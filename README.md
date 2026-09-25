@@ -110,7 +110,7 @@ sequenceDiagram
     P->>V: Tool name + typed arguments
     alt Ambiguous or unsupported
       V-->>API: Focused clarification
-      API-->>UI: Clarification; prior result remains visible
+      API-->>UI: Clarification, prior result remains visible
     else Valid intent
       V->>T: Approved request
       T->>D: Read pinned qualified snapshots
@@ -131,7 +131,7 @@ This is also the follow-up contract. “Use the previous year” reuses stored a
 
 The model may propose a typed intent, then choose an ordered list of approved claim IDs plus enumerated relations and qualifiers. It never supplies trusted substantive prose. Server templates render every numeric or causal sentence from validated values, relations, qualifiers, and citations. Arbitrary model text is treated as untrusted and cannot reach the substantive answer. A deterministic template returns the same validated result when model generation fails.
 
-DuckDB reads pinned immutable Parquet snapshots. SQLite stores local single-process sessions, idempotency reservations, result metadata, and follow-up links. No queue or server database is needed for the exam.
+DuckDB reads pinned immutable Parquet snapshots. SQLite stores local single-process sessions, idempotency reservations, result metadata, and follow-up links. Phase A does not need MongoDB or Supabase: DuckDB handles analytical queries over the snapshots, while SQLite provides atomic transactional state for the single application process. Revisit managed PostgreSQL or Supabase only if the product moves to multi-instance hosting or shared multi-user access. No queue or server database is needed for the exam.
 
 ### Why this approach
 
@@ -147,9 +147,9 @@ Source qualification is the first execution gate. A dependent ticket stops when 
 | Need | Candidate | Planned role | Qualification required |
 |---|---|---|---|
 | Public API | BTS SODA Airports Citizen Connect `https://data.bts.gov/resource/kfcv-nyy3.json` | Airport search/detail identity metadata with visible dated provenance | Exact fields, semantics, update date, identifiers, nonzero rows, and UI lineage pass. If unsuitable, qualify another meaningful public API before core acceptance. |
-| Eligible airport cohort | FAA CY2024 final commercial-service workbook | Authoritative membership after qualification | Final-status workbook, keys, year, and cohort rule verified; CY2025 preliminary data is not substituted. |
-| Traffic and route mix | BTS T-100 Segment All Carriers domestic and international extract candidate | Origin-direction departures, seats, passengers, and distance | The official selection UI and field documentation are reachable; the exact generated extract, segment grain, origin direction, domestic/international union, service class, distance units, deduplication, IDs, and complete comparable periods must still be verified. |
-| Operational indicators | BTS marketing-carrier on-time monthly ZIP candidates | Delay, cancellation, taxi indicators | The official PREZIP index enumerates 12 monthly ZIPs for each of CY2023 and CY2024; archive schema, reporting population, carrier grain, deduplication, months-with-rows, and fields remain to be verified. |
+| Eligible airport cohort | FAA CY2024 final commercial-service workbook | Authoritative membership after qualification | The workbook downloads as a valid XLSX; sheet parsing, keys, year, final status, and cohort rule must still be verified. CY2025 preliminary data is not substituted. |
+| Traffic and route mix | BTS T-100 Segment All Carriers domestic and international extract candidate | Origin-direction departures, seats, passengers, and distance | A bounded Alaska January 2024 generated extract succeeded with the required header and real rows; segment grain, direction, domestic/international union, service class, distance units, deduplication, IDs, reconciliation, and complete CY2023/CY2024 periods must still be verified. |
+| Operational indicators | BTS marketing-carrier on-time monthly ZIP candidates | Delay, cancellation, taxi indicators | The official PREZIP index exposes 12 month partitions for each of CY2023 and CY2024, plus an alternate duplicate filename for December 2023; archive identity, schema, reporting population, carrier grain, deduplication, months-with-rows, and fields remain to be verified. |
 | Intervention evidence | FAA and airport-authority documents | Terminal fit, competing constraints, counterevidence | Every claim resolves to publisher, date, page/section, constraint type, and review status. |
 
 ### How sources support the four assignment tasks
@@ -212,9 +212,9 @@ T-100 and on-time inputs are planned downloads, not mislabeled APIs. Frozen snap
 
 ### Observed preliminary download-index evidence
 
-- The official BTS T-100 Segment All Carriers selection UI at `https://transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG` and its field documentation at `https://transtats.bts.gov/Fields.asp?gnoyr_VQ=FMG` are reachable. A generated CSV/ZIP was not obtained. Analytical extraction is therefore a Gate 1 blocker, and no T-100-dependent workflow implementation starts until Ticket 4 passes.
-- The official PREZIP index enumerates all 12 marketing-carrier on-time monthly ZIP entries for CY2023 and all 12 for CY2024. A January 2024 file request timed out after receiving roughly 24 MB of an approximately 31 MB file (`curl` exit 28). This does not qualify the archive or schema. Ticket 5 must verify all 24 expected files, checksums, schemas, extraction, months-with-rows, and reporting coverage.
-- The FAA CY2024 commercial-service table is identified as final. CY2025 is preliminary and is outside the core comparison unless a later scope decision and qualification gate explicitly adopt it.
+- The official BTS T-100 Segment All Carriers selection UI at `https://transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG` and its field documentation at `https://transtats.bts.gov/Fields.asp?gnoyr_VQ=FMG` are reachable. A GET loaded the dynamic ASP.NET form fields, followed by a bounded POST selecting Alaska, 2024, and January. It returned HTTP 200 `application/zip`: the 36,924-byte ZIP had SHA-256 `6b69594064daafad1891483560d77aa63573b6087c4b3f6eb640734d49125da7` and contained a 211,939-byte CSV with the required header and 3,922 data rows. Observed two-character `DATA_SOURCE` values were `DU`, `DF`, `IF`, and `IU`; their semantics still require qualification. This validates bounded extraction mechanics only. Ticket 4 must still qualify full CY2023/CY2024 coverage, service class, direction, units, deduplication, and reconciliation before any T-100-dependent workflow starts.
+- The official PREZIP index exposes 12 marketing-carrier on-time month partitions for CY2023 and 12 for CY2024; December 2023 also has an alternate duplicate filename. A January 2024 file request timed out after receiving roughly 24 MB of an approximately 31 MB file (`curl` exit 28). This does not qualify the archive or schema. Ticket 5 must verify the 24 month partitions, resolve the duplicate alias, and check checksums, schemas, extraction, months-with-rows, and reporting coverage.
+- The FAA CY2024 commercial-service workbook returned HTTP 200 with the expected MIME type and a valid XLSX ZIP container. Sheet parsing, airport keys, final-status confirmation, and cohort membership remain unqualified. CY2025 is preliminary and is outside the core comparison unless a later scope decision and qualification gate explicitly adopt it.
 
 ### Public API acceptance contract
 
