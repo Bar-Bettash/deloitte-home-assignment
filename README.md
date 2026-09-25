@@ -29,11 +29,19 @@ Every substantive answer separates `observed`, `calculated`, `inferred`, `scenar
 
 The supplied public data cannot answer two requested business quantities by itself: project profitability and causal unmet demand. Phase A answers those parts with an explicit evidence-gap assessment: it shows the observed pressure and terminal-fit evidence, lists the missing finance or demand inputs, and returns `not_supported` for the requested quantity. It must not claim complete quantitative coverage of those two questions.
 
+### Business-question decision contract
+
+The PDF asks for profitable modernization and unmet demand but also explicitly permits uncertainty/scoping and prioritizes reasoning over completeness. The product must answer these questions directly with a decision status: `supported_observation`, `scenario_only`, or `not_identifiable`; it must never rename traffic pressure as profit or demand. Phase A’s default is a **diligence recommendation**, and a request for an estimated return/latent-demand count receives `not_identifiable` plus the specific missing inputs below. That is a disclosed scoped answer, not completed quantitative delivery.
+
+For profitability, collect airport-specific project capex/phasing, incremental usable peak capacity, demand capture, commercial rights/revenue share, incremental opex, financing/discount assumptions and counterfactual. [FAA’s financial reporting program](https://www.faa.gov/airports/airport_compliance/airport_financial_reporting_program) provides airport-reported financial summaries searchable by airport/fiscal year; coverage is incomplete and FAA does not validate their accuracy. These reports can contextualize operating finances but do not identify an investor’s incremental project cash flow. Qualification of any selected finance record must reconcile fiscal/calendar scope and attribute it to a specific airport/project; no finance figure has been extracted in this pass.
+
+For SFO, distinguish observed passengers, published forecast, and unserved willingness-to-travel. Identify desired routes/time slots, denied/suppressed requests or a documented demand model, fares/generalized travel cost, substitutable airports and the binding terminal/runway/airspace/airline constraint before estimating latent demand. A forecast minus actual traffic is not that estimate. The [2024 SFO financing report](https://www.flysfo.com/sites/default/files/2024-05/SFOSeries2024ABCfos.pdf) includes projections premised on capacity assumptions and the capital improvement program; it is a candidate for reviewing assumptions/counterevidence, not proof of excess unserved demand. Review the exact appendix/page, covered period and subsequent project completion before promoting a claim. Neither observed delay nor load factor can establish this quantity alone.
+
 ## 2. Milestones
 
 ### Phase A — mandatory exam product
 
-- a qualified public API supplies a substantive airport-search/detail field with dated lineage;
+- a qualified DataSF public API supplies SFO passenger trend metrics with dated lineage;
 - qualified downloads/snapshots supply calculation-grade aviation data;
 - deterministic backend tools implement all four workflows;
 - the first complete capability compares airports, stores structured context, recomputes “use the previous year,” atomically persists the successor result, and renders numbers without model arithmetic;
@@ -93,7 +101,7 @@ The backend is the product's analytical authority. The frontend sends intent and
 The fixed request flow is:
 
 ```text
-parse -> validate -> execute deterministic tool -> atomically persist -> explain
+reserve -> validate -> execute deterministic tool -> render final envelope -> atomically persist -> replay
 ```
 
 ```mermaid
@@ -116,7 +124,7 @@ sequenceDiagram
     P->>V: Tool name + typed arguments
     alt Ambiguous or unsupported
       V-->>C: Focused clarification
-      C->>S: Commit turn + revision
+      C->>S: Commit clarification envelope + turn + revision
       C-->>API: Committed acknowledgement
       API-->>UI: Clarification + committed revision
     else Valid intent
@@ -124,15 +132,15 @@ sequenceDiagram
       T->>D: Read pinned qualified snapshots
       D-->>T: Metrics + coverage + lineage
       T->>C: Validated result
-      C->>S: Atomic result + turn + revision commit
+      C->>R: Approved claims + prospective revision
+      R-->>C: Final response envelope or deterministic fallback
+      C->>S: Atomic result + envelope + turn + revision commit
       alt Revision changed
         S-->>C: Stale revision conflict
         C-->>API: Conflict + authoritative revision
         API-->>UI: Reconcile session before retry
       else Commit succeeds
         S-->>C: Immutable result + committed revision
-        C->>R: Approved claims
-        R-->>C: Template-rendered answer
         C-->>API: Committed acknowledgement + result
         API-->>UI: Apply commit; keep current draft text
       end
@@ -158,10 +166,11 @@ Source qualification is the first execution gate. A dependent ticket stops when 
 
 | Need | Candidate | Planned role | Qualification required |
 |---|---|---|---|
-| Public API | BTS SODA Airports Citizen Connect `https://data.bts.gov/resource/kfcv-nyy3.json` | Airport search/detail identity metadata with visible dated provenance | Live calls returned 19,850 rows and exactly one match for each of ANC, BDL, BOS, LAX, SFO, and SNA. Its 2020-07-16 observation vintage limits it to dated identity/classification enrichment; selected field semantics and UI lineage must still pass. |
+| Optional identity API | BTS SODA Airports Citizen Connect `https://data.bts.gov/resource/kfcv-nyy3.json` | Airport search/detail identity metadata with visible dated provenance | Live calls returned 19,850 rows and exactly one match for each of ANC, BDL, BOS, LAX, SFO, and SNA. Its 2020-07-16 observation vintage limits it to dated identity/classification enrichment; selected field semantics and UI lineage must still pass. |
+| Analytical public API | [DataSF SFO passenger statistics](https://data.sf.gov/resource/rkru-6vcg.json) | Monthly SFO enplaned passengers and domestic/international trend in demand-pressure answers | Real bounded aggregate returned all 24 months in CY2023–2024 for both categories; retained evidence below. Source-row uniqueness, official-total reconciliation, schema/failure checks and runtime integration remain gates. |
 | Eligible airport cohort | FAA CY2024 commercial-service workbook | Authoritative membership after qualification | The live workbook passed XLSX integrity and content checks: 513 unique airport rows and a reproducible 22-airport New England cohort. Preserve the verified checksum, inclusion rule, and source metadata in the ingestion manifest. CY2025 preliminary data is not substituted. |
 | Traffic and route mix | BTS T-100 Segment All Carriers domestic and international extract candidate | Origin-direction departures, seats, passengers, and distance | Official lookup calls now resolve service-class and domestic/international carrier-source codes, but three live bounded generated-download POSTs failed. The earlier successful extract is historical evidence; current extraction is blocked until reproducibility and the remaining grain, direction, units, deduplication, reconciliation, and period checks pass. |
-| Operational indicators | Official BTS on-time monthly PREZIP family; exact table/family unresolved | Delay, cancellation, taxi indicators | The index naming suggested marketing-carrier data, while the observed January archive contained a `Reporting_Carrier` CSV. The exact official table, carrier-family semantics, archive aliases, full-file checksums, row counts, reporting population, deduplication, and all-month coverage must be verified before use. |
+| Operational indicators | [BTS Reporting Carrier On-Time Performance (1987-present), table FGJ](https://transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FGJ) | Delay, cancellation, taxi and diversion indicators | Official table title and reporting-carrier PREZIP filename resolve the selected family; marketing-carrier files are separate and excluded. Full archive integrity, carrier population, deduplication and comparable period coverage remain unqualified. |
 | Intervention evidence | FAA and airport-authority documents | Terminal fit, competing constraints, counterevidence | Every claim resolves to publisher, date, page/section, constraint type, and review status. |
 
 ### How sources support the four assignment tasks
@@ -172,13 +181,15 @@ The diagram below is a planned mapping, not a validation result. Every arrow pas
 flowchart TB
     Gate{Source qualification gate<br/>schema · grain · scope · period · lineage}
 
-    SODA[BTS SODA airport API candidate<br/>dated identity metadata]
+    SODA[BTS SODA optional identity API<br/>dated metadata]
+    SFAPI[DataSF SFO analytical API<br/>monthly enplaned passengers]
     FAA[FAA commercial-service workbook candidate<br/>eligible cohort]
     T100[BTS T-100 Segment All Carriers candidate<br/>domestic + international · origin direction]
     OTP[BTS on-time candidate<br/>delay · cancellation · taxi]
     Docs[FAA and airport-authority documents<br/>terminal fit + counterevidence]
 
     SODA --> Gate
+    SFAPI --> Gate
     FAA --> Gate
     T100 --> Gate
     OTP --> Gate
@@ -186,6 +197,7 @@ flowchart TB
 
     Gate --> Registry[Airport registry + aliases + provenance]
     Gate --> Traffic[Traffic snapshot]
+    Gate --> SFOMonthly[SFO passenger API snapshot]
     Gate --> Operations[Operational snapshot]
     Gate --> EvidenceSet[Reviewed evidence set]
 
@@ -203,6 +215,7 @@ flowchart TB
 
     Registry --> W4[4. SFO demand-pressure assessment]
     Traffic --> W4
+    SFOMonthly --> W4
     Operations --> W4
     EvidenceSet --> W4
 
@@ -212,23 +225,49 @@ flowchart TB
     W4 --> O4[Observed pressure + hypotheses<br/>counterevidence + missing inputs]
 ```
 
-The candidate public API contributes dated airport identity metadata and visible provenance if it passes qualification; it is not the analytical source for congestion or ranking. The FAA cohort candidate determines New England eligibility, T-100 candidates support traffic/route calculations, on-time candidates support a distinct operational population, and reviewed documents gate terminal-intervention conclusions.
+The primary DataSF API supplies SFO historical passenger trend observations; optional BTS SODA supplies dated identity metadata. Neither substitutes for T-100 flight data or on-time congestion metrics. The displayed source gate applies independently to each adapter, not as an all-sources barrier. The FAA cohort candidate determines New England eligibility, T-100 candidates support traffic/route calculations, on-time candidates support a distinct operational population, and reviewed documents gate terminal-intervention conclusions.
 
 ### Observed live public-API evidence — 2026-09-25
 
 The SODA count query returned 19,850 rows. A bounded query for ANC, BDL, BOS, LAX, SFO, and SNA returned exactly one record for each identifier, including name, city, state, facility/use classification, status, and ICAO identity fields. Separate two-row pages returned distinct offsets, so the endpoint's pagination mechanism was exercised. Every required record carried `eff_date` 2020-07-16, and the official dataset description says its observations are as of 2020-07-16. A later portal-metadata update does not make those observations contemporary. The sampled `annual_ops` field contained dates such as `12/31/2019`, so it must not be interpreted as an operations count.
 
-This proves real calls, a nonempty response, bounded pagination behavior, and 6/6 target-airport identity resolution. It does not prove full-dataset uniqueness, null rates, schema stability, failure behavior, or that dated classification enrichment is substantive enough to satisfy the assignment's public-API criterion. Its fitness is limited to visibly dated identity/classification enrichment; it does not qualify modern congestion or the 2024 cohort. FAA membership is authoritative. SODA is left-joined enrichment: a missing row yields `registry_metadata_missing` and never removes an FAA airport. A qualified API-origin field and its 2020-07-16 vintage must appear in search/details with lineage for the exam to pass; if reviewer value remains merely decorative, Gate 1 must select a stronger public API. An offline fixture or download alone cannot satisfy that requirement.
+This proves real calls, a nonempty response, bounded pagination behavior, and 6/6 target-airport identity resolution. It does not prove full-dataset uniqueness, null rates, schema stability, failure behavior, or that dated classification enrichment is substantive enough to satisfy the assignment's public-API criterion. Its fitness is limited to visibly dated identity/classification enrichment; it does not qualify modern congestion or the 2024 cohort. FAA membership is authoritative. SODA is left-joined enrichment: a missing row yields `registry_metadata_missing` and never removes an FAA airport. This optional dated metadata can appear in search/details with lineage; the analytical DataSF integration below is the primary API acceptance target. An offline fixture or download alone cannot satisfy that requirement.
 
 T-100 and on-time inputs are planned downloads, not mislabeled APIs. Frozen snapshots may support reproducibility but are labeled with retrieval date and mode. Synthetic fixtures remain test-only.
+
+### Analytical API selection and reproducible evidence — 2026-09-25
+
+Select **DataSF SFO Air Traffic Passenger Statistics**, dataset `rkru-6vcg`, for the SFO workflow. The [official API catalog](https://dev.socrata.com/foundry/data.sfgov.org/rkru-6vcg) names the dataset. The legacy `data.sfgov.org` endpoint returned HTML with a meta redirect; explicitly using `data.sf.gov` returned JSON. Do not accept HTTP 200 alone as data success. The [publisher’s data dictionary](https://data.sfgov.org/api/views/rkru-6vcg/files/30489964-1207-4ee7-802c-e9069504b8eb?download=true&filename=DataSF+Data+Dictionary+for+Air+Traffic+Passenger+Statistics.pdf) warns that rows are additive across categories and comparisons must respect seasonality.
+
+A real aggregate query returned 48 rows: each of 24 months × Domestic/International for **Enplaned** activity only. Annual sums are 2023 domestic 17,994,192/international 6,997,894 and 2024 domestic 18,204,966/international 7,849,620. These are measured API aggregates, not independently reconciled annual totals or latent-demand estimates. A separate category probe returned Enplaned, Deplaned and Thru / Transit; never sum all three as departing passengers. Its latest observed period was 202607; current collection timestamps do not change historical observation dates.
+
+Retained public aggregate payload: [sfo-monthly-20260925.json](backend/docs/evidence/sfo-monthly-20260925.json), 4,417 bytes, SHA-256 `772af27f3684adbeb18c28bf5f717130a975f8fe0b46d5e6a1a9bf7ce46f9489`. The [category payload](backend/docs/evidence/sfo-types-20260925.json) records activity labels and period range. Both contain only public aggregate aviation data. Reproduce the bounded query in a network-enabled shell (the restricted sandbox first failed DNS; the approved external-network call succeeded):
+
+```sh
+curl --fail --silent --show-error --connect-timeout 5 --max-time 30 --get \
+  https://data.sf.gov/resource/rkru-6vcg.json \
+  --data-urlencode '$select=activity_period,geo_summary,sum(passenger_count) as passengers,count(*) as rows' \
+  --data-urlencode '$where=activity_period >= '"'"'202301'"'"' AND activity_period <= '"'"'202412'"'"' AND activity_type_code = '"'"'Enplaned'"'"'' \
+  --data-urlencode '$group=activity_period,geo_summary' \
+  --data-urlencode '$order=activity_period,geo_summary' \
+  --data-urlencode '$limit=100' \
+  -o /tmp/sfo-monthly-recheck.json
+shasum -a 256 /tmp/sfo-monthly-recheck.json
+```
+
+Expected structure: a JSON array with exactly 48 unique `(activity_period, geo_summary)` rows, nonnegative integer passenger sums and source-row counts, periods 202301–202412, both categories in every month. The retained checksum fixes the observed bytes; a later upstream revision may legitimately differ and must be recorded/reconciled rather than silently overwriting the snapshot. This query avoids client pagination by grouping to a known bounded result; raw-row qualification still checks complete retrieval, categorical grain and duplicates.
+
+**API delivery acceptance:** the backend’s SFO demand-pressure result must call/ingest this API through its adapter, calculate same-month year-over-year and annual enplaned trends from the retained scope, and expose source URL, activity type, periods, retrieval timestamp, and snapshot hash in the answer. Verify raw row grain/nulls/duplicates and reconcile the annual aggregates against SFO’s published traffic totals before `qualified`. Schema mismatch, non-JSON bodies, 429/5xx, timeout and partial months produce explicit unavailable/partial status with bounded retry. The dataset is SFO-only, so no airport filter is applied; every airline/terminal/boarding-area category is included once, using operating/published airline as row attributes rather than joining separate totals. Raw uniqueness and independent-total reconciliation still must rule out duplicate category representations. These aggregates never substitute for T-100 passengers/flight counts, and are not joined to its raw records. Other airports do not inherit SFO-only coverage. An offline replay proves reproducibility only; first live ingestion and the app’s actual consumer path remain required. SODA enrichment alone no longer satisfies this product’s API gate.
+
+**Earlier probe provenance:** the FAA/T-100/on-time observations below predate retained request/response artifacts in this checkout. Their reported hashes/counts are historical claims, not replayable proof of the full qualification. Do not reconstruct a guessed T-100 form POST and call it the original request. Before promoting them, retain exact URL/method/query or sanitized form body, relevant response headers/status/redirects, retrieval UTC, bytes/hash, CSV/schema/row counts, and a deterministic qualification report under `backend/docs/evidence/`. The successful DataSF probe above is the first retained reproduction package in this plan update; missing historical artifacts remain an explicit limitation.
 
 ### Observed live download evidence — 2026-09-25
 
 - The official BTS T-100 Segment All Carriers selection UI at `https://transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG` remains reachable and exposes the expected field selectors. Live official lookup downloads resolve `DATA_SOURCE` as `DF` domestic/foreign carrier, `DU` domestic/U.S. carrier, `IF` international/foreign carrier, and `IU` international/U.S. carrier. The service-class lookup identifies scheduled passenger/cargo classes `A`, `C`, `E`, and `F`, separately from scheduled all-cargo and unscheduled classes. An earlier bounded Alaska January 2024 POST returned a 36,924-byte ZIP with SHA-256 `6b69594064daafad1891483560d77aa63573b6087c4b3f6eb640734d49125da7`, a 211,939-byte CSV, and 3,922 data rows. On 2026-09-25, three fresh bounded POSTs with the same geography/year/month intent instead redirected to `/ErrPage.asp?aspxerrorpath=/DL_SelectFields.aspx` and then returned 404. The earlier success is historical evidence, not current runtime proof. Ticket 4 is blocked until generated extraction is reproducible and full CY2023/CY2024 coverage, segment grain, origin direction, units, IDs, deduplication, and reconciliation pass.
-- The official PREZIP index exposes 12 canonical monthly links for CY2023 and 12 for CY2024; December 2023 also has an alternate parenthesized filename. The index/link naming suggested a marketing-carrier family, but a January 2024 bounded read exposed `On_Time_Reporting_Carrier_On_Time_Performance_(1987_present)_2024_1.csv`. A HEAD returned HTTP 200, `application/x-zip-compressed`, 27,573,265 bytes, byte-range support, and a 2024-04-11 last-modified date. A bounded 65,536-byte request returned HTTP 206 with `Content-Range: bytes 0-65535/27573265` and a valid ZIP signature. Partial decompression exposed a declared uncompressed size of 246,830,488 bytes, 110 columns, and 1,553 complete real rows in the decoded prefix. Required fields including airport IDs/codes, flight date, carrier, cancellation, delay, taxi, and distance were present. The prefix itself demonstrated field missingness: 1,553 eligible rows versus 1,507 nonblank departure delays, 1,505 taxi-out values, 1,502 taxi-in values, and 1,501 arrival delays. This is prefix evidence only. Ticket 5 must identify the exact official table/family from BTS documentation, reconcile index labels with archive/column semantics, download and checksum every required file, resolve the December alias, and verify full row counts, extraction, carrier grain, deduplication, months-with-rows, reporting coverage, and airport population.
+- The official PREZIP index exposes 12 canonical monthly links for CY2023 and 12 for CY2024; December 2023 also has an alternate parenthesized filename. The index/link naming suggested a marketing-carrier family, but a January 2024 bounded read exposed `On_Time_Reporting_Carrier_On_Time_Performance_(1987_present)_2024_1.csv`. A HEAD returned HTTP 200, `application/x-zip-compressed`, 27,573,265 bytes, byte-range support, and a 2024-04-11 last-modified date. A bounded 65,536-byte request returned HTTP 206 with `Content-Range: bytes 0-65535/27573265` and a valid ZIP signature. Partial decompression exposed a declared uncompressed size of 246,830,488 bytes, 110 columns, and 1,553 complete real rows in the decoded prefix. Required fields including airport IDs/codes, flight date, carrier, cancellation, delay, taxi, and distance were present. The prefix itself demonstrated field missingness: 1,553 eligible rows versus 1,507 nonblank departure delays, 1,505 taxi-out values, 1,502 taxi-in values, and 1,501 arrival delays. This is prefix evidence only. Follow-up official-page inspection selects Reporting Carrier table FGJ and the separately named reporting archives in the [PREZIP index](https://transtats.bts.gov/PREZIP/); the earlier marketing label was incorrect. Ticket 5 must retain that exact URL/filename mapping, download and checksum every required file, resolve the December alias, and verify full row counts, extraction, carrier grain, deduplication, months-with-rows, reporting coverage, and airport population.
 - The FAA CY2024 commercial-service workbook returned HTTP 200 with the expected XLSX MIME type and 58,201 bytes. SHA-256 is `7253febd109b73deeece0bd68e2aeb6f419e88332c2d109fd3350020edd73640`; the ZIP container passed integrity checks. Its single sheet, `ChangeinRevenuePassengerEnplan `, contains columns for rank, FAA region, state, Locid, city, airport name, service level, hub, CY2024 enplanements, CY2023 enplanements, and percent change. Parsing produced 513 airport rows with 513 distinct Locids, no missing or nonpositive CY2024 enplanements, 394 primary (`P`) airports, and 119 nonprimary commercial-service (`CS`) airports. Applying the explicit CT, ME, MA, NH, RI, and VT rule yields 22 New England airports: 19 `P` and 3 `CS`. All six named target airports are present. The FAA page lists this under CY2024 Passenger Boarding Data, says it was added 2025-09-15, and defines the service-level and hub codes. This qualifies the workbook for the CY2024 commercial-service cohort; the immutable ingestion manifest must preserve the checksum, retrieval date, row counts, and cohort rule. CY2025 preliminary data remains outside the core comparison unless a later scope decision adopts it.
 
-### Public API acceptance contract
+### Identity API acceptance contract (optional enrichment)
 
 The candidate API is accepted only when the qualification artifact proves all of the following. Until then its status remains `candidate_reachable`, not `qualified`.
 
@@ -237,13 +276,14 @@ The candidate API is accepted only when the qualification artifact proves all of
 - The artifact records observation vintage separately from portal-metadata update time, plus request URL/parameters, retrieval timestamp, response checksum, row count, and schema fingerprint.
 - Pagination is exercised through the full dataset with stable ordering and a reconciled count; the existing two-page probe is insufficient.
 - Timeout, non-2xx, malformed JSON, schema drift, missing required fields, duplicate IDs, and partial-page failure each produce a typed unavailable/quarantined state rather than silently serving stale or partial metadata.
-- The qualified API-origin field and its vintage/lineage appear in airport search or detail output. If this candidate cannot meet that substantive role, Gate 1 selects another public API before Phase A can pass.
+- The qualified API-origin field and its vintage/lineage appear in airport search or detail output. This legacy metadata candidate is optional; primary API acceptance is the DataSF analytical contract above.
 
 ### Source failure matrix
 
 | Failure | Runtime response | Release consequence |
 |---|---|---|
-| Public API timeout/unavailable | Preserve the FAA-backed airport record, mark API enrichment unavailable, show no invented replacement field. | Core exam acceptance remains blocked until a meaningful API integration is qualified and evidenced. |
+| DataSF analytical API timeout/unavailable | Use a pinned qualified historical snapshot with visible retrieval date when one exists; otherwise the SFO API passenger trend is unavailable. Never invent passenger counts or substitute SODA identity. | First live ingestion/qualification remains required; without a qualified snapshot and actual API consumer proof the API acceptance gate is blocked. |
+| Optional SODA identity API timeout/unavailable | Preserve the FAA-backed airport record and mark dated enrichment unavailable. | Does not block the DataSF API gate or FAA cohort; identity remains source-resolved. |
 | Public API malformed payload/schema drift/duplicate identity | Quarantine the response and expose source-health failure; never merge ambiguous metadata. | Block airport API qualification and all dependent provenance claims. |
 | FAA cohort missing or crosswalk conflict | Do not infer cohort membership from SODA or visible map points. | Block New England screening; other airport-specific tools may proceed only with separately resolved IDs. |
 | T-100 partition incomplete or service/direction scope unresolved | Return unavailable for affected traffic metric; do not fill absent rows with zero. | Block every workflow whose required metric/period is incomplete. |
@@ -268,6 +308,20 @@ Return a common qualified period and service scope, passengers, seats, performed
 
 The two source families keep separate populations and denominators. T-100 passengers and seats use the frozen service-class and origin-direction scope; seat occupancy is `passengers / seats` only where that denominator is positive. On-time cancellation rate is `cancelled flights / eligible reported flights`. Delay and taxi aggregates use non-cancelled observed flights with the relevant field present, and return both the observed-flight denominator and coverage against eligible reported flights. Raw T-100 and on-time rows are never multiplied together or treated as one population.
 
+#### Operational comparison v0
+
+For each airport, use scheduled domestic reporting-carrier flights with that airport as **origin** over the same requested complete qualified period (default CY2024; a prior-year follow-up recomputes CY2023 from its own qualified snapshots); identify the same reporting-carrier set in both airports (intersection of qualified annual carrier coverage), display the excluded-carrier share, and retain airport-specific full-population summaries separately. This describes the reported departure experience, not all traffic or intrinsic terminal capacity. Never mix inbound and outbound denominators.
+
+Let `N` be deduplicated scheduled origin flights with valid cancellation/diversion flags. Report cancellation count/`N` and diversion count/`N` separately. For non-cancelled, non-diverted flights, report the share with `DepDel15=1` among nonnull `DepDel15`, and arithmetic means of `DepDelayMinutes` and `TaxiOut`, each over its own nonnull, valid-value subset. `TaxiIn` and `ArrDelayMinutes` on origin-filtered flights describe destination arrival experience, so they are excluded from the origin-congestion KPI comparison; any optional display labels that downstream meaning separately and cannot attribute it to the origin airport. Use zero-clamped delay minutes as defined by BTS; retain signed delay only as an explicitly separate field. Show each numerator, field denominator, and coverage against the eligible non-cancelled/non-diverted count and against `N`. Diverted flights stay in the diversion rate but are excluded from these typical-flight delay/taxi estimators. Missing flags invalidate the affected source scope; missing metrics never become zero.
+
+Compare each KPI independently, using unrounded values; equal values tie. No unvalidated composite congestion score or causal terminal diagnosis is emitted. If indicators disagree, return `mixed_indicators`; missing comparable periods/carriers yield `not_comparable`. The [official Reporting Carrier field definitions](https://transtats.bts.gov/Fields.asp?gnoyr_VQ=FGJ) identify the delay, cancellation and diversion fields; these are explicit modeling population choices, pending validation against complete archives.
+
+#### Evidence date and decision date
+
+Every answer declares `analysis_period`, `decision_as_of`, and `evidence_cutoff`. The default is a **present-day diligence screen using CY2024 historical metrics**, with `decision_as_of` and cutoff pinned to the snapshot refresh date. This is not a claim about what was knowable in 2024. An explicit historical-as-of request admits only material published on/before that requested date. Records preserve publication date, covered/effective interval, retrieved date, reviewed date, locator/page, supersession check and unresolved counterclaims. Missing dates make evidence `not_assessable`.
+
+For a current terminal recommendation, require an official airport/FAA capacity or capital-plan source whose effective plan interval contains the decision date and whose supersession/conflict check was performed within 30 days of the frozen cutoff. Older history can explain trends but cannot alone establish current capacity. A superseding completed project, materially conflicting current source or absent capacity/peak-processing information blocks terminal eligibility until reviewed. These 30-day review and plan-interval rules are conservative project conventions, not FAA standards. Reproducing an old result uses its original cutoff; refreshing evidence creates a successor result.
+
 ### Regional screening
 
 Methodology v0 is frozen before ranking is enabled. Its default evaluation formula is:
@@ -281,12 +335,12 @@ pressure score = 0.40 * growth percentile
 The weights are an explicit screening assumption, not an empirically validated investment model. Apply these deterministic v0 rules:
 
 - Compute CY2024 volume and seat occupancy over the frozen qualified passenger-service scope. Compute adjusted growth as `(P2024 - P2023) / max(P2023, 10,000 passengers)` and display raw year-over-year growth beside it so the base-effect adjustment is visible; when `P2023 = 0`, raw growth is `not_supported` while adjusted growth remains defined by the explicit floor. The 10,000 floor is a provisional modeling convention chosen to damp percentage explosions at very small bases; it is not an empirical estimate or a profitability threshold.
-- Within the eligible New England cohort, winsorize adjusted growth at the 5th and 95th percentiles when at least 20 airports are assessable; otherwise do not winsorize. This is a provisional tail-damping convention, not a learned cutoff. Convert each dimension to `[0, 1]` with midrank percentile `(average_rank - 1) / (n - 1)`, ascending so higher values receive higher percentiles.
+- Convert each dimension to `[0, 1]` with ascending midrank percentile `(average_rank - 1) / (n - 1)` within the fully assessable cohort. Do not winsorize: rank normalization already discards magnitude, and clipping would only create artificial ties rather than meaningfully damp extreme ranks. Preserve raw values alongside ranks.
 - Equal dimension values receive the same average rank. With fewer than two fully assessable airports, no ranking is produced. Missing period, passengers, seats, or a nonpositive seat denominator makes that airport `not_assessable`; weights are never renormalized.
 - Treat final scores equal within `1e-12` as tied. Use competition ranking (`1, 2, 2, 4`); every airport with displayed rank at most 3 counts as top-three, so a boundary tie may include more than three airports. Canonical airport ID orders tied rows for stable display without breaking the tie.
-- Run exactly 24 scenarios: four weight cases (base `40/30/30`, equal `1/3` each, growth-heavy `60/20/20`, and scale/utilization-heavy `20/40/40`) × three prior-passenger floors (`1`, `10,000`, `25,000`) × two tail treatments (5th/95th winsorization and none). When fewer than 20 airports are assessable, the winsorized treatment is explicitly recorded as disabled and duplicates the untreated result. Report each airport's full rank range. Label it `robust_top_three` only if, for every one of the six floor/tail pairs, it is top-three in at least three of four weight cases and its maximum rank minus minimum rank across all 24 scenarios is at most two.
+- Run exactly 12 scenarios: four weight cases (base `40/30/30`, equal thirds, growth-heavy `60/20/20`, scale/utilization-heavy `20/40/40`) × three prior-passenger floors (`1`, `10,000`, `25,000`). Report every airport’s minimum/maximum rank and top-three frequency out of 12. `robust_top_three` requires top-three placement in at least three of four weight cases **for each of the three floors**, and an overall maximum-minus-minimum rank of at most two.
 
-The score produces a quantitative pressure watchlist only. A terminal-project recommendation is `eligible` only when the airport is fully scoreable and current reviewed airport-specific evidence supports a passenger-terminal capacity or processing constraint, with every material counterclaim reviewed and no unresolved conflict. It is `excluded` when reviewed evidence attributes the binding constraint to a nonterminal cause or shows the proposed terminal intervention does not address it. It is `not_assessable` when evidence is absent, stale, unreviewed, or materially conflicting. Only `eligible` airports are ordered by pressure score; excluded and not-assessable airports remain visible with reasons and counterevidence. Evidence status never changes the numeric pressure score.
+The score produces a quantitative pressure watchlist only. A terminal-project recommendation is `eligible` only when the airport is fully scoreable and airport-specific evidence meeting the Evidence date and decision date rules supports a passenger-terminal capacity or processing constraint, with every material counterclaim reviewed and no unresolved conflict. It is `excluded` when reviewed evidence attributes the binding constraint to a nonterminal cause or shows the proposed terminal intervention does not address it. It is `not_assessable` when evidence is absent, stale, unreviewed, or materially conflicting. Only `eligible` airports are ordered by pressure score; excluded and not-assessable airports remain visible with reasons and counterevidence. Evidence status never changes the numeric pressure score.
 
 ### Long-haul share
 
@@ -313,7 +367,7 @@ Each result exposes typed claim objects: `metric`, `comparison`, `coverage`, `ev
 | `POST /api/v1/sessions` | Issue an anonymous opaque capability session in an HttpOnly, SameSite cookie with bounded expiry. |
 | `POST /api/v1/sessions/reconcile` | Reconcile one original idempotency key/hash to `committed`, `pending`, `failed`, or `absent`, plus canonical revision/result and reservation lease fence. |
 | `GET /api/v1/sources/status` | Qualified snapshots, periods, modes, and limitations. |
-| `GET /api/v1/airports/search` | Alias resolution plus mandatory API-origin metadata/provenance when available. |
+| `GET /api/v1/airports/search` | Alias resolution plus optional dated identity metadata/provenance when available. |
 | `POST /api/v1/analyses/compare` | Deterministic airport comparison. |
 | `POST /api/v1/analyses/screen` | Gated methodology-v0 cohort screening. |
 | `POST /api/v1/analyses/long-haul-share` | Departure-weighted share and coverage interval. |
@@ -326,12 +380,12 @@ Core proposed records: `Airport`, `SourceSnapshot`, `EvidenceRecord`, `AnalysisR
 
 FastAPI owns package startup, configuration loading, `main.py`, and a versioned root router that registers every promised route. A provider adapter owns the model call boundary so the orchestrator has no vendor-specific behavior. Every result/evidence/chat route resolves the anonymous server-issued capability cookie and scopes reads/writes to that session; opaque IDs alone never authorize cross-session access. Expired sessions fail closed and issue no silent replacement during a result request.
 
-Every `POST /analyses/*` route and the chat route invoke one common analysis application service. The service validates the capability, idempotency key, payload hash, and expected revision; calls a pure deterministic tool; then atomically persists the immutable result, turn, lineage, and new session revision before rendering the response. Direct analysis routes therefore create the same follow-up-capable state as chat. Pure tools remain internal and cannot be exposed by a route directly.
+Every `POST /analyses/*` route and the chat route invoke one common analysis application service. The service validates the capability, idempotency key, payload hash, and expected revision; calls a pure deterministic tool; then prepares the final response envelope (including a deterministic explanation fallback if needed) and atomically persists its canonical serialized body, HTTP status, immutable result, turn, lineage, and new session revision. The expected revision and active lease generation are rechecked in that transaction; an envelope computed against stale state is never committed. Direct analysis routes therefore create the same follow-up-capable state as chat. Pure tools remain internal and cannot be exposed by a route directly.
 
 ### Atomic follow-up semantics
 
 - Idempotency key binds the payload hash.
-- Same key plus same payload replays the committed response.
+- Same key plus same payload replays the stored HTTP status and canonical JSON body byte-for-byte, including explanation/fallback choice, result ID, revision, source IDs, timestamps, and claim order. Replay reads storage only: no model, tool, re-render, or new timestamp. Transport headers such as `Date` and request tracing are outside this identity guarantee.
 - Same key plus different payload returns conflict.
 - A bounded `pending` reservation owns one total model/tool call cap, including retries.
 - Each reservation has an opaque server owner and monotonically increasing `lease_generation`; only that owner/generation may commit.
@@ -339,7 +393,7 @@ Every `POST /analyses/*` route and the chat route invoke one common analysis app
 - Result and new session state commit in one transaction only if the revision still matches.
 - A stale response is rejected and never exposed as committed.
 - A process crash leaves no session pointer to a nonexistent result. An expired pending lease is reclaimed only after a CAS fence advances its generation and deactivates the former owner.
-- `failed` keeps a safe retry path. Follow-ups create immutable successor results.
+- `failed` keeps a safe retry path. Follow-ups create immutable successor results. The stored response envelope covers clarification as well as analytical success; before the transaction crashes leave no committed envelope/result/revision, after it crashes replay reads the complete stored envelope. Rendering failure uses the fixed fallback before commit; failure to create even that envelope fails the turn without advancing revision.
 
 ## 7. Truthfulness, failure, and security rules
 
@@ -366,13 +420,13 @@ Package setup and source qualification start in parallel; only source-dependent 
 
 | Clock | Parallel work | Cutoff and evidence |
 |---|---|---|
-| Hours 0–2 | Product contract; backend/frontend package scaffolds; T-100, on-time, FAA, SODA, and document qualification | At hour 2, record each source as qualified or blocked. T-100 extraction must reproduce or move to a documented official alternate with equivalent grain, fields, and CY2023/CY2024 coverage. |
+| Hours 0–2 | Product contract; backend/frontend package scaffolds; T-100, on-time, FAA, DataSF, and document qualification | At hour 2, record each source as qualified or blocked. T-100 extraction must reproduce or move to a documented official alternate with equivalent grain, fields, and CY2023/CY2024 coverage. |
 | Hours 2–6 | Startup/router/session skeleton; typed UI shell; successful source snapshots and methodology freeze | No synthetic or historical extract may stand in for a failed live qualification. A blocked required source marks its dependent workflow unavailable. |
 | Hours 6–14 | Common application service, persistence, traffic/operational tools, and independent workflow tools whose own inputs passed | Each tool advances on its own backend prerequisites; comparison browser QA is not a prerequisite for the other tools. |
 | Hours 14–20 | Analysis/chat routes, reconciliation behavior, client integration, deterministic rendering | Direct and conversational calls must create identical persisted lineage. |
 | Hours 20–24 | End-to-end evidence, architecture document, demo rehearsal, and assignment traceability | Phase A is complete only if all four workflows, meaningful API use, and required source coverage pass. Otherwise submit an explicitly incomplete artifact that names unavailable workflows and failed gates. |
 
-Reduction order is Phase B, globe, visual polish, optional live context, voice, hosting, and finance scenarios. The four required workflows, deterministic calculations, source lineage, and truthful unavailable states are not reducible. If SODA remains merely decorative, if T-100 is unreproducible, if the on-time family remains unresolved, or if intervention evidence cannot support terminal fit, the plan does not claim full assignment completion.
+Reduction order is Phase B, globe, visual polish, optional live context, voice, hosting, and finance scenarios. The four required workflows, deterministic calculations, source lineage, and truthful unavailable states are not reducible. If DataSF analytical API integration is unqualified, if T-100 is unreproducible, if on-time coverage remains unqualified, or if intervention evidence cannot support terminal fit, the plan does not claim full assignment completion.
 
 ## 9. Numbered implementation tickets
 
@@ -381,13 +435,13 @@ These are future, proposed units. Paths and commands do not assert that files or
 ### Gate 1 — contract and qualified sources
 
 1. **Write product contract** — Owner: backend engineer. Files: `backend/docs/PRODUCT_CONTRACT.md`, `backend/tests/test_product_contract.py`. Depends: none. Accept: four workflows define inputs, outputs, ambiguity, insufficient-data, and profitability boundaries. Future verify is deferred until Ticket 8 installs the declared test extra: `python -m pytest -q backend/tests/test_product_contract.py`.
-2. **Qualify public airport API** — Owner: data engineer. Files: `backend/scripts/qualify_airport_api.py`, `backend/docs/sources/airport-api.md`. Depends: 1. Accept: exact API fields, semantics, provenance, nonzero rows, and failure behavior pass, or a replacement API is selected. Future verify: `python backend/scripts/qualify_airport_api.py --check`.
+2. **Qualify analytical public API** — Owner: data engineer. Files: `backend/scripts/qualify_airport_api.py`, `backend/docs/sources/airport-api.md`. Depends: 1. Accept: DataSF SFO Enplaned monthly scope passes grain, complete 2023/24 coverage, official-total reconciliation, JSON schema and failure handling; optional SODA identity enrichment is qualified separately. Future verify: `python backend/scripts/qualify_airport_api.py --check`.
 3. **Qualify FAA cohort workbook** — Owner: data engineer. Files: `backend/scripts/qualify_faa_cohort.py`, `backend/docs/sources/faa-cohort.md`. Depends: 1. Accept: authoritative CY2024 cohort and New England rule are reproducible. Future verify: `python backend/scripts/qualify_faa_cohort.py --check`.
 4. **Qualify T-100 Segment All Carriers partitions** — Owner: data engineer. Files: `backend/scripts/qualify_t100.py`, `backend/docs/sources/t100.md`. Depends: 1. Accept: domestic+international union, segment grain, origin direction, service class, distance units, IDs, deduplication, and comparable CY2023/CY2024 partitions pass. Future verify: `python backend/scripts/qualify_t100.py --check`.
 5. **Qualify on-time partitions** — Owner: data engineer. Files: `backend/scripts/qualify_ontime.py`, `backend/docs/sources/ontime.md`. Depends: 1. Accept: all 12 CY2023 plus all 12 CY2024 expected ZIPs have retrieval outcome, checksum, extraction/schema result, carrier grain, deduplication, months-with-rows, seasonal no-row disposition, reporting population, and field coverage recorded; any unresolved required partition fails the gate. Future verify: `python backend/scripts/qualify_ontime.py --check`.
 5A. **Qualify intervention documents** — Owner: research lead. Files: `backend/scripts/qualify_intervention_docs.py`, `backend/docs/sources/intervention-evidence.md`. Depends: 1, 3. Accept: each candidate document has airport, publisher, effective/publication date, stable locator, page/section, constraint type, currency/conflict status, and review decision. Future verify: `python backend/scripts/qualify_intervention_docs.py --check`.
 6. **Assemble source decision matrix** — Owner: data engineer. Files: `backend/scripts/build_source_matrix.py`, `backend/docs/SOURCE_MATRIX.md`. Depends: 2–5A. Accept: one serialized writer records each source independently as qualified or failed so unrelated tools can proceed. Future verify: `python backend/scripts/build_source_matrix.py --check`.
-7. **Freeze screening methodology v0** — Owner: analytics lead. Files: `backend/config/methodology-v0.yaml`, `backend/tests/test_methodology_config.py`. Depends: 3, 4, 5A. Accept: formulas, cohort, scope, weights, normalization, base effects, competition ties, one-member cohort, missingness, terminal evidence gate, and all 24 sensitivity scenarios are explicit. Future verify is deferred until Ticket 8 installs the declared test extra: `python -m pytest -q backend/tests/test_methodology_config.py`.
+7. **Freeze screening methodology v0** — Owner: analytics lead. Files: `backend/config/methodology-v0.yaml`, `backend/tests/test_methodology_config.py`. Depends: 3, 4, 5A. Accept: formulas, cohort, scope, weights, normalization, base effects, competition ties, one-member cohort, missingness, terminal evidence gate, and all 12 sensitivity scenarios are explicit. Future verify is deferred until Ticket 8 installs the declared test extra: `python -m pytest -q backend/tests/test_methodology_config.py`.
 
 ### Gate 2 — runnable backend and reproducible data
 
@@ -399,6 +453,8 @@ These are future, proposed units. Paths and commands do not assert that files or
 11A. **Verify airport/source schemas** — Owner: backend engineer. Files: `backend/tests/test_source_contracts.py`. Depends: 11. Accept: qualified examples pass and invalid units/IDs fail. Future verify: `python -m pytest -q backend/tests/test_source_contracts.py`.
 12. **Build airport registry snapshot** — Owner: data engineer. Files: `backend/app/ingest/airports.py`, `backend/data/manifests/airports.json`. Depends: 3, 11A. Accept: the FAA cohort remains usable when API enrichment is failed/unavailable; qualified API metadata is left-joined when present and missing enrichment never drops an airport. Future verify is deferred to Ticket 12A.
 12A. **Verify airport registry ingestion** — Owner: data engineer. Files: `backend/tests/test_airport_ingest.py`. Depends: 12. Accept: repeated ingestion is stable and crosswalk/missing-metadata cases pass. Future verify: `python -m pytest -q backend/tests/test_airport_ingest.py`.
+12B. **Ingest SFO analytical API snapshot** — Owner: data engineer. Files: `backend/app/ingest/sfo_passengers.py`, `backend/data/manifests/sfo-passengers.json`. Depends: 2, 11A. Accept: the qualified Enplaned monthly API scope persists an immutable snapshot with source rows/counts, 24-month completeness and checksums; no T-100 substitution. Future verify: `python backend/scripts/qualify_airport_api.py --check` plus a retained first-ingestion report.
+
 13. **Build T-100 snapshot** — Owner: data engineer. Files: `backend/app/ingest/t100.py`, `backend/data/manifests/t100.json`. Depends: 4, 11A. Accept: qualified rows become immutable Parquet with lineage, deduplication, and coverage. Future verify is deferred to Ticket 13A.
 13A. **Verify T-100 ingestion** — Owner: data engineer. Files: `backend/tests/test_t100_ingest.py`. Depends: 13. Accept: repeat ingestion and hand-calculation cases pass. Future verify: `python -m pytest -q backend/tests/test_t100_ingest.py`.
 14. **Build on-time snapshot** — Owner: data engineer. Files: `backend/app/ingest/ontime.py`, `backend/data/manifests/ontime.json`. Depends: 5, 11A. Accept: immutable CY2023/CY2024 Parquet preserves its reporting population without joining raw T-100 rows or multiplying counts. Future verify is deferred to Ticket 14A.
@@ -409,7 +465,7 @@ These are future, proposed units. Paths and commands do not assert that files or
 
 16. **Define analysis contracts** — Owner: backend engineer. Files: `backend/app/domain/analysis.py`, `backend/tests/test_analysis_contracts.py`. Depends: 1, 11A. Accept: immutable requests/results carry optional per-source snapshots/status, methodology, coverage, evidence, exclusions, unknowns, predecessor, and owner session without requiring unrelated sources. Future verify: `python -m pytest -q backend/tests/test_analysis_contracts.py`.
 17. **Implement traffic metrics** — Owner: backend engineer. Files: `backend/app/analysis/traffic_metrics.py`, `backend/tests/test_traffic_metrics.py`. Depends: 13A, 15, 16. Accept: T-100 passengers, seats, departures, occupancy, and growth handle denominators/base effects truthfully without an on-time dependency. Future verify: `python -m pytest -q backend/tests/test_traffic_metrics.py`.
-18. **Implement operational metrics** — Owner: backend engineer. Files: `backend/app/analysis/operational_metrics.py`, `backend/tests/test_operational_metrics.py`. Depends: 14A, 15, 16. Accept: cancellation uses cancelled/eligible reported flights; delay and taxi use non-cancelled observed flights with field-specific denominators and eligible-flight coverage; no metric raw-joins T-100 rows. Future verify: `python -m pytest -q backend/tests/test_operational_metrics.py`.
+18. **Implement operational metrics** — Owner: backend engineer. Files: `backend/app/analysis/operational_metrics.py`, `backend/tests/test_operational_metrics.py`. Depends: 14A, 15, 16. Accept: the Operational comparison v0 origin/carrier population, cancellation/diversion rates, non-cancelled non-diverted means and departure-delay share follow explicit field denominators and coverage; no metric raw-joins T-100 rows. Future verify: `python -m pytest -q backend/tests/test_operational_metrics.py`.
 19. **Create reviewed evidence dataset** — Owner: research lead. Files: `backend/data/evidence/evidence.json`, `backend/tests/test_evidence_records.py`. Depends: 1, 5A. Accept: only qualified documents produce records, with publisher, date, locator, proposition, constraint type, counterevidence, and status. Future verify: `python -m pytest -q backend/tests/test_evidence_records.py`.
 20. **Implement evidence helper** — Owner: backend engineer. Files: `backend/app/analysis/evidence.py`, `backend/tests/test_evidence.py`. Depends: 16, 19. Accept: production helper returns reviewed evidence/counterevidence by airport, topic, and period; compare, screen, and demand tools are named required callers. Future verify: `python -m pytest -q backend/tests/test_evidence.py`.
 21. **Implement comparison tool** — Owner: backend engineer. Files: `backend/app/analysis/compare.py`, `backend/tests/test_compare.py`. Depends: 12A–14A, 15–18, 20. Accept: arbitrary eligible airports return common-period traffic and separately aggregated operational indicators; the production comparison caller invokes Ticket 20 for reviewed evidence/counterevidence and lineage. Future verify: `python -m pytest -q backend/tests/test_compare.py`.
@@ -417,15 +473,15 @@ These are future, proposed units. Paths and commands do not assert that files or
 23. **Add model provider adapter** — Owner: backend engineer. Files: `backend/app/agent/provider.py`, `backend/tests/test_provider.py`. Depends: 9. Accept: vendor calls, timeouts, retries, and structured output are isolated behind one interface. Future verify: `python -m pytest -q backend/tests/test_provider.py`.
 24. **Define intent/claim schemas** — Owner: backend engineer. Files: `backend/app/agent/contracts.py`, `backend/tests/test_agent_contracts.py`. Depends: 16, 22. Accept: intent plus ordered approved claim IDs, enumerated relations/qualifiers, and clarification states validate; free-form substantive prose does not. Future verify: `python -m pytest -q backend/tests/test_agent_contracts.py`.
 25. **Define session transaction schema** — Owner: backend engineer. Files: `backend/app/storage/session_schema.py`, `backend/tests/test_session_schema.py`. Depends: 22, 24. Accept: opaque capabilities, expiry, revisions, payload hashes, explicit `committed`/`pending`/`failed`/`absent` reconciliation states, lease owner/generation, and owner-scoped result links enforce invariants. Future verify: `python -m pytest -q backend/tests/test_session_schema.py`.
-26. **Implement atomic session store** — Owner: backend engineer. Files: `backend/app/storage/sessions.py`, `backend/tests/test_sessions.py`. Depends: 25. Accept: only the active lease owner/generation can commit; revision/result pointers never regress; reconciliation is key/hash-specific; pending permits no new key; failed is fenced before a new key; absent retries the same key; replay, conflict, crash recovery, and expiry are deterministic. Future verify: `python -m pytest -q backend/tests/test_sessions.py`.
+26. **Implement atomic session store** — Owner: backend engineer. Files: `backend/app/storage/sessions.py`, `backend/tests/test_sessions.py`. Depends: 25. Accept: only the active lease owner/generation can commit; revision/result pointers never regress; reconciliation is key/hash-specific; pending permits no new key; failed is fenced before a new key; absent retries the same key; stored-envelope replay is byte-identical without model/tool/render calls; conflict, pre/post-commit crashes, and expiry are deterministic. Future verify: `python -m pytest -q backend/tests/test_sessions.py`.
 27. **Implement safe renderer** — Owner: backend engineer. Files: `backend/app/agent/render.py`, `backend/tests/test_render.py`. Depends: 24. Accept: server templates render every substantive numeric/causal sentence from approved claims; fallback is complete. Future verify: `python -m pytest -q backend/tests/test_render.py`.
 28. **Implement comparison intent executor** — Owner: backend engineer. Files: `backend/app/agent/orchestrator.py`, `backend/tests/test_orchestrator.py`. Depends: 21, 23, 24, 27. Accept: typed comparison/follow-up execution cannot bypass validation, total call cap, or safe rendering and returns a validated candidate result for transactional persistence. Future verify: `python -m pytest -q backend/tests/test_orchestrator.py`.
-28A. **Implement common analysis application service** — Owner: backend engineer. Files: `backend/app/services/analysis.py`, `backend/tests/test_analysis_service.py`. Depends: 22, 26, 27. Accept: the tool-independent service validates capability/key/hash/revision, reserves a fenced lease, invokes an allowlisted executor, atomically persists result/turn/lineage/revision, and returns a monotonic committed acknowledgement for direct routes and chat. Future verify: `python -m pytest -q backend/tests/test_analysis_service.py`.
+28A. **Implement common analysis application service** — Owner: backend engineer. Files: `backend/app/services/analysis.py`, `backend/tests/test_analysis_service.py`. Depends: 22, 26, 27. Accept: the tool-independent service validates capability/key/hash/revision, reserves a fenced lease, invokes an allowlisted executor, prepares a final response envelope, atomically persists its canonical body/status with result/turn/lineage/revision, and returns a monotonic committed acknowledgement for direct routes and chat. Future verify: `python -m pytest -q backend/tests/test_analysis_service.py`.
 29. **Expose session and reconciliation endpoints** — Owner: backend engineer. Files: `backend/app/api/sessions.py`, `backend/tests/test_session_api.py`. Depends: 10, 26. Accept: the server issues a capability and key/hash-specific reconciliation returns canonical revision/result, exact reservation status, lease generation/owner activity, and a fence before `failed` permits a new key; `absent` permits same-key retry only. Future verify: `python -m pytest -q backend/tests/test_session_api.py`.
 29A. **Expose comparison endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_compare_api.py`. Depends: 10, 21, 28A, 29. Accept: the registered session-scoped route invokes the common application service and returns a persisted, follow-up-capable result with committed revision and lineage. Future verify: `python -m pytest -q backend/tests/test_compare_api.py`.
 30. **Expose chat endpoint** — Owner: backend engineer. Files: `backend/app/api/chat.py`, `backend/tests/test_chat_api.py`. Depends: 10, 23, 24, 28A, 29. Accept: registered session-scoped chat executes or clarifies through the common service and rejects missing/expired capability or stale revision. Future verify: `python -m pytest -q backend/tests/test_chat_api.py`.
 31. **Expose result/evidence endpoints** — Owner: backend engineer. Files: `backend/app/api/results.py`, `backend/tests/test_result_access.py`. Depends: 10, 26, 29. Accept: every result and evidence read is capability-session scoped; opaque result IDs alone grant no access. Future verify: `python -m pytest -q backend/tests/test_result_access.py`.
-32. **Expose source-status/search endpoints** — Owner: backend engineer. Files: `backend/app/api/catalog.py`, `backend/tests/test_catalog_api.py`. Depends: 10, 12, 29. Accept: routes expose qualified source state and API-origin airport metadata/provenance within the current session. Future verify: `python -m pytest -q backend/tests/test_catalog_api.py`.
+32. **Expose source-status/search endpoints** — Owner: backend engineer. Files: `backend/app/api/catalog.py`, `backend/tests/test_catalog_api.py`. Depends: 10, 12, 29. Accept: routes expose qualified source state and optional airport identity metadata plus DataSF analytical source status/provenance within the current session. Future verify: `python -m pytest -q backend/tests/test_catalog_api.py`.
 33. **Prove complete backend comparison slice** — Owner: backend engineer. Files: `backend/tests/test_comparison_journey.py`, `backend/docs/evidence/comparison-slice.md`. Depends: 21–32. Accept: LAX/SNA compare, evidence, stored context, prior-year recompute, atomic successor, scoped access, and deterministic rendering pass together. Future verify: `python -m pytest -q backend/tests/test_comparison_journey.py`.
 
 ### Gate 4 — minimal comparison UI
@@ -446,11 +502,11 @@ These are future, proposed units. Paths and commands do not assert that files or
 
 ### Gate 5 — remaining three workflows by their own backend prerequisites
 
-44. **Implement screening tool** — Owner: backend engineer. Files: `backend/app/analysis/screen.py`, `backend/tests/test_screen.py`. Depends: 7, 17, 20. Accept: v0 normalization, adjusted-growth base effect, winsorization condition, midrank ties, missingness, all 24 sensitivity scenarios, and stable tie display are exact; terminal `eligible`/`excluded`/`not_assessable` status is evidence-gated separately from the pressure score. Future verify: `python -m pytest -q backend/tests/test_screen.py`.
+44. **Implement screening tool** — Owner: backend engineer. Files: `backend/app/analysis/screen.py`, `backend/tests/test_screen.py`. Depends: 7, 17, 20. Accept: v0 normalization, adjusted-growth base effect, no winsorization, midrank ties, missingness, all 12 sensitivity scenarios, and stable tie display are exact; terminal `eligible`/`excluded`/`not_assessable` status is evidence-gated separately from the pressure score. Future verify: `python -m pytest -q backend/tests/test_screen.py`.
 45. **Expose screening endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_screen_api.py`. Depends: 28A, 29, 44. Accept: the session-scoped route uses the common application service and returns persisted deterministic components, evidence status, committed revision, and lineage. Future verify: `python -m pytest -q backend/tests/test_screen_api.py`.
 46. **Implement long-haul tool** — Owner: backend engineer. Files: `backend/app/analysis/long_haul.py`, `backend/tests/test_long_haul.py`. Depends: 13, 16, 17. Accept: the tool stores an exact fraction or fraction interval from performed departures with visible threshold/scope, then renders each percentage bound as `100 × fraction` exactly once. Future verify: `python -m pytest -q backend/tests/test_long_haul.py`.
 47. **Expose long-haul endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_long_haul_api.py`. Depends: 28A, 29, 46. Accept: the session-scoped route uses the common application service and returns a persisted numerator, denominator, percentage/interval, coverage, committed revision, and lineage. Future verify: `python -m pytest -q backend/tests/test_long_haul_api.py`.
-48. **Implement demand-pressure tool** — Owner: backend engineer. Files: `backend/app/analysis/demand_pressure.py`, `backend/tests/test_demand_pressure.py`. Depends: 17, 18, 20. Accept: SFO/arbitrary airports return observations, sourced constraints/counterevidence, and missing estimation inputs with `not_supported` for any unmet-demand quantity. Future verify: `python -m pytest -q backend/tests/test_demand_pressure.py`.
+48. **Implement demand-pressure tool** — Owner: backend engineer. Files: `backend/app/analysis/demand_pressure.py`, `backend/tests/test_demand_pressure.py`. Depends: 12B, 17, 18, 20. Accept: SFO/arbitrary airports return observations (including DataSF passenger trends for SFO only), sourced constraints/counterevidence, and missing estimation inputs with `not_supported` for any unmet-demand quantity. Future verify: `python -m pytest -q backend/tests/test_demand_pressure.py`.
 49. **Expose demand-pressure endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_demand_pressure_api.py`. Depends: 28A, 29, 48. Accept: the session-scoped route uses the common application service and persists substantive evidence, unknowns, committed revision, and lineage. Future verify: `python -m pytest -q backend/tests/test_demand_pressure_api.py`.
 49A. **Extend intent contracts for remaining tools** — Owner: backend engineer. Files: `backend/app/agent/contracts.py`, `backend/tests/test_agent_contracts.py`. Depends: 45, 47, 49. Accept: screen, long-haul, and demand-pressure intents/clarifications validate without free-form substantive claims. Future verify: `python -m pytest -q backend/tests/test_agent_contracts.py`.
 49B. **Extend orchestrator allowlist** — Owner: backend engineer. Files: `backend/app/agent/orchestrator.py`, `backend/tests/test_orchestrator.py`. Depends: 49A. Accept: chat dispatches all four tools through the same validation, call cap, session transaction, and access rules. Future verify: `python -m pytest -q backend/tests/test_orchestrator.py`.
@@ -470,7 +526,7 @@ These are future, proposed units. Paths and commands do not assert that files or
 
 Phase A is complete only when reviewer evidence shows:
 
-1. a real qualified public API field appears substantively in airport search/details with source date and lineage;
+1. a real qualified DataSF API snapshot feeds the SFO passenger trend calculation and answer with source date/lineage;
 2. qualified analytical partitions cover every emitted metric and methodology-v0 input;
 3. LAX/SNA comparison and “use the previous year” pass as one atomic backend capability;
 4. all four workflows work on generalized eligible inputs, not only named examples;
@@ -485,7 +541,7 @@ These are planned evidence requirements. No tests or reviewer approval are claim
 
 ## 11. Demonstration path
 
-1. Open source status and airport search; show API-origin metadata and dated provenance.
+1. Open source status; show the DataSF API-backed SFO monthly trend and provenance; airport identity metadata is optional.
 2. Compare LAX/SNA; inspect the table, coverage, evidence, and one result ID.
 3. Ask “use the previous year”; show an immutable successor preserving airport/service scope.
 4. Screen New England; inspect score components, exclusions, terminal-fit gate, and counterevidence.
