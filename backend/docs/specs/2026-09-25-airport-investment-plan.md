@@ -2,7 +2,7 @@
 
 Date: 2026-09-25  
 Author: brainstorming-agent  
-Status: Plan only; conditional on the source-qualification gate
+Status: Plan only; DataSF bounded source scope qualified, with runtime integration and other analytical source gates still open
 
 ## Problem Statement
 
@@ -77,15 +77,15 @@ Phase A is map-free: chat, result table, evidence, source/coverage status, assum
 
 The decision chain is `observed traffic -> pressure priority -> terminal intervention fit/counterevidence -> profitability evidence gap -> diligence recommendation`. A future finance scenario needs capex/phasing, attributable usable-capacity uplift, ramp/utilization, investor revenue capture, incremental opex, asset life, and discount rate. Without those inputs, profitability is returned as `not_identifiable`. SFO returns substantive observed indicators, sourced constraint hypotheses, counterevidence, and missing demand inputs; throughput, delay, and occupancy alone yield neither a point estimate nor bounds for unmet demand, so that quantity is also `not_identifiable`. The plan explicitly delivers evidence-gap assessments for those two requested business quantities and does not claim full quantitative coverage of them.
 
-The README Business-question decision contract owns the exact profitability/unmet-demand response. FAA airport financial reports and the SFO 2024 financing report are concrete candidate documents, not extracted project-return inputs. Phase A returns `not_identifiable` for quantitative return or latent demand until attributable cash-flow/capacity/counterfactual or route/time-specific demand evidence exists. A disclosed diligence answer is permitted by the PDF’s uncertainty/scoping instruction but does not satisfy quantitative delivery.
+The README Business-question decision contract owns the exact profitability/unmet-demand response. FAA airport financial reports and the SFO 2024 financing report are concrete candidate documents, not extracted project-return inputs. Phase A returns `not_identifiable` for quantitative return or latent demand until attributable cash-flow/capacity/counterfactual or route/time-specific demand evidence exists. A disclosed diligence answer is permitted by the PDF’s uncertainty/scoping instruction but does not satisfy quantitative delivery. Any future scenario uses the viewpoint of an external terminal infrastructure investor or concessionaire and models only incremental project cash flows under explicit commercial rights and revenue-sharing terms. Airport-authority finances, airline economics, passenger growth, and bond-feasibility projections remain context/counterevidence; Phase A excludes the scenario because the project attribution and commercial-rights inputs are absent.
 
 ## Source Research Decision Log
 
 1. **BTS SODA airport resource `kfcv-nyy3`: reachable sample, still unqualified.** Live calls returned HTTP 200 JSON, a 19,850 count, distinct bounded pages, and the requested ANC/BDL/BOS/LAX/SFO/SNA rows. Sample rows carried `eff_date` 2020-07-16. This does not prove full pagination, uniqueness/null rates, schema/failure behavior, or that dated enrichment is substantive enough for the assignment. The field named `annual_ops` behaved as a date and must not be interpreted as an operations count. It is optional enrichment; DataSF SFO statistics is now the primary analytical API.
-1A. **DataSF SFO passenger statistics `rkru-6vcg`: primary analytical API, sampled aggregate proven.** A real `data.sf.gov` JSON query returned 48 Enplaned monthly category aggregates spanning all 24 months of 2023/24. Raw bounded responses and exact reproduction command are retained in README/evidence. It feeds SFO demand-pressure passenger trends only; official-total reconciliation, raw categorical uniqueness, schema/failure behavior and app consumer proof remain gates. Legacy `data.sfgov.org` returned HTML redirect, so transport success alone is insufficient.
+1A. **DataSF SFO passenger statistics `rkru-6vcg`: bounded raw source scope qualified.** The retained [source qualification record](../evidence/source-qualification-20260925.md) documents a repeatable 3,721-row CY2023/24 raw CSV with all selected fields populated, zero declared-key duplicates, valid passenger counts, and exact domestic/international FY2024 enplaned-total reconciliation to SFO's audited statement. An invalid-column call establishes the upstream JSON error shape. Immutable ingestion, timeout/retry/schema quarantine, and the actual demand-pressure consumer remain implementation gates. Legacy `data.sfgov.org` returned HTML redirect, so transport success alone is insufficient.
 2. **FAA CY2024 final commercial-service workbook: qualified cohort authority.** The observed workbook passed integrity/content checks, produced 513 unique Locids and a reproducible 22-airport New England cohort, including all six named targets. The ingestion manifest must preserve its recorded checksum, retrieval date, counts, and cohort rule. SODA remains left-joined enrichment.
-3. **BTS T-100 All Carriers: blocked traffic candidate.** Official lookup meanings were resolved and an earlier bounded extract exists as historical evidence, but three fresh generated-download attempts failed. Current extraction, complete comparable CY2023/CY2024 coverage, grain, direction, units, identifiers, deduplication, and reconciliation remain unqualified.
-4. **BTS Reporting Carrier On-Time Performance, table FGJ: selected family.** The official table title and reporting-carrier PREZIP filename resolve the earlier marketing-label error. Full archives, carrier coverage, deduplication and metric field coverage remain unqualified; marketing-carrier files are excluded. See README official links and retained source status.
+3. **BTS T-100 All Carriers: bounded extraction reproducible; coverage blocked.** The retained qualification record documents the fresh-session hidden-field contract, a reproducible Alaska January 2024 ZIP/CSV with 3,922 rows, and two bounded 2023 state extracts. HTTP 200 HTML responses for other states prove content validation is required. Complete comparable assignment-airport CY2023/24 coverage, union/deduplication, class/data-source disposition, and total reconciliation remain unqualified, so traffic, ANC share, and screening calculations stay blocked.
+4. **BTS Reporting Carrier On-Time Performance, table FGJ: inventory qualified; archive contents blocked.** The official PREZIP index contains exactly 24 canonical CY2023/24 files. Matching size, timestamp, and ETag verify the second December 2023 name as one alias rather than an extra partition. Full archive bytes/checksums, extraction, schema/row counts, duplicates, reporting population, and field coverage remain open; marketing-carrier files are excluded.
 5. **FAA/airport-authority documents: proposed intervention evidence.** Each claim requires publisher, date, page/section, constraint type, counterevidence, and review status.
 
 The plan is sound conditionally. Source-independent package and contract work may start, but every metric-dependent workflow remains blocked until its inputs have qualified coverage and a hand calculation. A frozen/download snapshot may supplement the API but cannot satisfy the exam's API requirement by itself.
@@ -134,7 +134,7 @@ Status vocabulary matches the README: `not_identifiable` for unidentified busine
 
 Hours 0–2 run contract definition, backend/frontend package setup, and all source qualification in parallel. At hour 2, T-100 must reproduce or move to a documented official alternate with equivalent grain, fields, and CY2023/CY2024 coverage. Hours 2–6 build source-independent schemas, startup/session/UI skeletons and snapshots only for passed sources. The analytics store accepts available qualified manifests; traffic and long-haul require T-100, operational metrics require on-time, and screening requires FAA/T-100/reviewed terminal evidence. Execution contracts and the common service do not depend on comparison or source qualification. For the remaining workflows, stable ticket IDs are not execution order: 49A (typed contracts, after 24) then 49C (templates, after 27/49A) precede direct endpoints 45/47/49. Their templates are proven against typed synthetic results without an endpoint dependency. Real tools 44/46/48 and 49C precede allowlist 49B; endpoints and 49B precede client 49D. Every route renders its final envelope before commit. Hours 6–14 build the common service and each tool whose own prerequisites passed; no tool waits for comparison browser QA. Hours 14–20 integrate routes, reconciliation, rendering, and client state. Hours 20–24 produce browser evidence, architecture, traceability, and rehearse the demo.
 
-Phase B, globe, polish, live context, voice, hosting, and finance scenarios are cut first. Historical extracts and synthetic fixtures cannot replace failed qualification. If meaningful API use, T-100 reproducibility, full on-time coverage, intervention evidence, or any required workflow remains unresolved at the cutoff, the deliverable is explicitly incomplete and names the failed gates; a degraded display is not treated as assignment compliance.
+Phase B, globe, polish, live context, voice, hosting, and finance scenarios are cut first. Historical extracts and synthetic fixtures cannot replace failed qualification. If DataSF runtime ingestion/consumer proof, full T-100 coverage, full on-time archive qualification, intervention evidence, or any required workflow remains unresolved at the cutoff, the deliverable is explicitly incomplete and names the failed gates; bounded source proof or a degraded display is not treated as completed assignment integration.
 
 ## Blast-Radius Score
 
@@ -174,7 +174,7 @@ Source artifact: `FDE Exam 2.pdf`, SHA-256 `12de252ee7ecfb43be171c19b562a392bcec
 
 | PDF requirement | Plan response |
 |---|---|
-| Public APIs | DataSF SFO Enplaned monthly passenger API feeds a substantive demand-pressure trend; retained aggregate response is observed, while raw grain/reconciliation, failure behavior and runtime ingestion remain gates. SODA identity is optional. |
+| Public APIs | DataSF's bounded raw CY2023/24 SFO scope and audited-total reconciliation are qualified; immutable ingestion, adapter failure behavior, and the actual demand-pressure consumer remain gates. SODA identity is optional. |
 | Rank or compare with defined KPI | Deterministic comparisons and gated methodology-v0 pressure screening. |
 | Explain reasoning | Visible components, evidence/counterevidence, claim IDs, server-formatted numbers, deterministic fallback. |
 | Conversational follow-ups | Typed intent, structured stored context, CAS revisions, immutable successor results. |
@@ -189,7 +189,7 @@ Source artifact: `FDE Exam 2.pdf`, SHA-256 `12de252ee7ecfb43be171c19b562a392bcec
 
 ## Specialist Discussion Summary
 
-- **Data:** SODA reachability and bounded samples were reproduced but remain short of full qualification; FAA CY2024 workbook content qualifies the cohort; T-100 is currently unreproducible; Reporting Carrier table FGJ is selected, but full archive coverage remains unqualified.
+- **Data:** DataSF bounded raw SFO scope is source-qualified while runtime integration remains open; FAA CY2024 qualifies the cohort; T-100 bounded extraction is reproducible while full assignment coverage remains blocked; the Reporting Carrier 24-file inventory/December alias are verified while archive contents remain unqualified.
 - **Backend:** FastAPI modular monolith, read-only DuckDB, immutable Parquet, local SQLite, one common persisted application service, typed intents, CAS revisions, payload-bound idempotency, immutable follow-ups, and reconciliation.
 - **AI safety:** claim IDs and server numeric formatting constrain prose; bounded retries share a total cap; deterministic templates remain available.
 - **Finance:** screening prioritizes diligence and must preserve terminal fit, counterevidence, and the profitability evidence gap.
@@ -217,7 +217,7 @@ The strongest doubt is over-engineering a one-day assignment. The plan keeps one
 - Baseline substantive project files were `README.md` and `FDE Exam 2.pdf`; AppleDouble sidecars also exist.
 - The root is a Git repository on `main`; planning evidence was committed before this correction pass.
 - The FAA CY2024 workbook evidence recorded in the README qualifies the cohort content and New England membership rule, subject to preservation in the future ingestion manifest.
-- The SODA probe proves reachability, a count, bounded pagination, and sampled fields only. T-100 fresh extraction failed, and on-time inspection covered a bounded January archive prefix without full archive qualification.
+- The retained source record proves bounded DataSF raw qualification and reconciliation, bounded T-100 extraction reproducibility, and the on-time 24-file inventory/December alias. It does not prove application ingestion/consumer behavior, complete T-100 assignment coverage, or on-time archive contents.
 
 ### Proposed only
 
@@ -236,7 +236,7 @@ The detailed acceptance criteria and ownership of every invoked test/runner live
 
 | Subtask | HITL Tier | Acceptance Criteria (outcome — brainstorming fills) | Verification Command |
 | :--- | :--- | :--- | :--- |
-| Source qualification | Rescore | Required API/download inputs have qualified grain, units, periods, deduplication, lineage, and hand checks; failure blocks dependents. | `python backend/scripts/build_source_matrix.py --check` |
+| Source qualification | Rescore | Preserve the qualified DataSF bounded scope; close its runtime integration gates, complete T-100 assignment coverage, inspect all on-time archives, and keep each failed source isolated to its dependents. | `python backend/scripts/build_source_matrix.py --check` |
 | Immutable analytical data | Rescore | Identical inputs yield identical pinned read-only snapshots without cross-population multiplication. | `python -m pytest -q backend/tests/test_analytics_storage.py` |
 | Complete comparison capability | Rescore | LAX/SNA comparison includes evidence, stored context, prior-year follow-up, atomic successor, scoped access, and deterministic rendering; other tools may progress independently on their own passed prerequisites. | `python -m pytest -q backend/tests/test_comparison_journey.py` |
 | Conversation concurrency | Rescore | Direct/chat persistence parity, replay, conflict, stale revision, committed acknowledgement after draft edits, reconciliation after unknown response, crash recovery, pending expiry, and bounded retries behave deterministically. | `python -m pytest -q backend/tests/test_sessions.py backend/tests/test_orchestrator.py` |
@@ -248,7 +248,7 @@ The detailed acceptance criteria and ownership of every invoked test/runner live
 
 ## Open Questions
 
-The documentation may be reviewed, but empirical qualifications below remain open. README “Open empirical blockers and closure evidence” assigns Tickets 2/4/5 to the data engineer and 5A to the research lead, with retained proof and blocked capabilities for each. A plan verdict cannot close these gates. Exact T-100 extraction, on-time carrier semantics and full coverage, intervention documents, and final API acceptance are external qualification gates that block only their dependents. Methodology v0 supplies executable provisional conventions plus sensitivity disclosure; Ticket 7 freezes or replaces them before ranking. The exact remaining clock controls the documented cutoff branch, never a compliance workaround.
+The documentation may be reviewed, but empirical and integration gates remain open. README “Open empirical blockers and closure evidence” assigns Tickets 2/4/5 to the data engineer and 5A to the research lead, with retained proof and blocked capabilities for each. DataSF bounded raw qualification is closed, but ingestion/failure/consumer proof is open; T-100 extraction reproducibility is closed only for bounded samples, with full coverage open; on-time inventory/alias resolution is closed, with archive contents open. A plan verdict cannot close these gates. Methodology v0 supplies executable provisional conventions plus sensitivity disclosure; Ticket 7 freezes or replaces them before ranking. The exact remaining clock controls the documented cutoff branch, never a compliance workaround.
 
 ## Self-Review
 
