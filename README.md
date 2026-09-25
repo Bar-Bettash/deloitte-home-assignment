@@ -27,6 +27,8 @@ The exam milestone supports four generalized workflows:
 
 Every substantive answer separates `observed`, `calculated`, `inferred`, `scenario`, and `unknown` claims. Missing data is never converted into zero.
 
+The supplied public data cannot answer two requested business quantities by itself: project profitability and causal unmet demand. Phase A answers those parts with an explicit evidence-gap assessment: it shows the observed pressure and terminal-fit evidence, lists the missing finance or demand inputs, and returns `not_supported` for the requested quantity. It must not claim complete quantitative coverage of those two questions.
+
 ## 2. Milestones
 
 ### Phase A — mandatory exam product
@@ -57,10 +59,13 @@ flowchart LR
 
     subgraph Backend[FastAPI modular monolith]
       API[Session-scoped API routes]
+      Service[Common analysis application service<br/>CAS + idempotency + result lineage]
       Agent[Typed intent + allowlisted dispatcher]
       Tools[Deterministic analysis tools]
       Render[Server claim templates]
-      API --> Agent --> Tools --> Render --> API
+      API --> Service
+      Service --> Agent --> Tools --> Render --> Service
+      Service --> API
     end
 
     UI <--> API
@@ -80,8 +85,7 @@ flowchart LR
       SQLite[SQLite<br/>sessions, revisions, idempotency, result lineage]
     end
 
-    Agent <--> SQLite
-    Tools --> SQLite
+    Service <--> SQLite
 ```
 
 The backend is the product's analytical authority. The frontend sends intent and renders typed results; it does not calculate metrics. DuckDB reads versioned analytical snapshots, while SQLite tracks short-lived anonymous sessions and immutable result lineage. The model is bounded to typed intent and approved claim selection; deterministic tools and server templates own the answer.
@@ -97,6 +101,7 @@ sequenceDiagram
     actor A as Analyst
     participant UI as React client
     participant API as FastAPI route
+    participant C as Common application service
     participant P as Intent parser
     participant V as Schema and policy validator
     participant T as Deterministic tool
@@ -106,23 +111,30 @@ sequenceDiagram
 
     A->>UI: Ask a question or follow-up
     UI->>API: Message + expected revision + idempotency key
-    API->>P: Parse to typed intent
+    API->>C: Reserve key + payload hash + expected revision
+    C->>P: Parse to typed intent
     P->>V: Tool name + typed arguments
     alt Ambiguous or unsupported
-      V-->>API: Focused clarification
-      API-->>UI: Clarification, prior result remains visible
+      V-->>C: Focused clarification
+      C->>S: Commit turn + revision
+      C-->>API: Committed acknowledgement
+      API-->>UI: Clarification + committed revision
     else Valid intent
       V->>T: Approved request
       T->>D: Read pinned qualified snapshots
       D-->>T: Metrics + coverage + lineage
-      T->>S: Atomic result + revision commit
+      T->>C: Validated result
+      C->>S: Atomic result + turn + revision commit
       alt Revision changed
-        S-->>API: Stale revision conflict
-        API-->>UI: Discard stale response
+        S-->>C: Stale revision conflict
+        C-->>API: Conflict + authoritative revision
+        API-->>UI: Reconcile session before retry
       else Commit succeeds
-        S-->>R: Immutable result + approved claims
-        R-->>API: Template-rendered answer
-        API-->>UI: Result, evidence, limitations, lineage
+        S-->>C: Immutable result + committed revision
+        C->>R: Approved claims
+        R-->>C: Template-rendered answer
+        C-->>API: Committed acknowledgement + result
+        API-->>UI: Apply commit; keep current draft text
       end
     end
 ```
@@ -149,7 +161,7 @@ Source qualification is the first execution gate. A dependent ticket stops when 
 | Public API | BTS SODA Airports Citizen Connect `https://data.bts.gov/resource/kfcv-nyy3.json` | Airport search/detail identity metadata with visible dated provenance | Live calls returned 19,850 rows and exactly one match for each of ANC, BDL, BOS, LAX, SFO, and SNA. Its 2020-07-16 observation vintage limits it to dated identity/classification enrichment; selected field semantics and UI lineage must still pass. |
 | Eligible airport cohort | FAA CY2024 commercial-service workbook | Authoritative membership after qualification | The live workbook passed XLSX integrity and content checks: 513 unique airport rows and a reproducible 22-airport New England cohort. Preserve the verified checksum, inclusion rule, and source metadata in the ingestion manifest. CY2025 preliminary data is not substituted. |
 | Traffic and route mix | BTS T-100 Segment All Carriers domestic and international extract candidate | Origin-direction departures, seats, passengers, and distance | Official lookup calls now resolve service-class and domestic/international carrier-source codes, but three live bounded generated-download POSTs failed. The earlier successful extract is historical evidence; current extraction is blocked until reproducibility and the remaining grain, direction, units, deduplication, reconciliation, and period checks pass. |
-| Operational indicators | BTS marketing-carrier on-time monthly ZIP candidates | Delay, cancellation, taxi indicators | The index exposes 12 partitions for each of CY2023 and CY2024 plus a December 2023 alias. A bounded January 2024 range request verified real ZIP/CSV bytes, the 110-column schema, and real rows; full-file checksums, row counts, reporting population, deduplication, and all-month coverage remain pending. |
+| Operational indicators | Official BTS on-time monthly PREZIP family; exact table/family unresolved | Delay, cancellation, taxi indicators | The index naming suggested marketing-carrier data, while the observed January archive contained a `Reporting_Carrier` CSV. The exact official table, carrier-family semantics, archive aliases, full-file checksums, row counts, reporting population, deduplication, and all-month coverage must be verified before use. |
 | Intervention evidence | FAA and airport-authority documents | Terminal fit, competing constraints, counterevidence | Every claim resolves to publisher, date, page/section, constraint type, and review status. |
 
 ### How sources support the four assignment tasks
@@ -206,14 +218,14 @@ The candidate public API contributes dated airport identity metadata and visible
 
 The SODA count query returned 19,850 rows. A bounded query for ANC, BDL, BOS, LAX, SFO, and SNA returned exactly one record for each identifier, including name, city, state, facility/use classification, status, and ICAO identity fields. Separate two-row pages returned distinct offsets, so the endpoint's pagination mechanism was exercised. Every required record carried `eff_date` 2020-07-16, and the official dataset description says its observations are as of 2020-07-16. A later portal-metadata update does not make those observations contemporary. The sampled `annual_ops` field contained dates such as `12/31/2019`, so it must not be interpreted as an operations count.
 
-This proves a real, nonempty public API integration and 6/6 target-airport identity resolution. Its fitness is limited to visibly dated identity/classification enrichment; it does not qualify modern congestion or the 2024 cohort. FAA membership is authoritative. SODA is left-joined enrichment: a missing row yields `registry_metadata_missing` and never removes an FAA airport. A qualified API-origin field and its 2020-07-16 vintage must appear in search/details with lineage for the exam to pass; an offline fixture or download alone cannot satisfy that requirement.
+This proves real calls, a nonempty response, bounded pagination behavior, and 6/6 target-airport identity resolution. It does not prove full-dataset uniqueness, null rates, schema stability, failure behavior, or that dated classification enrichment is substantive enough to satisfy the assignment's public-API criterion. Its fitness is limited to visibly dated identity/classification enrichment; it does not qualify modern congestion or the 2024 cohort. FAA membership is authoritative. SODA is left-joined enrichment: a missing row yields `registry_metadata_missing` and never removes an FAA airport. A qualified API-origin field and its 2020-07-16 vintage must appear in search/details with lineage for the exam to pass; if reviewer value remains merely decorative, Gate 1 must select a stronger public API. An offline fixture or download alone cannot satisfy that requirement.
 
 T-100 and on-time inputs are planned downloads, not mislabeled APIs. Frozen snapshots may support reproducibility but are labeled with retrieval date and mode. Synthetic fixtures remain test-only.
 
 ### Observed live download evidence — 2026-09-25
 
 - The official BTS T-100 Segment All Carriers selection UI at `https://transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG` remains reachable and exposes the expected field selectors. Live official lookup downloads resolve `DATA_SOURCE` as `DF` domestic/foreign carrier, `DU` domestic/U.S. carrier, `IF` international/foreign carrier, and `IU` international/U.S. carrier. The service-class lookup identifies scheduled passenger/cargo classes `A`, `C`, `E`, and `F`, separately from scheduled all-cargo and unscheduled classes. An earlier bounded Alaska January 2024 POST returned a 36,924-byte ZIP with SHA-256 `6b69594064daafad1891483560d77aa63573b6087c4b3f6eb640734d49125da7`, a 211,939-byte CSV, and 3,922 data rows. On 2026-09-25, three fresh bounded POSTs with the same geography/year/month intent instead redirected to `/ErrPage.asp?aspxerrorpath=/DL_SelectFields.aspx` and then returned 404. The earlier success is historical evidence, not current runtime proof. Ticket 4 is blocked until generated extraction is reproducible and full CY2023/CY2024 coverage, segment grain, origin direction, units, IDs, deduplication, and reconciliation pass.
-- The official PREZIP index exposes 12 canonical marketing-carrier on-time month partitions for CY2023 and 12 for CY2024; December 2023 also has an alternate parenthesized filename. A January 2024 HEAD returned HTTP 200, `application/x-zip-compressed`, 27,573,265 bytes, byte-range support, and a 2024-04-11 last-modified date. A bounded 65,536-byte request returned HTTP 206 with `Content-Range: bytes 0-65535/27573265` and a valid ZIP signature. Partial decompression exposed `On_Time_Reporting_Carrier_On_Time_Performance_(1987_present)_2024_1.csv`, a declared uncompressed size of 246,830,488 bytes, 110 columns, and 1,553 complete real rows in the decoded prefix. Required fields including airport IDs/codes, flight date, carrier, cancellation, delay, taxi, and distance were present. The prefix itself demonstrated field missingness: 1,553 eligible rows versus 1,507 nonblank departure delays, 1,505 taxi-out values, 1,502 taxi-in values, and 1,501 arrival delays. Ticket 5 must still download and checksum every required file, resolve the December alias, and verify full row counts, extraction, carrier grain, deduplication, months-with-rows, reporting coverage, and airport population.
+- The official PREZIP index exposes 12 canonical monthly links for CY2023 and 12 for CY2024; December 2023 also has an alternate parenthesized filename. The index/link naming suggested a marketing-carrier family, but a January 2024 bounded read exposed `On_Time_Reporting_Carrier_On_Time_Performance_(1987_present)_2024_1.csv`. A HEAD returned HTTP 200, `application/x-zip-compressed`, 27,573,265 bytes, byte-range support, and a 2024-04-11 last-modified date. A bounded 65,536-byte request returned HTTP 206 with `Content-Range: bytes 0-65535/27573265` and a valid ZIP signature. Partial decompression exposed a declared uncompressed size of 246,830,488 bytes, 110 columns, and 1,553 complete real rows in the decoded prefix. Required fields including airport IDs/codes, flight date, carrier, cancellation, delay, taxi, and distance were present. The prefix itself demonstrated field missingness: 1,553 eligible rows versus 1,507 nonblank departure delays, 1,505 taxi-out values, 1,502 taxi-in values, and 1,501 arrival delays. This is prefix evidence only. Ticket 5 must identify the exact official table/family from BTS documentation, reconcile index labels with archive/column semantics, download and checksum every required file, resolve the December alias, and verify full row counts, extraction, carrier grain, deduplication, months-with-rows, reporting coverage, and airport population.
 - The FAA CY2024 commercial-service workbook returned HTTP 200 with the expected XLSX MIME type and 58,201 bytes. SHA-256 is `7253febd109b73deeece0bd68e2aeb6f419e88332c2d109fd3350020edd73640`; the ZIP container passed integrity checks. Its single sheet, `ChangeinRevenuePassengerEnplan `, contains columns for rank, FAA region, state, Locid, city, airport name, service level, hub, CY2024 enplanements, CY2023 enplanements, and percent change. Parsing produced 513 airport rows with 513 distinct Locids, no missing or nonpositive CY2024 enplanements, 394 primary (`P`) airports, and 119 nonprimary commercial-service (`CS`) airports. Applying the explicit CT, ME, MA, NH, RI, and VT rule yields 22 New England airports: 19 `P` and 3 `CS`. All six named target airports are present. The FAA page lists this under CY2024 Passenger Boarding Data, says it was added 2025-09-15, and defines the service-level and hub codes. This qualifies the workbook for the CY2024 commercial-service cohort; the immutable ingestion manifest must preserve the checksum, retrieval date, row counts, and cohort rule. CY2025 preliminary data remains outside the core comparison unless a later scope decision adopts it.
 
 ### Public API acceptance contract
@@ -223,7 +235,7 @@ The candidate API is accepted only when the qualification artifact proves all of
 - ANC, BDL, BOS, LAX, SFO, and SNA each resolve exactly once to canonical airport ID, name, city, state, and at least one meaningful classification field selected from the observed schema.
 - Required-field null rates, duplicate canonical IDs, duplicate IATA codes, and conflicting names are counted and dispositioned; a missing enrichment row never removes an FAA-cohort airport.
 - The artifact records observation vintage separately from portal-metadata update time, plus request URL/parameters, retrieval timestamp, response checksum, row count, and schema fingerprint.
-- Pagination is exercised until completion and proves that the six named airports are not an accidental first-page sample.
+- Pagination is exercised through the full dataset with stable ordering and a reconciled count; the existing two-page probe is insufficient.
 - Timeout, non-2xx, malformed JSON, schema drift, missing required fields, duplicate IDs, and partial-page failure each produce a typed unavailable/quarantined state rather than silently serving stale or partial metadata.
 - The qualified API-origin field and its vintage/lineage appear in airport search or detail output. If this candidate cannot meet that substantive role, Gate 1 selects another public API before Phase A can pass.
 
@@ -258,7 +270,7 @@ The two source families keep separate populations and denominators. T-100 passen
 
 ### Regional screening
 
-Methodology v0 is frozen before ranking is enabled. A provisional hypothesis to evaluate is:
+Methodology v0 is frozen before ranking is enabled. Its default evaluation formula is:
 
 ```text
 pressure score = 0.40 * growth percentile
@@ -266,9 +278,15 @@ pressure score = 0.40 * growth percentile
                + 0.30 * seat-occupancy percentile
 ```
 
-The weights are not empirically validated investment predictors. Growth needs a denominator/base-effect rule and outlier treatment. Volume favors large hubs. Seat occupancy is airline seat utilization, never terminal/runway capacity or headroom. Preserve the dimensions separately.
+The weights are an explicit screening assumption, not an empirically validated investment model. Apply these deterministic v0 rules:
 
-Freeze the cohort, service scope, normalization, percentile ties, one-airport cohort behavior, missingness, and sensitivity cases. Missing required data makes an airport `not_assessable`; weights are never silently renormalized. A quantitative pressure watchlist is distinct from ranked terminal projects. Terminal ranking requires reviewed intervention evidence and counterevidence.
+- Compute CY2024 volume and seat occupancy over the frozen qualified passenger-service scope. Compute adjusted growth as `(P2024 - P2023) / max(P2023, 10,000 passengers)` and display raw year-over-year growth beside it so the base-effect adjustment is visible; when `P2023 = 0`, raw growth is `not_supported` while adjusted growth remains defined by the explicit floor. The 10,000 floor is a provisional modeling convention chosen to damp percentage explosions at very small bases; it is not an empirical estimate or a profitability threshold.
+- Within the eligible New England cohort, winsorize adjusted growth at the 5th and 95th percentiles when at least 20 airports are assessable; otherwise do not winsorize. This is a provisional tail-damping convention, not a learned cutoff. Convert each dimension to `[0, 1]` with midrank percentile `(average_rank - 1) / (n - 1)`, ascending so higher values receive higher percentiles.
+- Equal dimension values receive the same average rank. With fewer than two fully assessable airports, no ranking is produced. Missing period, passengers, seats, or a nonpositive seat denominator makes that airport `not_assessable`; weights are never renormalized.
+- Treat final scores equal within `1e-12` as tied. Use competition ranking (`1, 2, 2, 4`); every airport with displayed rank at most 3 counts as top-three, so a boundary tie may include more than three airports. Canonical airport ID orders tied rows for stable display without breaking the tie.
+- Run exactly 24 scenarios: four weight cases (base `40/30/30`, equal `1/3` each, growth-heavy `60/20/20`, and scale/utilization-heavy `20/40/40`) × three prior-passenger floors (`1`, `10,000`, `25,000`) × two tail treatments (5th/95th winsorization and none). When fewer than 20 airports are assessable, the winsorized treatment is explicitly recorded as disabled and duplicates the untreated result. Report each airport's full rank range. Label it `robust_top_three` only if, for every one of the six floor/tail pairs, it is top-three in at least three of four weight cases and its maximum rank minus minimum rank across all 24 scenarios is at most two.
+
+The score produces a quantitative pressure watchlist only. A terminal-project recommendation is `eligible` only when the airport is fully scoreable and current reviewed airport-specific evidence supports a passenger-terminal capacity or processing constraint, with every material counterclaim reviewed and no unresolved conflict. It is `excluded` when reviewed evidence attributes the binding constraint to a nonterminal cause or shows the proposed terminal intervention does not address it. It is `not_assessable` when evidence is absent, stale, unreviewed, or materially conflicting. Only `eligible` airports are ordered by pressure score; excluded and not-assessable airports remain visible with reasons and counterevidence. Evidence status never changes the numeric pressure score.
 
 ### Long-haul share
 
@@ -293,6 +311,7 @@ Each result exposes typed claim objects: `metric`, `comparison`, `coverage`, `ev
 | Method and route | Purpose |
 |---|---|
 | `POST /api/v1/sessions` | Issue an anonymous opaque capability session in an HttpOnly, SameSite cookie with bounded expiry. |
+| `POST /api/v1/sessions/reconcile` | Reconcile one original idempotency key/hash to `committed`, `pending`, `failed`, or `absent`, plus canonical revision/result and reservation lease fence. |
 | `GET /api/v1/sources/status` | Qualified snapshots, periods, modes, and limitations. |
 | `GET /api/v1/airports/search` | Alias resolution plus mandatory API-origin metadata/provenance when available. |
 | `POST /api/v1/analyses/compare` | Deterministic airport comparison. |
@@ -307,16 +326,19 @@ Core proposed records: `Airport`, `SourceSnapshot`, `EvidenceRecord`, `AnalysisR
 
 FastAPI owns package startup, configuration loading, `main.py`, and a versioned root router that registers every promised route. A provider adapter owns the model call boundary so the orchestrator has no vendor-specific behavior. Every result/evidence/chat route resolves the anonymous server-issued capability cookie and scopes reads/writes to that session; opaque IDs alone never authorize cross-session access. Expired sessions fail closed and issue no silent replacement during a result request.
 
+Every `POST /analyses/*` route and the chat route invoke one common analysis application service. The service validates the capability, idempotency key, payload hash, and expected revision; calls a pure deterministic tool; then atomically persists the immutable result, turn, lineage, and new session revision before rendering the response. Direct analysis routes therefore create the same follow-up-capable state as chat. Pure tools remain internal and cannot be exposed by a route directly.
+
 ### Atomic follow-up semantics
 
 - Idempotency key binds the payload hash.
 - Same key plus same payload replays the committed response.
 - Same key plus different payload returns conflict.
 - A bounded `pending` reservation owns one total model/tool call cap, including retries.
+- Each reservation has an opaque server owner and monotonically increasing `lease_generation`; only that owner/generation may commit.
 - Compute targets an expected `session_revision`.
 - Result and new session state commit in one transaction only if the revision still matches.
 - A stale response is rejected and never exposed as committed.
-- A process crash leaves no session pointer to a nonexistent result. An expired pending lease is reclaimed only when no committed result exists.
+- A process crash leaves no session pointer to a nonexistent result. An expired pending lease is reclaimed only after a CAS fence advances its generation and deactivates the former owner.
 - `failed` keeps a safe retry path. Follow-ups create immutable successor results.
 
 ## 7. Truthfulness, failure, and security rules
@@ -334,9 +356,25 @@ FastAPI owns package startup, configuration loading, `main.py`, and a versioned 
 
 ### Client response ordering
 
-The frontend maintains a monotonic request generation. It increments synchronously on input change, submit, and retry. Both success and error handlers compare their captured generation before applying state; abort is an optional optimization, never the correctness mechanism. The prior committed result stays visible with a pending indicator. Empty, first-load, stale-response-discarded, and no-prior-result states are explicit.
+Draft editing changes presentation state only; it never invalidates an in-flight transaction. Each submission tracks its idempotency key, payload hash, and expected revision independently of the current input text. A committed acknowledgement is always recorded in request history even when the analyst has typed since submitting; the newer draft text remains untouched. Authoritative session revision and the current-result pointer update monotonically: an acknowledgement for revision `r+1` arriving after reconciliation already established `r+2` is retained as history but cannot replace `r+2` or its result. Every future follow-up uses the latest canonical server revision/result.
 
-## 8. Numbered implementation tickets
+After timeout, disconnect, unknown response, or revision conflict, the client calls `POST /api/v1/sessions/reconcile` with the original idempotency key and payload hash. The response returns canonical session revision/result plus reservation status, `lease_generation`, and whether an owner remains active. `committed` applies or records the committed revision monotonically and permits same-key/same-hash replay. `pending` permits only bounded polling or same-key/same-hash replay; a new key is forbidden because the original owner may still commit. `failed` permits a new attempt only after the server has atomically fenced the old generation and deactivated its owner. `absent` permits only same-key, identical-payload retry, preserving the original expected revision: a delayed original request and its retry share one reservation. A later revision conflict requires explicit rebase confirmation before submitting a new transaction. Reusing a key with a different hash is always a conflict. The prior result remains visible with pending/reconciling status.
+
+## 8. 24-hour execution lanes and failure branch
+
+Package setup and source qualification start in parallel; only source-dependent calculations wait for qualification.
+
+| Clock | Parallel work | Cutoff and evidence |
+|---|---|---|
+| Hours 0–2 | Product contract; backend/frontend package scaffolds; T-100, on-time, FAA, SODA, and document qualification | At hour 2, record each source as qualified or blocked. T-100 extraction must reproduce or move to a documented official alternate with equivalent grain, fields, and CY2023/CY2024 coverage. |
+| Hours 2–6 | Startup/router/session skeleton; typed UI shell; successful source snapshots and methodology freeze | No synthetic or historical extract may stand in for a failed live qualification. A blocked required source marks its dependent workflow unavailable. |
+| Hours 6–14 | Common application service, persistence, traffic/operational tools, and independent workflow tools whose own inputs passed | Each tool advances on its own backend prerequisites; comparison browser QA is not a prerequisite for the other tools. |
+| Hours 14–20 | Analysis/chat routes, reconciliation behavior, client integration, deterministic rendering | Direct and conversational calls must create identical persisted lineage. |
+| Hours 20–24 | End-to-end evidence, architecture document, demo rehearsal, and assignment traceability | Phase A is complete only if all four workflows, meaningful API use, and required source coverage pass. Otherwise submit an explicitly incomplete artifact that names unavailable workflows and failed gates. |
+
+Reduction order is Phase B, globe, visual polish, optional live context, voice, hosting, and finance scenarios. The four required workflows, deterministic calculations, source lineage, and truthful unavailable states are not reducible. If SODA remains merely decorative, if T-100 is unreproducible, if the on-time family remains unresolved, or if intervention evidence cannot support terminal fit, the plan does not claim full assignment completion.
+
+## 9. Numbered implementation tickets
 
 These are future, proposed units. Paths and commands do not assert that files or test runners exist today. Each ticket names no more than two proposed files, one outcome, dependencies, owner, acceptance, and an exact **future** verification command owned by that implementer. No command below was run during planning. If work exceeds 150 net lines, split it before execution. Tickets 1–50 are the exam milestone; Tickets 51–52 are separately gated Phase B.
 
@@ -348,71 +386,72 @@ These are future, proposed units. Paths and commands do not assert that files or
 4. **Qualify T-100 Segment All Carriers partitions** — Owner: data engineer. Files: `backend/scripts/qualify_t100.py`, `backend/docs/sources/t100.md`. Depends: 1. Accept: domestic+international union, segment grain, origin direction, service class, distance units, IDs, deduplication, and comparable CY2023/CY2024 partitions pass. Future verify: `python backend/scripts/qualify_t100.py --check`.
 5. **Qualify on-time partitions** — Owner: data engineer. Files: `backend/scripts/qualify_ontime.py`, `backend/docs/sources/ontime.md`. Depends: 1. Accept: all 12 CY2023 plus all 12 CY2024 expected ZIPs have retrieval outcome, checksum, extraction/schema result, carrier grain, deduplication, months-with-rows, seasonal no-row disposition, reporting population, and field coverage recorded; any unresolved required partition fails the gate. Future verify: `python backend/scripts/qualify_ontime.py --check`.
 5A. **Qualify intervention documents** — Owner: research lead. Files: `backend/scripts/qualify_intervention_docs.py`, `backend/docs/sources/intervention-evidence.md`. Depends: 1, 3. Accept: each candidate document has airport, publisher, effective/publication date, stable locator, page/section, constraint type, currency/conflict status, and review decision. Future verify: `python backend/scripts/qualify_intervention_docs.py --check`.
-6. **Assemble source decision matrix** — Owner: data engineer. Files: `backend/scripts/build_source_matrix.py`, `backend/docs/SOURCE_MATRIX.md`. Depends: 2–5A. Accept: one serialized writer combines per-source decisions without concurrent shared-file edits. Future verify: `python backend/scripts/build_source_matrix.py --check`.
-7. **Freeze methodology v0** — Owner: analytics lead. Files: `backend/config/methodology-v0.yaml`, `backend/tests/test_methodology_config.py`. Depends: 3–6. Accept: formulas, cohort, scope, weights, normalization, base effects, outliers, ties, one-member cohort, missingness, intervention gate, and sensitivity are explicit. Future verify is deferred until Ticket 8 installs the declared test extra: `python -m pytest -q backend/tests/test_methodology_config.py`.
+6. **Assemble source decision matrix** — Owner: data engineer. Files: `backend/scripts/build_source_matrix.py`, `backend/docs/SOURCE_MATRIX.md`. Depends: 2–5A. Accept: one serialized writer records each source independently as qualified or failed so unrelated tools can proceed. Future verify: `python backend/scripts/build_source_matrix.py --check`.
+7. **Freeze screening methodology v0** — Owner: analytics lead. Files: `backend/config/methodology-v0.yaml`, `backend/tests/test_methodology_config.py`. Depends: 3, 4, 5A. Accept: formulas, cohort, scope, weights, normalization, base effects, competition ties, one-member cohort, missingness, terminal evidence gate, and all 24 sensitivity scenarios are explicit. Future verify is deferred until Ticket 8 installs the declared test extra: `python -m pytest -q backend/tests/test_methodology_config.py`.
 
 ### Gate 2 — runnable backend and reproducible data
 
-8. **Create backend package/dependencies** — Owner: backend engineer. Files: `backend/pyproject.toml`, `backend/app/__init__.py`. Depends: 7. Accept: one installable backend package declares FastAPI, Pydantic, DuckDB, and test tooling. Future verify: `python -m pip install -e 'backend[test]'`.
+8. **Create backend package/dependencies** — Owner: backend engineer. Files: `backend/pyproject.toml`, `backend/app/__init__.py`. Depends: 1. Runs in parallel with Tickets 2–7. Accept: one installable backend package declares FastAPI, Pydantic, DuckDB, and test tooling. Future verify: `python -m pip install -e 'backend[test]'`.
 9. **Own configuration and startup** — Owner: backend engineer. Files: `backend/app/config.py`, `backend/app/main.py`. Depends: 8. Accept: typed configuration creates the FastAPI app without reading secrets into logs. Future verify is owned by Ticket 9A.
 9A. **Verify backend startup** — Owner: backend engineer. Files: `backend/tests/test_startup.py`. Depends: 9. Accept: app startup succeeds with safe defaults and redacted configuration output. Future verify: `python -m pytest -q backend/tests/test_startup.py`.
 10. **Own versioned root router** — Owner: backend engineer. Files: `backend/app/api/router.py`, `backend/tests/test_router_factory.py`. Depends: 9A. Accept: one router factory supports incremental registration; each later route ticket registers its own router. Future verify: `python -m pytest -q backend/tests/test_router_factory.py`.
-11. **Define airport/source schemas** — Owner: backend engineer. Files: `backend/app/domain/airports.py`, `backend/app/domain/sources.py`. Depends: 2–6, 8. Accept: typed records preserve time-valid IDs, aliases, grain, period, units, and lineage. Future verify is deferred to Ticket 11A.
+11. **Define airport/source schemas** — Owner: backend engineer. Files: `backend/app/domain/airports.py`, `backend/app/domain/sources.py`. Depends: 1, 8. Accept: typed records preserve time-valid IDs, aliases, grain, period, units, lineage, and per-source qualified/failed status without requiring every source to pass. Future verify is deferred to Ticket 11A.
 11A. **Verify airport/source schemas** — Owner: backend engineer. Files: `backend/tests/test_source_contracts.py`. Depends: 11. Accept: qualified examples pass and invalid units/IDs fail. Future verify: `python -m pytest -q backend/tests/test_source_contracts.py`.
-12. **Build airport registry snapshot** — Owner: data engineer. Files: `backend/app/ingest/airports.py`, `backend/data/manifests/airports.json`. Depends: 2, 3, 11A. Accept: FAA cohort left-joins API metadata; missing enrichment never drops an airport. Future verify is deferred to Ticket 12A.
+12. **Build airport registry snapshot** — Owner: data engineer. Files: `backend/app/ingest/airports.py`, `backend/data/manifests/airports.json`. Depends: 3, 11A. Accept: the FAA cohort remains usable when API enrichment is failed/unavailable; qualified API metadata is left-joined when present and missing enrichment never drops an airport. Future verify is deferred to Ticket 12A.
 12A. **Verify airport registry ingestion** — Owner: data engineer. Files: `backend/tests/test_airport_ingest.py`. Depends: 12. Accept: repeated ingestion is stable and crosswalk/missing-metadata cases pass. Future verify: `python -m pytest -q backend/tests/test_airport_ingest.py`.
 13. **Build T-100 snapshot** — Owner: data engineer. Files: `backend/app/ingest/t100.py`, `backend/data/manifests/t100.json`. Depends: 4, 11A. Accept: qualified rows become immutable Parquet with lineage, deduplication, and coverage. Future verify is deferred to Ticket 13A.
 13A. **Verify T-100 ingestion** — Owner: data engineer. Files: `backend/tests/test_t100_ingest.py`. Depends: 13. Accept: repeat ingestion and hand-calculation cases pass. Future verify: `python -m pytest -q backend/tests/test_t100_ingest.py`.
 14. **Build on-time snapshot** — Owner: data engineer. Files: `backend/app/ingest/ontime.py`, `backend/data/manifests/ontime.json`. Depends: 5, 11A. Accept: immutable CY2023/CY2024 Parquet preserves its reporting population without joining raw T-100 rows or multiplying counts. Future verify is deferred to Ticket 14A.
 14A. **Verify on-time ingestion** — Owner: data engineer. Files: `backend/tests/test_ontime_ingest.py`. Depends: 14. Accept: duplicate, seasonal-partition, and aggregate reconciliation cases pass. Future verify: `python -m pytest -q backend/tests/test_ontime_ingest.py`.
-15. **Add read-only analytics store** — Owner: backend engineer. Files: `backend/app/storage/analytics.py`, `backend/tests/test_analytics_storage.py`. Depends: 12–14. Accept: DuckDB opens pinned per-source manifests read-only with distinct population/coverage metadata. Future verify: `python -m pytest -q backend/tests/test_analytics_storage.py`.
+15. **Add read-only analytics store** — Owner: backend engineer. Files: `backend/app/storage/analytics.py`, `backend/tests/test_analytics_storage.py`. Depends: 8, 11A. Accept: DuckDB opens whichever pinned per-source manifests are qualified, preserves distinct population/coverage metadata, and exposes failed/missing sources without blocking unrelated stores. Future verify: `python -m pytest -q backend/tests/test_analytics_storage.py`.
 
 ### Gate 3 — first comparison vertical slice
 
-16. **Define analysis contracts** — Owner: backend engineer. Files: `backend/app/domain/analysis.py`, `backend/tests/test_analysis_contracts.py`. Depends: 7, 11. Accept: immutable requests/results carry methodology, snapshots, coverage, evidence, exclusions, unknowns, predecessor, and owner session. Future verify: `python -m pytest -q backend/tests/test_analysis_contracts.py`.
-17. **Implement traffic metrics** — Owner: backend engineer. Files: `backend/app/analysis/traffic_metrics.py`, `backend/tests/test_traffic_metrics.py`. Depends: 7, 15, 16. Accept: passengers, seats, departures, occupancy, and growth handle denominators/base effects truthfully. Future verify: `python -m pytest -q backend/tests/test_traffic_metrics.py`.
-18. **Implement operational metrics** — Owner: backend engineer. Files: `backend/app/analysis/operational_metrics.py`, `backend/tests/test_operational_metrics.py`. Depends: 14–16. Accept: cancellation uses cancelled/eligible reported flights; delay and taxi use non-cancelled observed flights with field-specific denominators and eligible-flight coverage; no metric raw-joins T-100 rows. Future verify: `python -m pytest -q backend/tests/test_operational_metrics.py`.
+16. **Define analysis contracts** — Owner: backend engineer. Files: `backend/app/domain/analysis.py`, `backend/tests/test_analysis_contracts.py`. Depends: 1, 11A. Accept: immutable requests/results carry optional per-source snapshots/status, methodology, coverage, evidence, exclusions, unknowns, predecessor, and owner session without requiring unrelated sources. Future verify: `python -m pytest -q backend/tests/test_analysis_contracts.py`.
+17. **Implement traffic metrics** — Owner: backend engineer. Files: `backend/app/analysis/traffic_metrics.py`, `backend/tests/test_traffic_metrics.py`. Depends: 13A, 15, 16. Accept: T-100 passengers, seats, departures, occupancy, and growth handle denominators/base effects truthfully without an on-time dependency. Future verify: `python -m pytest -q backend/tests/test_traffic_metrics.py`.
+18. **Implement operational metrics** — Owner: backend engineer. Files: `backend/app/analysis/operational_metrics.py`, `backend/tests/test_operational_metrics.py`. Depends: 14A, 15, 16. Accept: cancellation uses cancelled/eligible reported flights; delay and taxi use non-cancelled observed flights with field-specific denominators and eligible-flight coverage; no metric raw-joins T-100 rows. Future verify: `python -m pytest -q backend/tests/test_operational_metrics.py`.
 19. **Create reviewed evidence dataset** — Owner: research lead. Files: `backend/data/evidence/evidence.json`, `backend/tests/test_evidence_records.py`. Depends: 1, 5A. Accept: only qualified documents produce records, with publisher, date, locator, proposition, constraint type, counterevidence, and status. Future verify: `python -m pytest -q backend/tests/test_evidence_records.py`.
 20. **Implement evidence helper** — Owner: backend engineer. Files: `backend/app/analysis/evidence.py`, `backend/tests/test_evidence.py`. Depends: 16, 19. Accept: production helper returns reviewed evidence/counterevidence by airport, topic, and period; compare, screen, and demand tools are named required callers. Future verify: `python -m pytest -q backend/tests/test_evidence.py`.
-21. **Implement comparison tool** — Owner: backend engineer. Files: `backend/app/analysis/compare.py`, `backend/tests/test_compare.py`. Depends: 15–18, 20. Accept: arbitrary eligible airports return common-period traffic and separately aggregated operational indicators; the production comparison caller invokes Ticket 20 for reviewed evidence/counterevidence and lineage. Future verify: `python -m pytest -q backend/tests/test_compare.py`.
-22. **Implement comparison request handler** — Owner: backend engineer. Files: `backend/app/services/comparison.py`, `backend/tests/test_comparison_service.py`. Depends: 21. Accept: a pure handler validates scope and returns the tool result without claiming an exposed route. Future verify: `python -m pytest -q backend/tests/test_comparison_service.py`.
+21. **Implement comparison tool** — Owner: backend engineer. Files: `backend/app/analysis/compare.py`, `backend/tests/test_compare.py`. Depends: 12A–14A, 15–18, 20. Accept: arbitrary eligible airports return common-period traffic and separately aggregated operational indicators; the production comparison caller invokes Ticket 20 for reviewed evidence/counterevidence and lineage. Future verify: `python -m pytest -q backend/tests/test_compare.py`.
+22. **Define common execution contracts** — Owner: backend engineer. Files: `backend/app/domain/execution.py`, `backend/tests/test_execution_contracts.py`. Depends: 16. Accept: tool-independent commands, idempotency/hash/revision envelopes, reservation status, lease owner/generation, reconciliation outcomes, and monotonic committed acknowledgements are typed without depending on comparison or any source. Future verify: `python -m pytest -q backend/tests/test_execution_contracts.py`.
 23. **Add model provider adapter** — Owner: backend engineer. Files: `backend/app/agent/provider.py`, `backend/tests/test_provider.py`. Depends: 9. Accept: vendor calls, timeouts, retries, and structured output are isolated behind one interface. Future verify: `python -m pytest -q backend/tests/test_provider.py`.
-24. **Define intent/claim schemas** — Owner: backend engineer. Files: `backend/app/agent/contracts.py`, `backend/tests/test_agent_contracts.py`. Depends: 16, 21. Accept: intent plus ordered approved claim IDs, enumerated relations/qualifiers, and clarification states validate; free-form substantive prose does not. Future verify: `python -m pytest -q backend/tests/test_agent_contracts.py`.
-25. **Define session transaction schema** — Owner: backend engineer. Files: `backend/app/storage/session_schema.py`, `backend/tests/test_session_schema.py`. Depends: 16, 24. Accept: opaque capabilities, expiry, revisions, payload hashes, leases, states, and owner-scoped result links enforce invariants. Future verify: `python -m pytest -q backend/tests/test_session_schema.py`.
-26. **Implement atomic session store** — Owner: backend engineer. Files: `backend/app/storage/sessions.py`, `backend/tests/test_sessions.py`. Depends: 25. Accept: CAS atomically persists result/state; replay, conflict, stale response, crash recovery, and pending expiry are deterministic. Future verify: `python -m pytest -q backend/tests/test_sessions.py`.
-27. **Implement safe renderer** — Owner: backend engineer. Files: `backend/app/agent/render.py`, `backend/tests/test_render.py`. Depends: 20, 24. Accept: server templates render every substantive numeric/causal sentence from approved claims; fallback is complete. Future verify: `python -m pytest -q backend/tests/test_render.py`.
-28. **Implement comparison orchestrator** — Owner: backend engineer. Files: `backend/app/agent/orchestrator.py`, `backend/tests/test_orchestrator.py`. Depends: 21, 23–27. Accept: typed comparison/follow-up cannot bypass validation, total call cap, CAS persistence, or safe rendering. Future verify: `python -m pytest -q backend/tests/test_orchestrator.py`.
-29. **Expose anonymous session endpoint** — Owner: backend engineer. Files: `backend/app/api/sessions.py`, `backend/tests/test_session_api.py`. Depends: 10, 26. Accept: server issues an opaque expiring capability in an HttpOnly SameSite cookie. Future verify: `python -m pytest -q backend/tests/test_session_api.py`.
-29A. **Expose comparison endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_compare_api.py`. Depends: 10, 22, 29. Accept: the registered route requires a valid capability session, validates scope, and returns the comparison handler result. Future verify: `python -m pytest -q backend/tests/test_compare_api.py`.
-30. **Expose chat endpoint** — Owner: backend engineer. Files: `backend/app/api/chat.py`, `backend/tests/test_chat_api.py`. Depends: 10, 28, 29, 29A. Accept: registered session-scoped chat executes or clarifies and rejects missing/expired capability or stale revision. Future verify: `python -m pytest -q backend/tests/test_chat_api.py`.
-31. **Expose result/evidence endpoints** — Owner: backend engineer. Files: `backend/app/api/results.py`, `backend/tests/test_result_access.py`. Depends: 10, 20, 26, 29. Accept: every result and evidence read is capability-session scoped; opaque result IDs alone grant no access. Future verify: `python -m pytest -q backend/tests/test_result_access.py`.
+24. **Define intent/claim schemas** — Owner: backend engineer. Files: `backend/app/agent/contracts.py`, `backend/tests/test_agent_contracts.py`. Depends: 16, 22. Accept: intent plus ordered approved claim IDs, enumerated relations/qualifiers, and clarification states validate; free-form substantive prose does not. Future verify: `python -m pytest -q backend/tests/test_agent_contracts.py`.
+25. **Define session transaction schema** — Owner: backend engineer. Files: `backend/app/storage/session_schema.py`, `backend/tests/test_session_schema.py`. Depends: 22, 24. Accept: opaque capabilities, expiry, revisions, payload hashes, explicit `committed`/`pending`/`failed`/`absent` reconciliation states, lease owner/generation, and owner-scoped result links enforce invariants. Future verify: `python -m pytest -q backend/tests/test_session_schema.py`.
+26. **Implement atomic session store** — Owner: backend engineer. Files: `backend/app/storage/sessions.py`, `backend/tests/test_sessions.py`. Depends: 25. Accept: only the active lease owner/generation can commit; revision/result pointers never regress; reconciliation is key/hash-specific; pending permits no new key; failed is fenced before a new key; absent retries the same key; replay, conflict, crash recovery, and expiry are deterministic. Future verify: `python -m pytest -q backend/tests/test_sessions.py`.
+27. **Implement safe renderer** — Owner: backend engineer. Files: `backend/app/agent/render.py`, `backend/tests/test_render.py`. Depends: 24. Accept: server templates render every substantive numeric/causal sentence from approved claims; fallback is complete. Future verify: `python -m pytest -q backend/tests/test_render.py`.
+28. **Implement comparison intent executor** — Owner: backend engineer. Files: `backend/app/agent/orchestrator.py`, `backend/tests/test_orchestrator.py`. Depends: 21, 23, 24, 27. Accept: typed comparison/follow-up execution cannot bypass validation, total call cap, or safe rendering and returns a validated candidate result for transactional persistence. Future verify: `python -m pytest -q backend/tests/test_orchestrator.py`.
+28A. **Implement common analysis application service** — Owner: backend engineer. Files: `backend/app/services/analysis.py`, `backend/tests/test_analysis_service.py`. Depends: 22, 26, 27. Accept: the tool-independent service validates capability/key/hash/revision, reserves a fenced lease, invokes an allowlisted executor, atomically persists result/turn/lineage/revision, and returns a monotonic committed acknowledgement for direct routes and chat. Future verify: `python -m pytest -q backend/tests/test_analysis_service.py`.
+29. **Expose session and reconciliation endpoints** — Owner: backend engineer. Files: `backend/app/api/sessions.py`, `backend/tests/test_session_api.py`. Depends: 10, 26. Accept: the server issues a capability and key/hash-specific reconciliation returns canonical revision/result, exact reservation status, lease generation/owner activity, and a fence before `failed` permits a new key; `absent` permits same-key retry only. Future verify: `python -m pytest -q backend/tests/test_session_api.py`.
+29A. **Expose comparison endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_compare_api.py`. Depends: 10, 21, 28A, 29. Accept: the registered session-scoped route invokes the common application service and returns a persisted, follow-up-capable result with committed revision and lineage. Future verify: `python -m pytest -q backend/tests/test_compare_api.py`.
+30. **Expose chat endpoint** — Owner: backend engineer. Files: `backend/app/api/chat.py`, `backend/tests/test_chat_api.py`. Depends: 10, 23, 24, 28A, 29. Accept: registered session-scoped chat executes or clarifies through the common service and rejects missing/expired capability or stale revision. Future verify: `python -m pytest -q backend/tests/test_chat_api.py`.
+31. **Expose result/evidence endpoints** — Owner: backend engineer. Files: `backend/app/api/results.py`, `backend/tests/test_result_access.py`. Depends: 10, 26, 29. Accept: every result and evidence read is capability-session scoped; opaque result IDs alone grant no access. Future verify: `python -m pytest -q backend/tests/test_result_access.py`.
 32. **Expose source-status/search endpoints** — Owner: backend engineer. Files: `backend/app/api/catalog.py`, `backend/tests/test_catalog_api.py`. Depends: 10, 12, 29. Accept: routes expose qualified source state and API-origin airport metadata/provenance within the current session. Future verify: `python -m pytest -q backend/tests/test_catalog_api.py`.
 33. **Prove complete backend comparison slice** — Owner: backend engineer. Files: `backend/tests/test_comparison_journey.py`, `backend/docs/evidence/comparison-slice.md`. Depends: 21–32. Accept: LAX/SNA compare, evidence, stored context, prior-year recompute, atomic successor, scoped access, and deterministic rendering pass together. Future verify: `python -m pytest -q backend/tests/test_comparison_journey.py`.
 
 ### Gate 4 — minimal comparison UI
 
-34. **Create frontend package/index** — Owner: frontend engineer. Files: `frontend/package.json`, `frontend/index.html`. Depends: 33. Accept: React 19, Vite, TypeScript, Vitest, and Playwright dependencies/scripts plus the app mount are explicit. Future verify: `node -e "const p=require('./frontend/package.json'); if(!p.scripts||!p.dependencies||!p.devDependencies) process.exit(1)"`.
+34. **Create frontend package/index** — Owner: frontend engineer. Files: `frontend/package.json`, `frontend/index.html`. Depends: 1. Runs in parallel with source qualification and backend setup. Accept: React 19, Vite, TypeScript, Vitest, and Playwright dependencies/scripts plus the app mount are explicit. Future verify: `node -e "const p=require('./frontend/package.json'); if(!p.scripts||!p.dependencies||!p.devDependencies) process.exit(1)"`.
 34A. **Own TypeScript configuration** — Owner: frontend engineer. Files: `frontend/tsconfig.json`. Depends: 34. Accept: browser, JSX, strictness, and source inclusion are explicit. Future verify: `npx --prefix frontend tsc --showConfig`.
 35. **Create frontend entry/styles** — Owner: frontend engineer. Files: `frontend/src/main.tsx`, `frontend/src/base.css`. Depends: 34A. Accept: application entry and accessible base styles exist; full build remains deferred until App composition. Future verify: `npx --prefix frontend tsc --noEmit --pretty false` after Ticket 40.
-36. **Implement typed API client** — Owner: frontend engineer. Files: `frontend/src/api/client.ts`, `frontend/src/api/types.ts`. Depends: 29–34A. Accept: cookie credentials, typed results, conflicts, and structured errors are handled. Future verification is owned by Ticket 36A.
+36. **Implement typed API client** — Owner: frontend engineer. Files: `frontend/src/api/client.ts`, `frontend/src/api/types.ts`. Depends: 29–34A. Accept: cookie credentials, committed acknowledgements, reconciliation state, typed results, conflicts, and structured errors are handled. Future verification is owned by Ticket 36A.
 36A. **Verify typed API client** — Owner: frontend engineer. Files: `frontend/src/api/client.test.ts`. Depends: 36. Accept: cookie credentials, structured success/error, conflict, and capability-expiry cases pass. Future verify: `npm --prefix frontend test -- client`.
-37. **Implement monotonic request state** — Owner: frontend engineer. Files: `frontend/src/state/analysis.ts`, `frontend/src/state/analysis.test.ts`. Depends: 36A. Accept: input/submit/retry synchronously increment generation; both success/error discard stale generations; prior result stays visible while pending. Future verify: `npm --prefix frontend test -- analysis`.
-38. **Build chat/result component** — Owner: frontend engineer. Files: `frontend/src/components/ChatResult.tsx`, `frontend/src/components/ChatResult.test.tsx`. Depends: 37. Accept: empty, pending-with-prior-result, clarification, success, conflict, and stale-discard states are explicit. Future verify: `npm --prefix frontend test -- ChatResult`.
+37. **Implement request and reconciliation state** — Owner: frontend engineer. Files: `frontend/src/state/analysis.ts`, `frontend/src/state/analysis.test.ts`. Depends: 36A. Accept: draft edits never discard a committed acknowledgement; request key/hash/revision tracking is separate from presentation generation; lost responses reconcile and replay deterministically while preserving newer draft text and the prior result. Future verify: `npm --prefix frontend test -- analysis`.
+38. **Build chat/result component** — Owner: frontend engineer. Files: `frontend/src/components/ChatResult.tsx`, `frontend/src/components/ChatResult.test.tsx`. Depends: 37. Accept: empty, pending-with-prior-result, clarification, committed success, conflict, reconciling, and lost-response-recovered states are explicit. Future verify: `npm --prefix frontend test -- ChatResult`.
 39. **Build evidence/source component** — Owner: frontend engineer. Files: `frontend/src/components/EvidencePanel.tsx`, `frontend/src/components/EvidencePanel.test.tsx`. Depends: 36. Accept: evidence, counterevidence, coverage, API provenance, metadata-missing, unavailable, and fixture states are distinct. Future verify: `npm --prefix frontend test -- EvidencePanel`.
 40. **Compose analyst screen** — Owner: frontend engineer. Files: `frontend/src/App.tsx`, `frontend/src/app.css`. Depends: 38, 39. Accept: one map-free screen preserves question, result, lineage, assumptions, evidence, and source state. Future verify: `npm --prefix frontend run typecheck`.
 40A. **Run complete frontend build gate** — Owner: frontend engineer. Files: `frontend/vite.config.ts`. Depends: 40. Accept: the composed app type-checks and production-bundles from the declared manifest. Future verify: `npm --prefix frontend run build`.
 41. **Create screenshot runner** — Owner: UI tester. Files: `frontend/qa/capture.ts`, `frontend/playwright.config.ts`. Depends: 40A. Accept: deterministic desktop/narrow captures can be generated for named application states. Future verify: `npx --prefix frontend playwright test --list`.
-42. **Record UI review evidence** — Owner: UI tester. Files: `frontend/docs/UI_AUDIT.md`, `frontend/qa/screenshot-manifest.json`. Depends: 41. Accept: captured evidence covers empty, loading, prior-result-pending, clarification, partial, unavailable, metadata-missing, fixture, conflict, explanation failure, stale discard, and success; accessibility is reviewed first, state coverage second, final web design last; motion/canvas review is conditional. Visual verification: reviewer inspects every screenshot named in `frontend/qa/screenshot-manifest.json` and records the verdict in `frontend/docs/UI_AUDIT.md`.
-43. **Prove complete comparison browser slice** — Owner: UI tester. Files: `frontend/qa/comparison.spec.ts`, `frontend/docs/comparison-evidence.md`. Depends: 33–42. Accept: session creation, search provenance, LAX/SNA chat comparison, evidence, prior-year follow-up, pending continuity, stale success/error discard, and model fallback work end-to-end. Future verify: `npm --prefix frontend run qa:comparison`.
+42. **Record UI review evidence** — Owner: UI tester. Files: `frontend/docs/UI_AUDIT.md`, `frontend/qa/screenshot-manifest.json`. Depends: 41. Accept: captured evidence covers empty, loading, prior-result-pending, clarification, partial, unavailable, metadata-missing, fixture, conflict, explanation failure, reconciling, lost-response recovery, and success; accessibility is reviewed first, state coverage second, final web design last; motion/canvas review is conditional. Visual verification: reviewer inspects every screenshot named in `frontend/qa/screenshot-manifest.json` and records the verdict in `frontend/docs/UI_AUDIT.md`.
+43. **Prove complete comparison browser slice** — Owner: UI tester. Files: `frontend/qa/comparison.spec.ts`, `frontend/docs/comparison-evidence.md`. Depends: 33–42. Accept: session creation, search provenance, LAX/SNA chat comparison, evidence, prior-year follow-up, pending continuity, committed acknowledgement after draft edits, lost-response reconciliation, and model fallback work end-to-end. Future verify: `npm --prefix frontend run qa:comparison`.
 
-### Gate 5 — remaining three workflows, only after the slice
+### Gate 5 — remaining three workflows by their own backend prerequisites
 
-44. **Implement screening tool** — Owner: backend engineer. Files: `backend/app/analysis/screen.py`, `backend/tests/test_screen.py`. Depends: 7, 17, 20, 43. Accept: eligibility, dimensions, ties, missingness, sensitivity, and pressure watchlist are explicit; the production screening caller invokes Ticket 20 before any terminal evidence gate can pass. Future verify: `python -m pytest -q backend/tests/test_screen.py`.
-45. **Expose screening endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_screen_api.py`. Depends: 44. Accept: session-scoped route exposes deterministic components/evidence. Future verify: `python -m pytest -q backend/tests/test_screen_api.py`.
-46. **Implement long-haul tool** — Owner: backend engineer. Files: `backend/app/analysis/long_haul.py`, `backend/tests/test_long_haul.py`. Depends: 13, 16, 17, 43. Accept: the tool stores an exact fraction or fraction interval from performed departures with visible threshold/scope, then renders each percentage bound as `100 × fraction` exactly once. Future verify: `python -m pytest -q backend/tests/test_long_haul.py`.
-47. **Expose long-haul endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_long_haul_api.py`. Depends: 46. Accept: session-scoped route returns numerator, denominator, percentage/interval, and coverage. Future verify: `python -m pytest -q backend/tests/test_long_haul_api.py`.
-48. **Implement demand-pressure tool** — Owner: backend engineer. Files: `backend/app/analysis/demand_pressure.py`, `backend/tests/test_demand_pressure.py`. Depends: 17, 18, 20, 43. Accept: SFO/arbitrary airports return observations and missing estimation inputs without invented quantity; the production demand-pressure caller invokes Ticket 20 for sourced constraints and counterevidence. Future verify: `python -m pytest -q backend/tests/test_demand_pressure.py`.
-49. **Expose demand-pressure endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_demand_pressure_api.py`. Depends: 48. Accept: session-scoped route preserves substantive evidence and unknowns. Future verify: `python -m pytest -q backend/tests/test_demand_pressure_api.py`.
+44. **Implement screening tool** — Owner: backend engineer. Files: `backend/app/analysis/screen.py`, `backend/tests/test_screen.py`. Depends: 7, 17, 20. Accept: v0 normalization, adjusted-growth base effect, winsorization condition, midrank ties, missingness, all 24 sensitivity scenarios, and stable tie display are exact; terminal `eligible`/`excluded`/`not_assessable` status is evidence-gated separately from the pressure score. Future verify: `python -m pytest -q backend/tests/test_screen.py`.
+45. **Expose screening endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_screen_api.py`. Depends: 28A, 29, 44. Accept: the session-scoped route uses the common application service and returns persisted deterministic components, evidence status, committed revision, and lineage. Future verify: `python -m pytest -q backend/tests/test_screen_api.py`.
+46. **Implement long-haul tool** — Owner: backend engineer. Files: `backend/app/analysis/long_haul.py`, `backend/tests/test_long_haul.py`. Depends: 13, 16, 17. Accept: the tool stores an exact fraction or fraction interval from performed departures with visible threshold/scope, then renders each percentage bound as `100 × fraction` exactly once. Future verify: `python -m pytest -q backend/tests/test_long_haul.py`.
+47. **Expose long-haul endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_long_haul_api.py`. Depends: 28A, 29, 46. Accept: the session-scoped route uses the common application service and returns a persisted numerator, denominator, percentage/interval, coverage, committed revision, and lineage. Future verify: `python -m pytest -q backend/tests/test_long_haul_api.py`.
+48. **Implement demand-pressure tool** — Owner: backend engineer. Files: `backend/app/analysis/demand_pressure.py`, `backend/tests/test_demand_pressure.py`. Depends: 17, 18, 20. Accept: SFO/arbitrary airports return observations, sourced constraints/counterevidence, and missing estimation inputs with `not_supported` for any unmet-demand quantity. Future verify: `python -m pytest -q backend/tests/test_demand_pressure.py`.
+49. **Expose demand-pressure endpoint** — Owner: backend engineer. Files: `backend/app/api/analyses.py`, `backend/tests/test_demand_pressure_api.py`. Depends: 28A, 29, 48. Accept: the session-scoped route uses the common application service and persists substantive evidence, unknowns, committed revision, and lineage. Future verify: `python -m pytest -q backend/tests/test_demand_pressure_api.py`.
 49A. **Extend intent contracts for remaining tools** — Owner: backend engineer. Files: `backend/app/agent/contracts.py`, `backend/tests/test_agent_contracts.py`. Depends: 45, 47, 49. Accept: screen, long-haul, and demand-pressure intents/clarifications validate without free-form substantive claims. Future verify: `python -m pytest -q backend/tests/test_agent_contracts.py`.
 49B. **Extend orchestrator allowlist** — Owner: backend engineer. Files: `backend/app/agent/orchestrator.py`, `backend/tests/test_orchestrator.py`. Depends: 49A. Accept: chat dispatches all four tools through the same validation, call cap, session transaction, and access rules. Future verify: `python -m pytest -q backend/tests/test_orchestrator.py`.
 49C. **Extend safe templates for remaining tools** — Owner: backend engineer. Files: `backend/app/agent/render.py`, `backend/tests/test_render.py`. Depends: 49A. Accept: approved claim/relation/qualifier templates render substantive screen, long-haul, and demand-pressure answers. Future verify: `python -m pytest -q backend/tests/test_render.py`.
@@ -427,7 +466,7 @@ These are future, proposed units. Paths and commands do not assert that files or
 51A. **Review ORBIT workspace screenshots** — Owner: UI tester. Files: `frontend/docs/WORKSPACE_REVIEW.md`, `frontend/qa/workspace-screenshots.json`. Depends: 51. Accept: the manifest names desktop/narrow screenshots for empty, populated, pending, partial, and failure states; a reviewer records a visual verdict in the review document.
 52. **Evaluate optional globe integration** — Owner: frontend engineer. Files: `frontend/src/globe/GlobeSpike.tsx`, `frontend/docs/GLOBE_DECISION.md`. Depends: 50. Accept: measured evidence chooses narrow GEV reuse, smaller Cesium integration, or no globe; failure cannot affect the completed exam product. Visual verification: the decision document must name the captured lifecycle/failure screenshots and record the review verdict; no script is presumed.
 
-## 9. Core completion criteria
+## 10. Core completion criteria
 
 Phase A is complete only when reviewer evidence shows:
 
@@ -438,13 +477,13 @@ Phase A is complete only when reviewer evidence shows:
 5. screening exposes dimensions, eligibility, intervention evidence, counterevidence, and sensitivity;
 6. ANC shows passenger scope, threshold, numerator, denominator, and distance coverage;
 7. SFO shows observations, constraints, counterevidence, and missing demand inputs without invented quantity;
-8. same-payload replay, payload conflict, stale revision, bounded retry, and process-crash recovery pass;
+8. direct analysis and chat calls persist identical follow-up-capable lineage; same-payload replay, payload conflict, authoritative reconciliation after a lost response, stale revision, bounded retry, and process-crash recovery pass;
 9. explanation mutation controls reject altered numbers, unknown claims, and unsupported causality;
 10. the map-free UI exposes all relevant success/degraded states and a fresh reader can follow `backend/docs/ARCHITECTURE.md`.
 
 These are planned evidence requirements. No tests or reviewer approval are claimed to exist today.
 
-## 10. Demonstration path
+## 11. Demonstration path
 
 1. Open source status and airport search; show API-origin metadata and dated provenance.
 2. Compare LAX/SNA; inspect the table, coverage, evidence, and one result ID.
@@ -454,7 +493,7 @@ These are planned evidence requirements. No tests or reviewer approval are claim
 6. Ask about SFO unmet demand; show substantive observations and why no quantity is supported.
 7. Disable explanation generation; the deterministic result and fallback remain usable.
 
-## 11. Explicit exclusions from Phase A
+## 12. Explicit exclusions from Phase A
 
 - profitability/ROI/NPV forecast;
 - production auth, billing, deployment, or live multi-user concurrency;
@@ -463,6 +502,6 @@ These are planned evidence requirements. No tests or reviewer approval are claim
 - live global flight storage, voice, weather, or required globe interaction;
 - polished cinematic UI.
 
-## 12. Planning artifact
+## 13. Planning artifact
 
 The compact decision spec, PDF traceability, specialist discussion, risk surface, reality sweep, and acceptance matrix are in [`backend/docs/specs/2026-09-25-airport-investment-plan.md`](backend/docs/specs/2026-09-25-airport-investment-plan.md). This README is the canonical build sequence. The future short reviewer-facing design document is `backend/docs/ARCHITECTURE.md`.

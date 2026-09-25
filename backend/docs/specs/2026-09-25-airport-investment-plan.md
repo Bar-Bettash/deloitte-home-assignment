@@ -26,9 +26,9 @@ The exam evaluator is the primary user for the 24-hour milestone. They need a de
 
 ## Chosen Approach
 
-Use a separate FastAPI modular monolith and React 19 + Vite + TypeScript frontend. React provides explicit state composition and a later Cesium path; Vite keeps bootstrap small; TypeScript guards API/result contracts. Implement `parse -> validate -> execute -> persist -> explain`: the model proposes a typed intent and later an ordered list of approved claim IDs plus enumerated relations/qualifiers; code validates and dispatches deterministic tools; a compare-and-swap transaction persists the result and session revision; server templates render every substantive numeric/causal sentence; and a deterministic template handles model failure. Arbitrary model prose is never trusted. DuckDB reads immutable Parquet. SQLite stores local sessions, capability metadata, idempotency reservations, results, and follow-up links.
+Use a separate FastAPI modular monolith and React 19 + Vite + TypeScript frontend. React provides explicit state composition and a later Cesium path; Vite keeps bootstrap small; TypeScript guards API/result contracts. Implement `reserve -> validate -> execute -> persist -> explain`: every direct analysis route and chat invoke one common application service; it validates the capability, idempotency key/payload hash, and expected revision, calls a pure deterministic tool, then atomically persists the result, turn, lineage, and revision. Server templates render every substantive numeric/causal sentence, with a deterministic fallback on model failure. Arbitrary model prose is never trusted. DuckDB reads immutable Parquet. SQLite stores local sessions, capability metadata, idempotency reservations, results, and follow-up links.
 
-This is the smallest design that protects analytical semantics while preserving a clean path from the exam's map-free interface to the later ORBIT/globe product. The canonical implementation sequence is the [root README](../../../README.md#8-numbered-implementation-tickets).
+This is the smallest design that protects analytical semantics while preserving a clean path from the exam's map-free interface to the later ORBIT/globe product. The canonical implementation sequence is the [root README](../../../README.md#9-numbered-implementation-tickets).
 
 ## Alternatives Considered
 
@@ -46,7 +46,7 @@ The recommendation stays stable across the four dimensions. The single-app optio
 2. DuckDB performs read-only queries over pinned Parquet files.
 3. Deterministic tools implement compare, screen, long-haul share, and demand-pressure workflows.
 4. Evidence records distinguish terminal fit from runway, airspace, airline, access, and weather constraints.
-5. FastAPI owns typed configuration, package startup, `main.py`, the versioned router, every promised endpoint, and atomic result/session persistence.
+5. FastAPI owns typed configuration, package startup, `main.py`, the versioned router, and every promised endpoint; a common application service owns atomic result/session persistence for direct analysis and chat calls.
 6. A provider adapter isolates vendor calls; the conversational layer cannot author formulas, SQL, numbers, or substantive free-form claims.
 7. The React/Vite/TypeScript interface first renders chat, tables, evidence, coverage, and limitations without a map.
 8. Phase B may add an ORBIT/globe view as another consumer of the same result IDs.
@@ -61,31 +61,31 @@ This is a greenfield plan; all records are proposed.
 - `AnalysisRequest`: workflow, airport/cohort, period, service scope, threshold, methodology version.
 - `AnalysisResult`: immutable request, snapshot IDs, metrics, coverage, evidence IDs, assumptions, exclusions, unknowns, predecessor.
 - `Claim`: typed approved statement referencing validated result fields and evidence.
-- `ChatSession`/`ChatTurn`: session revision, idempotency key, payload hash, reservation state, intent, clarification or result ID.
+- `ChatSession`/`ChatTurn`: session revision, idempotency key, payload hash, reservation state, committed acknowledgement, intent, clarification or result ID.
 
 No result or follow-up mutates an earlier result. Missing required ranking data produces `not_assessable`; it never becomes zero or triggers silent reweighting.
 
 ## API Surface
 
-Planned routes are in [README Section 6](../../../README.md#6-api-and-state-contracts). The root router is created first, then each endpoint ticket registers its route only after its dependencies exist; a final inventory check closes the API surface. `POST /api/v1/sessions` issues an anonymous, opaque, expiring capability in an HttpOnly SameSite cookie before comparison is exposed. Every chat/result/evidence route is session-scoped; IDs alone grant no access. The comparison route is a precursor: the first complete gate also requires evidence, stored structured context, follow-up recomputation, immutable successor results, deterministic rendering, and the minimal browser slice. Screening, long-haul, and demand-pressure tools start only after that slice passes. Before the architecture gate, explicit tickets extend the intent contract, orchestrator allowlist, safe templates, client renderer, and browser proof across all four workflows.
+Planned routes are in [README Section 6](../../../README.md#6-api-and-state-contracts). `POST /api/v1/sessions` issues an anonymous, opaque, expiring capability in an HttpOnly SameSite cookie; `POST /api/v1/sessions/reconcile` accepts the original key/hash and returns canonical revision/result plus that reservation’s committed/pending/failed/absent status, lease generation, and owner activity. Every analysis, chat, result, and evidence route is session-scoped; IDs alone grant no access. Direct analysis routes use the same application service, persistence, idempotency, CAS, and lineage contract as chat, so their results support follow-ups. Pure tools are internal. Backend and frontend package setup begin in parallel with source qualification; screening, long-haul, and demand-pressure tools begin when their own backend/source prerequisites pass and do not wait for comparison browser QA. Final browser proof still covers all four workflows.
 
 ## UI/UX Impact
 
-Phase A is map-free: chat, result table, evidence, source/coverage status, assumptions, and result identity. A monotonic client generation increments synchronously on input, submit, and retry; both success and error handlers discard stale generations, while the prior result remains visible during pending work. Empty, clarification, partial, unavailable, metadata-missing, fixture, conflict, explanation-failure, stale-discarded, and success states are explicit. Accessibility audit precedes state-coverage audit; final web-design review closes the UI; motion/canvas review fires only when those surfaces exist. Phase B's ORBIT shell depends on the completed exam gate but remains independent of the optional globe decision.
+Phase A is map-free: chat, result table, evidence, source/coverage status, assumptions, and result identity. Draft text is independent from transaction state. Every committed acknowledgement is retained in history; only a newer canonical revision updates the current-result pointer, so a late r+1 response cannot overwrite r+2. Draft edits remain intact. The client reconciles unknown responses by original key/hash using the state rules below, preserving prior results while pending.
 
 ## Profitability and Finance Boundary
 
-The decision chain is `observed traffic -> pressure priority -> terminal intervention fit/counterevidence -> profitability evidence gap -> diligence recommendation`. A future finance scenario needs capex/phasing, attributable usable-capacity uplift, ramp/utilization, investor revenue capture, incremental opex, asset life, and discount rate. Without those inputs, the system does not imply returns. SFO returns substantive observed indicators, sourced constraint hypotheses, counterevidence, and missing demand inputs; throughput, delay, and occupancy alone yield neither a point estimate nor bounds for unmet demand.
+The decision chain is `observed traffic -> pressure priority -> terminal intervention fit/counterevidence -> profitability evidence gap -> diligence recommendation`. A future finance scenario needs capex/phasing, attributable usable-capacity uplift, ramp/utilization, investor revenue capture, incremental opex, asset life, and discount rate. Without those inputs, profitability is returned as `not_supported`. SFO returns substantive observed indicators, sourced constraint hypotheses, counterevidence, and missing demand inputs; throughput, delay, and occupancy alone yield neither a point estimate nor bounds for unmet demand, so that quantity is also `not_supported`. The plan explicitly delivers evidence-gap assessments for those two requested business quantities and does not claim full quantitative coverage of them.
 
 ## Source Research Decision Log
 
-1. **BTS SODA airport resource `kfcv-nyy3`: preliminarily reachable, analytically unqualified.** Two independent probes returned HTTP 200 JSON and the requested ANC/BDL/BOS/LAX/SFO/SNA rows. Sample rows carried `eff_date` 2020-07-16. The metadata description is dated 2020-07-16. The field named `annual_ops` behaved as a date in the sampled response, so it must not be interpreted as an operations count. Coordinates were not selected and are unproven. Planned use: dated public-API identity/name metadata displayed with provenance and a `registry_metadata_missing` state.
-2. **FAA CY2024 final commercial-service workbook: proposed cohort authority.** It must determine eligible-airport membership after qualification. SODA metadata is left-joined enrichment; a missing SODA row never removes an FAA airport.
-3. **BTS T-100 All Carriers: proposed traffic foundation.** It is a download, not the public API requirement. Grain, service class, units, fields, identifiers, and complete CY2023/CY2024 partitions remain a gate.
-4. **BTS marketing-carrier on-time monthly data: proposed operational indicators.** CY2023 and CY2024 reporting population, carrier grain, deduplication, fields, and partitions remain a gate. A month with no rows may reflect seasonality; completeness uses expected partitions and reporting coverage, not `months_with_rows` alone. Operational aggregates stay separate from T-100 aggregates; raw populations are never multiplicatively joined.
+1. **BTS SODA airport resource `kfcv-nyy3`: reachable sample, still unqualified.** Live calls returned HTTP 200 JSON, a 19,850 count, distinct bounded pages, and the requested ANC/BDL/BOS/LAX/SFO/SNA rows. Sample rows carried `eff_date` 2020-07-16. This does not prove full pagination, uniqueness/null rates, schema/failure behavior, or that dated enrichment is substantive enough for the assignment. The field named `annual_ops` behaved as a date and must not be interpreted as an operations count. Gate 1 must qualify a meaningful displayed field or select a stronger API.
+2. **FAA CY2024 final commercial-service workbook: qualified cohort authority.** The observed workbook passed integrity/content checks, produced 513 unique Locids and a reproducible 22-airport New England cohort, including all six named targets. The ingestion manifest must preserve its recorded checksum, retrieval date, counts, and cohort rule. SODA remains left-joined enrichment.
+3. **BTS T-100 All Carriers: blocked traffic candidate.** Official lookup meanings were resolved and an earlier bounded extract exists as historical evidence, but three fresh generated-download attempts failed. Current extraction, complete comparable CY2023/CY2024 coverage, grain, direction, units, identifiers, deduplication, and reconciliation remain unqualified.
+4. **Official BTS on-time PREZIP family: exact table/family unresolved.** Index/link naming suggested marketing-carrier data while the observed January archive contained a `Reporting_Carrier` CSV. Only a bounded archive prefix was inspected. Qualification must verify the official table identity, carrier semantics, aliases, all required full files, checksums, row counts, reporting population, deduplication, and field coverage before operational metrics are enabled.
 5. **FAA/airport-authority documents: proposed intervention evidence.** Each claim requires publisher, date, page/section, constraint type, counterevidence, and review status.
 
-The plan is sound conditionally. Implementation is blocked at Gate 1 until every metric required by methodology v0 has qualified coverage and a hand calculation. A frozen/download snapshot may supplement the API but cannot satisfy the exam's API requirement by itself.
+The plan is sound conditionally. Source-independent package and contract work may start, but every metric-dependent workflow remains blocked until its inputs have qualified coverage and a hand calculation. A frozen/download snapshot may supplement the API but cannot satisfy the exam's API requirement by itself.
 
 ## Methodology Decisions
 
@@ -95,17 +95,27 @@ The plan is sound conditionally. Implementation is blocked at Gate 1 until every
 - ANC defaults to passenger scheduled departures; cargo/charter are excluded unless explicitly requested and qualified.
 - Long haul defaults to at least 3,000 statute miles as a visible project choice.
 - Exact long-haul percentage is reported only when all eligible departure distance is known. With total departures `T`, known long-haul departures `L`, and unknown-distance departures `U`, partial coverage yields `100 * L/T` to `100 * (L+U)/T`; `T=0` is unavailable.
-- Candidate pressure score for evaluation: 40% growth percentile, 30% passenger-volume percentile, 30% seat-occupancy percentile. It is not an empirically validated investment model and cannot be emitted until methodology v0 is frozen.
-- Percentile ties, a one-airport cohort, and missing required values receive explicit deterministic rules. Missing values never cause renormalized weights.
-- An airport may appear on a pressure watchlist without passing the terminal-intervention evidence gate. Ranking terminal projects requires that second gate.
+- Pressure score: 40% adjusted-growth percentile, 30% passenger-volume percentile, and 30% seat-occupancy percentile. Adjusted growth is `(P2024-P2023)/max(P2023, 10,000)`; the 10,000-passenger floor is a provisional convention to damp small-base explosions, not an empirical or profitability threshold. Display raw growth beside it; when `P2023 = 0`, raw growth is `not_supported` while adjusted growth remains defined by the floor.
+- When at least 20 airports are fully assessable, winsorize adjusted growth at the 5th/95th percentiles; otherwise do not winsorize. This is a provisional tail convention. Normalize all dimensions with ascending midrank `(average_rank-1)/(n-1)`. Equal values share average rank; fewer than two assessable airports produces no ranking; missing required values produce `not_assessable` with no weight renormalization. Scores equal within `1e-12` share competition rank (1, 1, 3); all rows with rank <=3 count as top-three, including ties. Canonical ID only stabilizes row order.
+- Run exactly 24 scenarios: four weight cases (base `40/30/30`, equal `1/3` each, growth-heavy `60/20/20`, and scale/utilization-heavy `20/40/40`) × three prior-passenger floors (`1`, `10,000`, `25,000`) × two tail treatments (5th/95th winsorization and none). When fewer than 20 airports are assessable, the winsorized treatment is explicitly recorded as disabled and duplicates the untreated result. Report each airport's full rank range. Label it `robust_top_three` only if, for every one of the six floor/tail pairs, it is top-three in at least three of four weight cases and its maximum rank minus minimum rank across all 24 scenarios is at most two.
+- Terminal evidence is a separate gate. `eligible` requires a complete score and current reviewed airport-specific support for a passenger-terminal capacity/processing constraint, with all material counterclaims reviewed and no unresolved conflict. `excluded` requires reviewed evidence that a nonterminal cause binds or the intervention does not address it. Missing, stale, unreviewed, or materially conflicting evidence is `not_assessable`. Only eligible airports are ordered by pressure score; all other rows remain visible with reasons and counterevidence. Evidence never changes the numeric score.
 
 ## Session and Idempotency Semantics
 
 - The idempotency key binds the payload hash. Same key and same payload replay the committed response; same key and different payload returns conflict.
 - A request reserves a bounded `pending` turn. Model/tool retries remain within one total call cap.
 - Compute uses an expected session revision. Result and new state persist atomically only if the revision still matches; a stale response is rejected and never exposed as committed.
-- `failed` preserves a safe retry path. A crashed/expired `pending` reservation is reclaimed only after its lease expires and no committed result exists.
+- Reservations have an opaque server owner and monotonically increasing lease generation. Only the active owner/generation can commit; expired lease recovery atomically fences the former generation before another worker resumes, retaining the reservation’s total call cap.
 - Follow-ups create immutable successor results. A process crash cannot leave session state pointing to a nonexistent result.
+- Direct analysis and chat calls use the same application service and create identical follow-up-capable result lineage.
+- Reconcile by original key/hash: `committed` permits identical replay; `pending` permits bounded polling or same-key replay only; `failed` permits a new key only after atomic fencing deactivates the former owner; `absent` permits same-key, identical-payload retry with the original expected revision so a delayed original cannot create a second reservation. A later revision conflict requires explicit rebase confirmation before a new transaction.
+- Client revisions/current-result pointers are monotonic; older committed acknowledgements remain in history, never overwrite newer canonical state, and never replace edited draft text. Every follow-up uses the latest canonical revision/result.
+
+## 24-Hour Execution and Failure Branch
+
+Hours 0–2 run contract definition, backend/frontend package setup, and all source qualification in parallel. At hour 2, T-100 must reproduce or move to a documented official alternate with equivalent grain, fields, and CY2023/CY2024 coverage. Hours 2–6 build source-independent schemas, startup/session/UI skeletons and snapshots only for passed sources. The analytics store accepts available qualified manifests; traffic and long-haul require T-100, operational metrics require on-time, and screening requires FAA/T-100/reviewed terminal evidence. Execution contracts and the common service do not depend on comparison or source qualification. Hours 6–14 build the common service and each tool whose own prerequisites passed; no tool waits for comparison browser QA. Hours 14–20 integrate routes, reconciliation, rendering, and client state. Hours 20–24 produce browser evidence, architecture, traceability, and rehearse the demo.
+
+Phase B, globe, polish, live context, voice, hosting, and finance scenarios are cut first. Historical extracts and synthetic fixtures cannot replace failed qualification. If meaningful API use, T-100 reproducibility, the exact on-time family, intervention evidence, or any required workflow remains unresolved at the cutoff, the deliverable is explicitly incomplete and names the failed gates; a degraded display is not treated as assignment compliance.
 
 ## Blast-Radius Score
 
@@ -145,7 +155,7 @@ Source artifact: `FDE Exam 2.pdf`, SHA-256 `12de252ee7ecfb43be171c19b562a392bcec
 
 | PDF requirement | Plan response |
 |---|---|
-| Public APIs | BTS SODA identity metadata is a substantive dated API-fed display contribution; analytical downloads supplement it. |
+| Public APIs | SODA is a tested candidate for a dated API-fed field; full qualification and reviewer-substantive value remain gates, with replacement required if it is merely decorative. |
 | Rank or compare with defined KPI | Deterministic comparisons and gated methodology-v0 pressure screening. |
 | Explain reasoning | Visible components, evidence/counterevidence, claim IDs, server-formatted numbers, deterministic fallback. |
 | Conversational follow-ups | Typed intent, structured stored context, CAS revisions, immutable successor results. |
@@ -160,8 +170,8 @@ Source artifact: `FDE Exam 2.pdf`, SHA-256 `12de252ee7ecfb43be171c19b562a392bcec
 
 ## Specialist Discussion Summary
 
-- **Data:** the SODA endpoint reachability and sample IDs/dates were reproduced, but the 2020 metadata cannot determine the 2024 cohort or modern congestion. FAA membership is authoritative after qualification; analytical sources remain gated.
-- **Backend:** FastAPI modular monolith, read-only DuckDB, immutable Parquet, local SQLite, typed intents, CAS revisions, payload-bound idempotency, immutable follow-ups.
+- **Data:** SODA reachability and bounded samples were reproduced but remain short of full qualification; FAA CY2024 workbook content qualifies the cohort; T-100 is currently unreproducible; the on-time archive/table family remains unresolved beyond a January prefix.
+- **Backend:** FastAPI modular monolith, read-only DuckDB, immutable Parquet, local SQLite, one common persisted application service, typed intents, CAS revisions, payload-bound idempotency, immutable follow-ups, and reconciliation.
 - **AI safety:** claim IDs and server numeric formatting constrain prose; bounded retries share a total cap; deterministic templates remain available.
 - **Finance:** screening prioritizes diligence and must preserve terminal fit, counterevidence, and the profitability evidence gap.
 - **Frontend/product:** prove chat/table/evidence first; retain ORBIT and selective globe reuse as a later phase.
@@ -173,8 +183,9 @@ Source artifact: `FDE Exam 2.pdf`, SHA-256 `12de252ee7ecfb43be171c19b562a392bcec
 2. **[CRITICAL] “Most profitable” could become “busiest.”** Resolved by the explicit decision chain and finance evidence gap.
 3. **[CRITICAL] The globe could consume the exam budget.** Resolved by map-free Phase A and independently gated Phase B.
 4. **[CRITICAL] Model prose could change numbers or causality.** Resolved by deterministic tools, claims, formatting, citations, and fallback.
-5. **[CRITICAL] A follow-up could compute correctly and still commit stale state.** Resolved by payload-bound idempotency, expected revision, and atomic result/state persistence.
-6. **[WARNING] Missing metrics could improve a rank.** Resolved by full eligibility and `not_assessable`, never reweighting.
+5. **[CRITICAL] A follow-up could compute correctly and still commit stale state.** Resolved by payload-bound idempotency, expected revision, atomic result/state persistence, committed acknowledgements, and reconciliation.
+6. **[CRITICAL] Direct routes could bypass follow-up lineage.** Resolved by routing every analysis/chat execution through the common application service.
+7. **[WARNING] Missing metrics could improve a rank.** Resolved by full eligibility and `not_assessable`, never reweighting.
 
 `[GRILL-ME: 5 CRITICAL / 1 WARN / 0 NIT — 5-critical answers captured]`
 
@@ -185,9 +196,9 @@ The strongest doubt is over-engineering a one-day assignment. The plan keeps one
 ### Observed
 
 - Baseline substantive project files were `README.md` and `FDE Exam 2.pdf`; AppleDouble sidecars also exist.
-- The root is not a Git repository; `git status` and `git log` fail.
-- The prior README contained a 575-line, 15-phase plan.
-- The SODA sample probe result described above was independently reproduced; it proves reachability and sampled fields only.
+- The root is a Git repository on `main`; planning evidence was committed before this correction pass.
+- The FAA CY2024 workbook evidence recorded in the README qualifies the cohort content and New England membership rule, subject to preservation in the future ingestion manifest.
+- The SODA probe proves reachability, a count, bounded pagination, and sampled fields only. T-100 fresh extraction failed, and on-time inspection covered a bounded January archive prefix with unresolved family semantics.
 
 ### Proposed only
 
@@ -202,26 +213,26 @@ The first complete capability proof is a qualified source feeding LAX/SNA compar
 
 ## Acceptance & Verification Matrix
 
-The detailed acceptance criteria and ownership of every invoked test/runner live with each numbered ticket in [README Section 8](../../../README.md#8-numbered-implementation-tickets). Early pytest checks explicitly wait for the backend test extra, and frontend TypeScript/client tests have named ownership. Commands below are prospective and were not executed during planning.
+The detailed acceptance criteria and ownership of every invoked test/runner live with each numbered ticket in [README Section 9](../../../README.md#9-numbered-implementation-tickets). Early pytest checks explicitly wait for the backend test extra, and frontend TypeScript/client tests have named ownership. Commands below are prospective and were not executed during planning.
 
 | Subtask | HITL Tier | Acceptance Criteria (outcome — brainstorming fills) | Verification Command |
 | :--- | :--- | :--- | :--- |
 | Source qualification | Rescore | Required API/download inputs have qualified grain, units, periods, deduplication, lineage, and hand checks; failure blocks dependents. | `python backend/scripts/build_source_matrix.py --check` |
 | Immutable analytical data | Rescore | Identical inputs yield identical pinned read-only snapshots without cross-population multiplication. | `python -m pytest -q backend/tests/test_analytics_storage.py` |
-| Complete comparison capability | Rescore | LAX/SNA comparison includes evidence, stored context, prior-year follow-up, atomic successor, scoped access, and deterministic rendering before other tools begin. | `python -m pytest -q backend/tests/test_comparison_journey.py` |
-| Conversation concurrency | Rescore | Replay, conflict, stale revision, crash recovery, pending expiry, and bounded retries behave deterministically. | `python -m pytest -q backend/tests/test_sessions.py backend/tests/test_orchestrator.py` |
-| Comparison UI | Rescore | Browser slice preserves prior result while pending and discards stale success/error responses across required states. | `npm --prefix frontend run qa:comparison` |
-| Remaining deterministic tools | Rescore | Screening, long-haul percentage, and demand pressure start only after the comparison slice and preserve evidence/unknowns. | `python -m pytest -q backend/tests/test_screen.py backend/tests/test_long_haul.py backend/tests/test_demand_pressure.py` |
+| Complete comparison capability | Rescore | LAX/SNA comparison includes evidence, stored context, prior-year follow-up, atomic successor, scoped access, and deterministic rendering; other tools may progress independently on their own passed prerequisites. | `python -m pytest -q backend/tests/test_comparison_journey.py` |
+| Conversation concurrency | Rescore | Direct/chat persistence parity, replay, conflict, stale revision, committed acknowledgement after draft edits, reconciliation after unknown response, crash recovery, pending expiry, and bounded retries behave deterministically. | `python -m pytest -q backend/tests/test_sessions.py backend/tests/test_orchestrator.py` |
+| Comparison UI | Rescore | Browser slice preserves prior result while pending, applies committed revision/result state despite later draft edits, and recovers lost responses through reconciliation. | `npm --prefix frontend run qa:comparison` |
+| Remaining deterministic tools | Rescore | Screening, long-haul percentage, and demand pressure start from their own backend/source prerequisites and preserve evidence/unknowns through the common persisted service. | `python -m pytest -q backend/tests/test_screen.py backend/tests/test_long_haul.py backend/tests/test_demand_pressure.py` |
 | All-four conversational integration | Rescore | Intent contracts, allowlist dispatch, server templates, client rendering, and browser chat proof cover all four workflows before architecture delivery. | `npx --prefix frontend playwright test frontend/qa/all-workflows.spec.ts` |
 | Assignment package | Rescore | A fresh reviewer completes all workflows and traces PDF requirements to architecture and evidence. | `python -m pytest -q backend/tests/test_requirement_traceability.py` |
 | Phase B | Separately gated | ORBIT shell and optional globe each depend on the completed exam gate; neither alters Phase A semantics. | Visual evidence in `frontend/docs/WORKSPACE_REVIEW.md` and `frontend/docs/GLOBE_DECISION.md`; no runner is presumed. |
 
 ## Open Questions
 
-No question blocks review of the plan. Exact analytical endpoints, partitions, cohorts, periods, fields, methodology weights, and optional providers are named decision gates that block dependent implementation until resolved. The exact remaining clock is an execution-time phase-cut input; this plan assumes the assignment milestone precedes Phase B.
+No question blocks review of the plan. Exact T-100 extraction, on-time table/family semantics and full coverage, intervention documents, and final API acceptance are external qualification gates that block only their dependents. Methodology v0 supplies executable provisional conventions plus sensitivity disclosure; Ticket 7 freezes or replaces them before ranking. The exact remaining clock controls the documented cutoff branch, never a compliance workaround.
 
 ## Self-Review
 
-`[Self-review: 14 issues found, 14 fixed, 0 remaining]`
+`[Self-review: 23 issues found, 23 fixed, 0 remaining]`
 
-Fixed: source/API role conflation; incorrect source date; ambiguous `annual_ops`; profitability drift; UI-first sequencing; calculation-only milestone; stale follow-up commit risk; missing-value reweighting; startup/endpoint ownership; provider boundary; session capability scoping; client response ordering; UI audit routing; and placeholder verification commands.
+Fixed: source/API role conflation; public-API overclaim; FAA status drift; T-100 and on-time qualification overclaim; on-time family mismatch; profitability and unmet-demand coverage; methodology defaults, base effects, ties, missingness, sensitivity, and terminal eligibility; direct-route persistence; lost-response reconciliation; client draft/commit ordering; parallel setup; independent workflow dependencies; 24-hour cutoffs; incomplete-delivery rules; stale Git status; and section links.
