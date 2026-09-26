@@ -1,0 +1,55 @@
+{
+  "delivery_type": "DESIGN ONLY",
+  "status": "BLOCKED_NOT_APPROVED",
+  "repository": "Bar-Bettash/deloitte-home-assignment",
+  "remote_base_commit": "7995983c8b4d81c830c244255a3f322c6099f6f8",
+  "remote_changed": false,
+  "candidate_commit": null,
+  "candidate_hashes": {
+    "README.md": {
+      "bytes": 80999,
+      "sha256": "e2115328b1a9cb7dc39ec2a3ad35ab0318578fe17d21240b3a675570af7a60e4",
+      "git_blob_sha": "8e17f315748262283978025898e6c3794e01a656"
+    },
+    "docs/PLAN_GRAPH.json": {
+      "bytes": 23150,
+      "sha256": "9ce4f4f6e987be21e90651bf21a2f7a2bbb81b36a55dfb536b6281ebdb46a5cd",
+      "git_blob_sha": "ce7a4ac89cf42feefa992bfcefc68b2601ea651b"
+    },
+    "docs/execution-mode.json": {
+      "bytes": 326,
+      "sha256": "3402d4f30ab36f75e233402136e5940d01d8858d1431867246b99326a1d53e38",
+      "git_blob_sha": "d47c4f026662d3f91c8fa170f93e49cefee70f6e"
+    }
+  },
+  "upstream_pins": {
+    "claude-code-config": "97e5e8e4dc5f2de5a3120b7dfde47b7c52d29458",
+    "agent-os-core": "9db00d22fd88962e902e19c778430dc24bc7151b"
+  },
+  "review_stages": {
+    "stage_1_domain_agents": "NOT_RUN: no agent dispatch interface or Claude CLI",
+    "stage_2_independent": "NOT_RUN: stage 1 unmet; no Codex/Gemini CLI or GitHub comment action",
+    "stage_3_best": "NOT_RUN: no actual model dispatch"
+  },
+  "measured": {
+    "native_execution_mode_validator": "6/6 expected outcomes; source blob verified",
+    "local_structure": "42 nodes / 74 dependencies / 5 negative controls rejected",
+    "patch_apply": "exact three-file bytes matched; fixture-only"
+  },
+  "not_proven": [
+    "native PlanGraph validation",
+    "semantic atomicity",
+    "runnable per-feature checks before their implementation",
+    "full independent review",
+    "local operator TSO binding",
+    "application behavior"
+  ],
+  "blocking_capabilities": [
+    "write-capable GitHub or authenticated local git",
+    "native Claude/agent runtime for mandatory review stages",
+    "independent Codex/Gemini review execution"
+  ],
+  "native_validator_blob": "5d99e0d4bd574e8d70f0fbc99ed5fb3153ab9560",
+  "review_reentries_consumed": 0,
+  "authorization": "User explicitly permits plan fixes on main; no upstream-governance or application-build authorization implied."
+}

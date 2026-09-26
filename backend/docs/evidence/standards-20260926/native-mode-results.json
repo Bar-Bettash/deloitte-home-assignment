@@ -1,0 +1,48 @@
+{
+  "source_blob": "5d99e0d4bd574e8d70f0fbc99ed5fb3153ab9560",
+  "cases_checked": 6,
+  "results": [
+    {
+      "case": "candidate",
+      "returncode": 0,
+      "expected": 0,
+      "stdout": "VALID: execution_planning.mode=dependency_graph\n",
+      "stderr": ""
+    },
+    {
+      "case": "missing-mode",
+      "returncode": 1,
+      "expected": 1,
+      "stdout": "REJECTED: qualifying decomposition (units=42, deps_affect_ordering=True, two_independent=True) omits `execution_planning` \u2014 the mode decision has no record, so 'sequential was chosen' is indistinguishable from 'nobody considered it'\n",
+      "stderr": ""
+    },
+    {
+      "case": "bad-mode",
+      "returncode": 1,
+      "expected": 1,
+      "stdout": "REJECTED: `execution_planning.mode` is 'graph'; must be one of dependency_graph | sequential \u2014 `graph` is not a valid value; the canonical value is `dependency_graph`\n",
+      "stderr": ""
+    },
+    {
+      "case": "false-sequential",
+      "returncode": 1,
+      "expected": 1,
+      "stdout": "REJECTED: mode is `sequential` but the decomposition meets all three clauses (units=42, deps_affect_ordering=True, two_independent=True) \u2014 declaring sequential here collapses a real graph to a line; if an edge was asserted that does not exist, state it in `reason`\n",
+      "stderr": ""
+    },
+    {
+      "case": "typed-threshold",
+      "returncode": 1,
+      "expected": 1,
+      "stdout": "REJECTED: threshold block malformed: deps_affect_ordering must be a bool, got str 'false'\n",
+      "stderr": ""
+    },
+    {
+      "case": "genuine-small",
+      "returncode": 0,
+      "expected": 0,
+      "stdout": "VALID: execution_planning.mode=sequential\n",
+      "stderr": ""
+    }
+  ]
+}

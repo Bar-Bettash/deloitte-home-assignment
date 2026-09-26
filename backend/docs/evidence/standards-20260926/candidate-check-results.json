@@ -1,0 +1,55 @@
+{
+  "scope": "local structural/projection check only; not native PlanGraph, semantic atomicity or independent review",
+  "nodes_checked": 42,
+  "dependency_references": 74,
+  "errors": [],
+  "negative_controls": [
+    {
+      "name": "cycle",
+      "errors": [
+        "dependency not backward-resolving"
+      ]
+    },
+    {
+      "name": "unknown-field",
+      "errors": [
+        "node field schema"
+      ]
+    },
+    {
+      "name": "missing-node",
+      "errors": [
+        "node cardinality"
+      ]
+    },
+    {
+      "name": "bad-type",
+      "errors": [
+        "node types"
+      ]
+    },
+    {
+      "name": "write-drift",
+      "errors": [
+        "projection mismatch"
+      ]
+    }
+  ],
+  "artifacts": {
+    "README.md": {
+      "bytes": 80999,
+      "sha256": "e2115328b1a9cb7dc39ec2a3ad35ab0318578fe17d21240b3a675570af7a60e4",
+      "git_blob_sha": "8e17f315748262283978025898e6c3794e01a656"
+    },
+    "docs/PLAN_GRAPH.json": {
+      "bytes": 23150,
+      "sha256": "9ce4f4f6e987be21e90651bf21a2f7a2bbb81b36a55dfb536b6281ebdb46a5cd",
+      "git_blob_sha": "ce7a4ac89cf42feefa992bfcefc68b2601ea651b"
+    },
+    "docs/execution-mode.json": {
+      "bytes": 326,
+      "sha256": "3402d4f30ab36f75e233402136e5940d01d8858d1431867246b99326a1d53e38",
+      "git_blob_sha": "d47c4f026662d3f91c8fa170f93e49cefee70f6e"
+    }
+  }
+}

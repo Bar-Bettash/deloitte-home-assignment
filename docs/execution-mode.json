@@ -1,0 +1,11 @@
+{
+  "threshold": {
+    "units": 42,
+    "deps_affect_ordering": true,
+    "two_independent": true
+  },
+  "execution_planning": {
+    "mode": "dependency_graph",
+    "reason": "Clauses 1, 2 and 3 hold: more than three executable units; data precedes its consumers; FAA import and T-100 import can proceed independently."
+  }
+}
