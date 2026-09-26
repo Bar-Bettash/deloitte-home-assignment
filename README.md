@@ -1,8 +1,8 @@
 # Airport Investment Analyst — Bounded Demo Plan
 
-**Plan revision 3. DESIGN ONLY.** This is a small home-assignment prototype, not an aviation platform. The written plan has been simplified around the owner's direction: keep sensible limits and show a clear UI error outside them. Application execution and real agent reviews remain [TODO](TODO.md); no independent approval or implemented capability is claimed.
+**Plan revision 4. DESIGN ONLY.** This is a small home-assignment prototype, not an aviation platform. The written plan has been simplified around the owner's direction: keep sensible limits and show a clear UI error outside them. Application execution and real agent reviews remain [TODO](TODO.md); no independent approval or implemented capability is claimed.
 
-This README is the master plan. [PLAN_GRAPH.json](docs/PLAN_GRAPH.json) mirrors the step goals, dependencies and file scopes. Earlier review records are historical and apply only to their recorded versions. No upstream Agentic OS or Claude configuration is changed by this plan.
+This README is the master plan. The [API ↔ UI contract](docs/API_UI_MAP.md) defines the concrete request/result/error fields used by the connections below. [PLAN_GRAPH.json](docs/PLAN_GRAPH.json) mirrors the step goals, dependencies and file scopes. Earlier review records are historical and apply only to their recorded versions. No upstream Agentic OS or Claude configuration is changed by this plan.
 
 ## 1. Mission and successful demo
 
@@ -28,25 +28,47 @@ One local FastAPI process (Python 3.11+) serves a static HTML/JavaScript UI. Duc
 
 ```mermaid
 flowchart LR
-    UI[Chat and quick prompts] --> V[Validate scope and limits]
-    V -->|Explicit request| D[Deterministic dispatcher]
-    V -->|Free text| M[One bounded model call]
-    M --> A[Validate parsed arguments]
-    A --> D
-    S[Qualified snapshots] --> D
-    E[Curated evidence] --> D
-    D --> R[Result and source details]
-    R --> UI
-    V -->|Unsupported or too large| X[Clear UI error]
-    M -->|Timeout or invalid output| X
-    A -->|Invalid arguments| X
-    D -->|Missing data or deadline| X
-    X --> UI
+    Chat["Chat / quick prompts / scope changes"] -->|"POST /api/query"| Query["Backend: main.py"]
+    Query -->|"Free text only"| Model["intent.py: one bounded call"]
+    Model --> Validate["contracts.py: validated request"]
+    Query -->|"Structured preset"| Validate
+    Validate --> Dispatch["dispatch.py: rank / compare / metric / explain"]
+    Data["Accepted snapshots + evidence"] --> Dispatch
+    Dispatch --> Result["Calculations + typed result"]
+    Result -->|"HTTP 200"| Screen["Frontend: summary / table / sources"]
+    Query -->|"HTTP 4xx or 5xx"| Error["Frontend: safe error + Previous result"]
+    Page["Page-load health probe"] -->|"GET /health"| Health["Backend reachable only"]
 ```
 
 Serve on `127.0.0.1`, one worker. No hosting, auth product, queue, database server, RAG, crawler, multiple runtime agents, voice, live-flight tracking or financial valuation. ORBIT is styling inspiration. A globe/map is optional only after the core works; camera position must never change analytical populations.
 
 Private keys stay server-side and outside Git/logs. Do not search for or print credentials. Use already-authorized access; missing access means AI unavailable, not silent fabricated output. Presets can still run without the model.
+
+### Backend endpoints → frontend connections
+
+**All routes below are planned, not already running.** The browser uses same-origin relative URLs; the backend owns calculations, source access, validation and model credentials.
+
+| Frontend action | Backend endpoint | Backend file / destination | Frontend consumer | Build step |
+|---|---|---|---|---|
+| Open the app | `GET /` | `backend/app/main.py` serves `static/index.html` | The single analyst page | 1.3–1.4 |
+| Load browser behavior | `GET /static/app.js` | Mount only `backend/app/static/` | `index.html` script tag | 1.4 |
+| Check reachability once on page load | `GET /health` | `backend/app/main.py` | Small “Backend reachable” indicator, not data/model readiness | 1.1, 2.5 |
+| Send chat, preset or changed metric/year/threshold | `POST /api/query` | `main.py` → `contracts.py` → `dispatch.py` → calculations | `app.js` renders summary, metrics, scope and sources | 1.5, 2.4–2.5, 5.2–5.6 |
+| Explain the latest result | `POST /api/query`, action `explain` | Same route → `session.py` and stored-result explanation | Explanation area; no new calculation or model call for the explicit button | 5.1–5.6 |
+| Expand sources, methodology or returned evidence | **No additional endpoint** | Already included in the result object | Local details panel | 5.6 |
+
+The four assignment questions all use the **same `POST /api/query`**:
+
+| Question | Validated operation | Internal handler → screen |
+|---|---|---|
+| New England expansion | `rank / screen_score` | `calculations/screen.py` + evidence → ranking and conditional terminal notes |
+| LAX vs SNA congestion | `compare / congestion` | `calculations/operations.py` + `calculations/comparison.py` → comparison table |
+| ANC long haul | `metric / long_haul_share` | `calculations/long_haul.py` → percentage, counts, threshold |
+| SFO demand pressure | `metric / sfo_pressure` | `calculations/sfo.py` + evidence → trends, proxy and limitations |
+
+First slice: the SFO preset uses `metric / sfo_enplaned_trend` and the route calls the SFO calculation directly. Later, 5.5 replaces that implementation with the shared dispatcher; it does not add another `/api/query` route. Source refresh remains a setup command with the server stopped, not a browser endpoint.
+
+Before implementing the API, UI or their tests, read [API_UI_MAP.md](docs/API_UI_MAP.md): typed request examples, bare success responses, error status codes, session/result binding, field-to-UI mapping and planned contract checks. It records the researched config sources and explicit local-demo adaptations. No WebSocket/SSE, separate evidence/history API, extra service or preemptive `/v1` route is added.
 
 ## 3. Supported scope and simple limits
 
@@ -66,7 +88,7 @@ These are deliberate prototype limits, not aviation standards. Enforce them in r
 | Long-haul threshold | Default 3,000 statute miles; accept an explicit finite value `0 < threshold <= 12000`. Distance/count/period gaps return `insufficient_data`. |
 | Source refresh | DataSF only, separate explicit refresh: 60 seconds total, at most four pages of 5,000 rows, 10 MiB cumulative response bytes, no automatic retries. Count/schema/coverage validation still applies. Hitting a cap is an error, never permission to accept a partial dataset. |
 
-Use one ordinary response shape for failure: `status=error`, a stable `code`, a short safe `message`, and a suggested user action or allowed scope. It is not necessary to build a recovery workflow per error.
+Use the config-derived errors-only HTTP envelope: `{"success":false,"error":{"code":"...","message":"...","request_id":"..."}}` with an appropriate 4xx/5xx status, never HTTP 200 for a failed analysis. Messages are safe English text with a next action. Successful responses are bare typed analysis objects (`status=ok|partial`), not success envelopes. The [API/UI contract](docs/API_UI_MAP.md) fixes field names and error mappings; no recovery workflow per error is required.
 
 | Situation | Example UI behavior |
 |---|---|
@@ -169,7 +191,7 @@ Retain the predeclared candidate bar: at least 29/30 correct semantic outcomes, 
 
 ## 7. Build and review method
 
-Work through the existing 42 small steps, one builder at a time. [Execution mode](docs/execution-mode.json) is a dependency graph for ordering, not a requirement for parallel agents or a new runtime orchestrator. Do not edit the same file concurrently. The README is authoritative; update its derived graph when goals, dependencies or scopes change.
+Work through the existing 42 small steps, one builder at a time. [Execution mode](docs/execution-mode.json) is a dependency graph for ordering, not a requirement for parallel agents or a new runtime orchestrator. Do not edit the same file concurrently. The README owns the plan and formulas; docs/API_UI_MAP.md owns the concrete wire contract. Update the derived graph when step goals, dependencies or scopes change. Do not introduce conflicting wire fields in an implementation note.
 
 Keep each change to its named file pair where practical. If it grows, split that change before coding; do not compress code to satisfy a paperwork limit. The owner has narrowed this to a sensible prototype review, not a hunt for perfect formatting or zero possible comments. Retain the real protections: correct calculations, source scope, credentials, bounded cost/work, truthful errors and successful end-to-end examples.
 
@@ -191,7 +213,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/docs/adr/001-local-demo.md`. **Depends on:** none. **Execution tier:** DRAFT.
 
-**How / acceptance:** Decision covers chosen stack, alternatives, tenancy, dependency policy, dated source links and reversibility; no new runtime service.
+**How / acceptance:** Record the chosen local stack and the API/UI decisions already grounded in docs/API_UI_MAP.md: HTTP JSON to the browser, internal function calls, no extra service. Note alternatives, tenancy, dependency policy and reversibility; do not reintroduce rejected infrastructure.
 
 **Check:** Read the decision against the mission: one local service, supported scope, alternatives and no unrequested infrastructure. Record any concrete disagreement; whitespace checking is supplementary.
 
@@ -211,7 +233,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/main.py`, `backend/tests/test_main.py`. **Depends on:** 1.0. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** test_main.py: exact health response; unsupported method rejected; import performs no network or credential lookup.
+**How / acceptance:** Declare the tiny health response model in main.py; test_main.py asserts its exact response and rejects unsupported methods. Import performs no network or credential lookup.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_main.py -q`.
 
@@ -241,17 +263,17 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/main.py`. **Depends on:** 1.3. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** Browser loads page and JavaScript without 404s.
+**How / acceptance:** Serve `/` and `/static/app.js` from the declared static directory, not the repository or data directories. Browser loads both without 404s. Preserve `/health`; no provider calls on page or asset load.
 
 **Check:** `python -c "import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/'); assert r.status==200; assert b'<html' in r.read().lower(); print('pages_checked=1')"`.
 
 ### Step 1.5 — contracts
 
-**Single outcome:** Validate the analytical request contract.
+**Single outcome:** Define the frontend/backend JSON contract.
 
 **Files:** `backend/app/contracts.py`, `backend/tests/test_contracts.py`. **Depends on:** 1.0. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** Validate action, metric, supported airports/year, long-haul threshold and bounded request size; define the common safe UI error response. Test supported requests, unsupported combinations, oversized input and invalid values.
+**How / acceptance:** Read docs/API_UI_MAP.md. Define QueryRequest (message XOR analysis, optional context_result_id), bounded AnalysisRequest, bare AnalysisResult and errors-only ErrorResponse. Forbid extra fields; test canonical examples, allowed metric/year combinations, units, malformed/oversized input and response source references. This is schema work, not implemented routing.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_contracts.py -q`.
 
@@ -301,7 +323,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/main.py`, `backend/tests/test_api.py`. **Depends on:** 1.4, 1.5, 2.3. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** Return the validated SFO result object directly; prose templates come later at 4.5. Test correct values, snapshot identity, invalid requests and missing-data errors.
+**How / acceptance:** Implement the explicit `sfo_enplaned_trend` request from docs/API_UI_MAP.md; return a typed AnalysisResult with actual values, scope and source identity. Summary may be null until 4.5. Normalize validation/data errors into the documented non-2xx envelope with a server request_id. Test success/error shapes and no source/internal-field leakage. No session or model call is needed for this first slice.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_api.py -q`.
 
@@ -311,7 +333,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/static/app.js`, `backend/app/static/index.html`. **Depends on:** 2.4. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** Render the accepted SFO snapshot values and source label. Show a safe error for failed requests; keep any previous result explicitly labeled as previous.
+**How / acceptance:** Use same-origin app.js requests: one GET /health reachability probe and POST /api/query for the explicit SFO preset. Render the accepted result and its source label; handle documented HTTP errors or a local connection error. Keep any earlier result labeled Previous result. No data-provider calls from the browser.
 
 **Check:** Browser interaction trace plus screenshot: click SFO, compare displayed values with the API result, then exercise an unavailable-data response. Whitespace checking is not acceptance.
 
@@ -471,7 +493,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/responses.py`, `backend/tests/test_responses.py`. **Depends on:** 3.10, 3.11, 4.4, 2.4. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** `test_responses.py`: each number/source resolves; terminal and SFO answers include counterevidence; proxy never becomes unmet flights.
+**How / acceptance:** Read the AnalysisResult field map in docs/API_UI_MAP.md. Test that each returned number/source resolves and summary/evidence/limitations come from deterministic results and reviewed notes. Produce backend-scaled percentages; the frontend must not recalculate them. Terminal and SFO explanations include counterevidence; the proxy never becomes unmet flights.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_responses.py -q`.
 
@@ -481,7 +503,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/tests/fixtures/intent_eval.json`, `backend/docs/evidence/intent-eval-contract.md`. **Depends on:** 1.5. **Execution tier:** DRAFT.
 
-**How / acceptance:** Freeze 30 unique labeled cases before tuning: six demonstrations, eight safety/clarification cases and sixteen ordinary/paraphrased/follow-up cases. Include prior request context where needed. Expected outputs are independently authored.
+**How / acceptance:** Freeze 30 unique labeled cases before tuning: six demonstrations, eight safety/clarification cases and sixteen ordinary/paraphrased/follow-up cases. Use the canonical metrics and parsed AnalysisRequest in docs/API_UI_MAP.md, with prior context where needed. Expected outputs are independently authored. Evaluate interpreted requests/safe outcomes here; HTTP envelope assertions belong to API tests.
 
 **Check:** Inspect the labels against the declared query matrix. Step 5.0b must assert 30 unique IDs, category counts 6/8/16, required fields and valid expected outputs before evaluating either parser. JSON parsing alone is not corpus acceptance.
 
@@ -511,7 +533,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/session.py`, `backend/tests/test_session.py`. **Depends on:** 1.5. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** Test session isolation, expiry and bounded capacity. Failed/unsupported requests do not replace the last successful result. Busy requests are rejected rather than queued; include zero/expired/foreign result references.
+**How / acceptance:** Implement server-side lookup of opaque session tokens plus latest-result matching under docs/API_UI_MAP.md. Test expiry, capacity, isolation and stale/foreign context_result_id refusal. Do not overwrite the latest successful result after an error; explicit explain reads it without changing its ID or scope. Cookie transport is wired in main.py at 5.5, not a new session endpoint.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_session.py -q`.
 
@@ -521,7 +543,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/dispatch.py`, `backend/tests/test_dispatch.py`. **Depends on:** 1.5, 3.5, 4.5, 5.1. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** test_dispatch.py: BOS/PVD growth; performed-departure metric/compare; raw-growth order; explanation preserves cohort; unsupported combinations refuse.
+**How / acceptance:** Use the operation-to-handler crosswalk in docs/API_UI_MAP.md. Test BOS/PVD growth, performed-departure metric/compare, raw-growth order, SFO presets and explanation preserving its original cohort. Unsupported combinations refuse. Internal modules use functions, not localhost HTTP calls.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_dispatch.py -q`.
 
@@ -531,7 +553,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/intent.py`, `backend/tests/test_intent.py`. **Depends on:** 1.2, 1.5, 1.6, 5.1, 5.0, 5.0b. **Execution tier:** COMMIT.
 
-**How / acceptance:** Parse once into the strict schema. Unit-test safe errors, whole-prompt/output/cost/deadline limits and disabled retries. No provider call on structured presets. Live enabling waits for 5.4b.
+**How / acceptance:** Parse a message once into the canonical AnalysisRequest or a declared clarification/unsupported outcome; backend mapping owns the error status/message. Never let the model choose session identity, result ownership or citations. Unit-test schema errors, prompt/output/cost/deadline bounds and disabled retries. Structured input bypasses this call. Live enabling waits for 5.4b.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_intent.py -q`.
 
@@ -561,7 +583,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/main.py`, `backend/tests/test_api.py`. **Depends on:** 1.4, 2.4, 5.1, 5.2, 5.4. **Execution tier:** COMMIT.
 
-**How / acceptance:** Test real deterministic handlers, typed safe errors, one-query busy guard, deadline/cancellation behavior, supported follow-ups and cross-session refusal. Structured presets still run when model evaluation fails. Only model-backed free text requires a passed 5.4b decision.
+**How / acceptance:** Replace the first SFO route body with the shared dispatcher; keep exactly one POST /api/query handler. Apply docs/API_UI_MAP.md: typed responses/errors, same-origin opaque-cookie transport, server-owned request IDs, session/result checks, one-query guard and deadline cleanup. Presets/explicit explain make no model call; only admitted free text uses one. Test cross-session refusal, read-only explain and error paths without state overwrite.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_api.py -q`.
 
@@ -571,7 +593,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/static/app.js`, `backend/app/static/index.html`. **Depends on:** 2.5, 5.5. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** Show the four examples, nearby supported questions and follow-ups. Render result, previous-result and error states distinctly. Disable sending while a query is active; show safe messages rather than stack traces.
+**How / acceptance:** Use the API_UI_MAP.md field-to-screen contract for summaries, metrics, scope, sources and evidence. Source expansion is local; preset/scope changes and explicit Explain use the shared endpoint. Disable duplicate sends; handle non-2xx/non-JSON/network failure, partial and Previous result states, and ignore late responses. Store only the result reference in JavaScript; do not expose the session cookie or recalculate metrics.
 
 **Check:** `ui-tester screenshot + functional trace`.
 
@@ -601,7 +623,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/docs/evidence/demo-acceptance.md`. **Depends on:** 6.2, 5.4b. **Execution tier:** COMMIT.
 
-**How / acceptance:** With authorized source/model access, run the final demonstration protocol below within the same request/process limits. Record actual results and safe failure paths in demo-acceptance.md. Do not call unit-test success a live demo.
+**How / acceptance:** With authorized source/model access, run the final demonstration protocol within the same limits. Record an actual browser network trace linking UI actions to the documented routes and result/source IDs. Include a real API result, zero-call preset and admitted free-text path. Record errors honestly in demo-acceptance.md; schema/static tests are not a live demo.
 
 **Check:** Run the full available unit/lint/typecheck suite, then the real API/model/browser protocol below. Record commands, counts, source snapshots, model usage and screenshots. Runtime not available means TODO, not approval.
 

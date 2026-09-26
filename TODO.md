@@ -1,6 +1,6 @@
 # Execution TODOs
 
-**Runtime work: TODO — NOT RUN.** This checklist follows README plan revision 3, the bounded local-demo scope. It is not a second specification. Earlier review receipts remain historical; no missing run has been converted into a pass.
+**Runtime work: TODO — NOT RUN.** This checklist follows README plan revision 4, the bounded local-demo scope. It is not a second specification. Earlier review receipts remain historical; no missing run has been converted into a pass.
 
 ## Written corrections completed in revision 3
 
@@ -16,12 +16,21 @@
 
 These are changes to the plan, not completed application features or tests.
 
+## Connection design completed in revision 4
+
+- [x] Research the applicable API/module/error/UI owners in claude-code-config and record their pinned source references plus explicit English-message/route-version adaptations.
+- [x] Add the endpoint → backend handler → frontend consumer map to README; define the wire request/result/error examples in docs/API_UI_MAP.md.
+- [x] Assign contract, session, route and rendering ownership to the existing implementation steps; keep one analysis endpoint and no browser-driven source refresh.
+
+These checkmarks describe written design, not running routes, verified model calls or independent approval.
+
 ## Needs implementation or a running application
 
 - [ ] Install the pinned toolchain in an isolated environment; verify config, then lint/typecheck existing source targets and run behavioral tests.
 - [ ] Acquire/validate the qualified DataSF, FAA, T-100 and CY2024 on-time data. Respect the declared scope, limits, duplicates and missing-month rules. Prove the real DataSF API output feeds SFO.
 - [ ] Verify deterministic metrics with hand-checked fixtures: ranking, performed departures, long-haul counts, operational indicators and the SFO proxy. Missing values must not become zeros.
-- [ ] Run the first SFO API/browser slice; compare displayed values with its accepted source snapshot and exercise the error path.
+- [ ] Implement and test docs/API_UI_MAP.md in contracts.py, main.py and app.js: exact request union, bare success, non-2xx safe errors, typed units, opaque-cookie/result binding and one query route. Verify malformed, foreign/stale, busy and timeout cases without provider/state side effects.
+- [ ] Run the first SFO API/browser slice; record GET /, GET /static/app.js, one GET /health and POST /api/query in the browser trace. Compare displayed values/source IDs with the returned object; exercise errors and confirm source-detail expansion sends no request.
 - [ ] Review the top-three terminal evidence notes and SFO note against actual official passages; validate the file's expected coverage and record honest unknowns.
 - [ ] Freeze/check the 30-case intent corpus. Run the shared evaluator in baseline and authorized candidate modes; record failures, usage, costs and latency. Keep AI disabled if it fails.
 - [ ] Exercise supported follow-ups, unsupported scopes, busy/timeouts, expired sessions and provider errors. Preserve a clearly labeled previous result; do not return fabricated or stale success.
