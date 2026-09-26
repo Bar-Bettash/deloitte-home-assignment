@@ -1,395 +1,276 @@
 # Airport Investment Analyst — Lean Build Plan
 
-**Status: plan only.** The goal is a small, convincing home-assignment prototype, not a production aviation platform.
+**Delivery: design only.** Build one local home-assignment demo, not a production aviation platform. Source-research notes exist; application behavior and final acceptance remain to be demonstrated. This README is the current plan. Earlier specs/review records apply only to the versions they identify, not automatically to this revision.
 
-## Goal
+## Mission and scope
 
-Build an AI-assisted airport-investment screening tool that can answer the four assignment workflows with real public data, deterministic calculations, clear assumptions, and conversational follow-ups:
+The [assignment](FDE%20Exam%202.pdf) asks for an AI-powered assistant that identifies promising US airport modernization opportunities based on additional flight/passenger capacity. It requires public-API data, deterministic ranking or comparison, clear reasoning, conversational follow-ups, a chat UI, source code, and a short design document. Its four questions are examples, not four hardcoded intent names.
 
-1. Which New England airports are strong screening candidates for terminal-expansion diligence?
-2. How do LAX and SNA compare on congestion indicators?
-3. What percentage of ANC flights are long-haul?
-4. What demand pressure is visible at SFO, and what can or cannot be concluded about unmet demand?
+Our deliverable is a **capacity-unlock diligence screen**: measured traffic pressure plus a small amount of sourced intervention evidence. A busy airport alone is not an expansion opportunity. A candidate must have an evidenced unresolved constraint that the proposed renovation could address. We report why it merits investigation, what could invalidate it, and what the next diligence question is.
 
-The product is a **screening assistant**, not a profitability model. Public traffic data can identify pressure, growth, capacity utilization, and operational strain. It cannot establish project-specific returns or a causal quantity of latent demand without capex, revenue, fare, booking/search, and constraint-specific inputs.
+The available inputs do not support project-specific profitability or an identified quantity of unserved demand. We will provide useful calculations and conditional conclusions, not replace missing economics with a score. Increases in available airline seats are not measurements of terminal capacity.
 
-## Definition of done
+### Definition of done
 
-The prototype is complete only when all of the following work with real qualified data:
+| Demonstration | Required successful result |
+|---|---|
+| New England terminal-expansion question | A real numeric ranking across the declared cohort; manually reviewed evidence notes for the first three numerically assessable airports; each note explains terminal fit, counterevidence and next diligence. Supported candidates are distinguished from unverified watchlist entries. Never manufacture a positive candidate to pass. |
+| LAX/SNA congestion comparison | Real CY2024 cancellation, diversion, departure-delay and taxi-out indicators with denominators; a deterministic per-indicator comparison plus a qualified summary. |
+| ANC long-haul percentage | A real departure-weighted CY2024 percentage or justified missing-distance bounds; numerator, denominator, threshold, service scope and coverage. |
+| SFO unmet-demand question | Real passenger trends, a quantitative passenger-growth-versus-seat-growth proxy, CY2024 operational indicators, and a sourced constraint note. Explain what the proxy measures and why it cannot identify unmet flight demand or its causes. |
+| Generalization | Answer “Compare BOS and PVD passenger growth” and “Which New England airports grew fastest?” through the same operations used for the examples. No question-specific endpoint or intent name. |
+| Conversation | A metric-only follow-up preserves airports/year; an explanation preserves the original ranking cohort; a supported period/threshold change recomputes. Unsupported or ambiguous changes preserve the previous result and offer allowed choices. |
+| API and AI | A real DataSF API refresh feeds the SFO result. Real model calls resolve the four example questions and the two generalization questions to validated requests. Offline fixtures do not substitute for these checks. |
+| Deliverables | One browser chat/results screen, runnable source, and a short architecture note covering scoring, tradeoffs, where AI is used, sources and uncertainty. |
 
-- **New England:** a deterministic numeric ranking is produced for assessable airports using the frozen scoring formula below.
-- **LAX vs SNA:** the app returns a numeric CY2024 comparison of cancellation rate, mean departure delay, and taxi-out time for the same reporting population.
-- **ANC:** the app returns a departure-weighted long-haul percentage with numerator, denominator, threshold, and coverage.
-- **SFO:** the app returns passenger-growth and operational pressure indicators, then explicitly states that quantitative unmet demand is not identifiable from the available sources.
-- **Public API:** the live DataSF API is called by the application and its result is consumed by the SFO workflow.
-- **AI agent:** a natural-language question is mapped to one of the four allowlisted workflows and validated before execution.
-- **Follow-up:** at least one follow-up changes or narrows an existing analysis without losing the selected airport/workflow context.
-- **Transparency:** every answer shows period, population, source/coverage, assumptions, and any unavailable fields.
-- **UI:** a reviewer can use the four example prompts from one browser screen.
-- **Docs:** the repository includes a short architecture note explaining the scoring methodology, tradeoffs, and where AI is used.
+A dataset outage, empty ranking, or limitation-only response does not satisfy the numerical demonstrations. An evidence-backed conclusion that none of the reviewed airports has a supported terminal case is a legitimate outcome, provided real calculations and the completed evidence review are shown. This is prototype acceptance, not investment validation.
 
-A workflow that only returns a limitation does **not** satisfy the first three bullets. SFO is the deliberate exception because the requested latent-demand quantity is not defensible from the available public data; the app must still return useful measured indicators.
+### Keep out of the first submission
 
-## Deliberate non-goals
-
-To keep the assignment focused, the first submission does **not** include:
-
-- a 3D globe or God’s Eye View integration;
-- live aircraft tracking;
-- voice;
-- saved analyses across process restarts;
-- a database server, queue, worker fleet, or multi-agent architecture;
-- automated document crawling or RAG;
-- a full financial-return model;
-- a generalized aviation data platform.
-
-The uploaded ORBIT reference is used only for visual tone: dark workspace, restrained typography, compact controls, and clear information hierarchy. God’s Eye View remains an optional post-core enhancement if the analytical prototype is already complete.
+No required globe, live aircraft, voice, saved analyses across restarts, authentication product, queue, worker fleet, database server, multiple runtime agents, document crawler, vector database, RAG, or ROI model. No automatic cloud deployment or publication. Use ORBIT only for restrained dark styling. A GEV/Cesium map is optional after the core passes; its camera must never change analytical populations.
 
 ## Architecture
 
-One local FastAPI process serves both the API and a small static browser UI. Source refresh is separate from calculation. The analytical workflows read qualified local snapshots so a demo is reproducible.
+One local FastAPI process serves static HTML/JavaScript and the API. Use DuckDB to query local Parquet snapshots, an in-memory session dictionary, and one small manually curated JSON evidence file. No separate frontend toolchain.
 
-~~~mermaid
+```mermaid
 flowchart LR
-    U[Analyst] --> UI[Static chat and results UI]
+    User[Analyst] --> UI[Chat and tables]
     UI --> API[FastAPI]
-    API --> INTENT[One constrained intent call]
-    INTENT --> VALIDATE[Validate allowlisted workflow and args]
-    VALIDATE --> CALC[Deterministic calculations]
-    CALC --> SNAP[Qualified local snapshots]
-    API --> SESSION[In-memory session context]
-    API --> RESP[Template explanation and source metadata]
-    RESP --> UI
-    DATASF[DataSF public API] --> REFRESH[Refresh adapter]
-    REFRESH --> SNAP
-~~~
+    API --> Intent[One constrained intent call]
+    Intent --> Validate[Validate operation and scope]
+    API -->|Quick prompts or model failure| Explicit[Explicit structured request]
+    Explicit --> Validate
+    Validate --> Calc[Rank / compare / metric / explain]
+    Data[Qualified Parquet snapshots] --> Calc
+    Notes[Curated evidence notes] --> Calc
+    Calc --> Result[Metrics and evidence references]
+    Result --> Render[Deterministic explanation templates]
+    Render --> UI
+    API <--> Session[In-memory context]
+    Public[DataSF public API] --> Refresh[Explicit refresh]
+    Refresh --> Data
+```
 
-### Why this shape
+The model chooses an operation and parameters; the backend controls authorization, supported combinations, arithmetic and explanations. Templates explain score contributions, comparisons and evidence rather than merely displaying numbers. No second model or reviewer is needed on the runtime request path.
 
-- **FastAPI + static HTML/JS:** one runnable application, no frontend build system required.
-- **DuckDB or direct Parquet reads:** enough for the analytical joins without introducing a database service.
-- **In-memory session state:** sufficient for a single-process home-assignment demo; restart persistence is unnecessary.
-- **One LLM call per message:** the model classifies intent and follow-up parameters only. It does not calculate metrics or invent answer prose.
-- **Template explanations:** every displayed number comes directly from the deterministic result object.
+Serve on `127.0.0.1` with one worker. Keep the model credential server-side, excluded from Git and logs; no key reaches browser JavaScript. This local demo is not a hosted multi-user security design. Ignore credentials and replaceable data before acquisition. Keep permitted source snapshots reproducible without committing large raw archives.
 
-## Data sources and bounded scope
+## Data and scope contracts
 
-Detailed source qualification evidence already lives under backend/docs/evidence/. That evidence is useful input, but the submission does not need a large provenance subsystem.
+The [existing qualification record](backend/docs/evidence/source-qualification-20260925.md) reports bounded source inspections, not a working application. Its temporary paths are not guaranteed to survive. Reacquire or validate supplied files; do not assume those paths exist. Preserve exact request/filter details from the record rather than treating old row counts as permanent truth.
 
-| Source | Use in prototype | Scope |
+| Source | Intended scope | Remaining implementation work |
 |---|---|---|
-| DataSF SFO Air Traffic Passenger Statistics | Runtime public-API integration and SFO passenger trends | CY2023–CY2024 |
-| FAA CY2024 commercial-service airport list | Defines the New England screening cohort | CY2024 cohort only |
-| BTS T-100 Segment | New England traffic/seat metrics and ANC long-haul calculation | CY2023–CY2024 as needed |
-| BTS Reporting Carrier On-Time Performance | LAX/SNA congestion indicators and optional SFO operational context | CY2024 only |
+| DataSF `rkru-6vcg` public API | SFO enplaned passengers, CY2023–24 | Fetch, validate, snapshot, consume. The record reports a qualified raw CSV; live app ingestion is unbuilt. |
+| FAA CY2024 commercial-service list | New England cohort | Record the exact download URL; reproduce membership from the official list. |
+| BTS T-100 All Carriers (`FMG`) | CY2023–24, 22 cohort origins plus ANC/LAX/SNA/SFO | Reacquire/import the qualified AK/CA/CT/MA/ME/NH/RI/VT partitions; deduplicate overlaps and retain origin scope. |
+| BTS Reporting Carrier On-Time (`FGJ`) | CY2024 LAX/SNA/SFO departures | Qualify all 12 monthly archives; the existing record inspected only January 2024. No annual conclusion from one month. |
+| Official airport/FAA documents | First three traffic-ranked cohort airports plus SFO | Manually curate short evidence notes; no scraping or extraction pipeline. |
 
-### Simplified source rule
+**New England cohort:** `BDL, HVN, PWM, BGR, PQI, RKD, BHB, AUG, BOS, ACK, ORH, MVY, HYA, PVC, MHT, PSM, LEB, PVD, WST, BID, BTV, RUT` (22 airports from the recorded FAA CY2024 scope). These IDs are a check against acquisition, not a replacement for it. The source record reports no eligible PVC row for December 2024. Keep that month unknown unless the absence is separately resolved; do not impute zero.
 
-Each accepted snapshot needs only:
+### Public API: substantive use, not an ornamental integration
 
-- source name and URL;
-- retrieval UTC;
-- period;
-- row count;
-- SHA-256;
-- validation result.
+Use `https://data.sf.gov/resource/rkru-6vcg.csv` through its Socrata API. Reuse the recorded selected columns and CY2023–24 predicate. Paginate in stable order, reject duplicate/conflicting keys, reconcile with a scoped count query, and require expected month/activity/geography coverage. A page below the limit alone is not completeness proof. Bound acquisition; a timeout, unstable count or unresolved drift fails refresh without replacing the last accepted snapshot.
 
-Do not build a generalized lineage service. If a refresh fails validation, keep the last accepted snapshot and show that the live refresh is unavailable.
+For the passenger result, filter `activity_type_code = 'Enplaned'`; sum `passenger_count` by `activity_period` and `geo_summary`. Do not sum enplaned, deplaned and transit rows together. A real refresh must occur in the demo and the returned snapshot must feed the SFO calculation. Subsequent questions reuse it.
 
-### Public API requirement
+**Acquisition tradeoff:** DataSF supplies the real API-driven airport workflow. BTS/FAA bulk downloads supply comparable historical populations. Those downloads are explicitly not REST APIs; choosing them avoids substituting a partial live-tracking feed for historical seats, passengers and departures. We do not claim an unverified general BTS API exists, or add a provider solely to increase the API count. Explain this division in the architecture note.
 
-The DataSF Socrata endpoint is the runtime public API. The application must actually call it during refresh and consume the accepted output in the SFO workflow. FAA/BTS official downloads provide the broader historical datasets.
+### Small validation contract
 
-## Frozen analytical rules
+Each accepted snapshot stores source URL plus request parameters, retrieval UTC, period/population, row count, SHA-256 and validation outcome. These are local metadata, not a lineage service. Accept legitimate source corrections after checking affected aggregates; never blindly reject a changed hash or silently accept changed scope.
 
-These formulas are intentionally simple, visible, and versioned as methodology v1.
+T-100 uses origin-direction records with `CLASS in {A,C,E,F}` and `SEATS > 0`, retaining domestic/international US/foreign carrier source families. The inspected partitions happened to contain only F among those classes. Preserve the full raw identity, including `AIRCRAFT_CONFIG`, from the source record. Exact cross-state duplicate rows collapse; conflicting measures block publication. Cargo-only/nonscheduled services remain out of scope and must not be silently included.
 
-### 1. New England screening score
+FGJ uses `(FlightDate, Reporting_Airline, Flight_Number_Reporting_Airline, OriginAirportID, DestAirportID, CRSDepTime)` as the recorded flight identity. Validate binary cancellation/diversion flags and airport ID/code agreement. Conflicting duplicate flights or invalid identity/flags block the affected airport-period. Conditional nulls in delay/taxi fields are allowed with explicit denominators.
 
-Use the FAA CY2024 commercial-service cohort and T-100 origin-direction scheduled passenger-service records for CY2023 and CY2024.
+Annual eligibility requires all 12 source months and explicit coverage for the selected airport. Unknown no-row months block annual metrics, not zero-fill them. Missing values remain distinct from zero. On refresh failure, an existing result remains visible with its original snapshot/time and a failed-refresh label; never label cached data freshly retrieved. On a clean start with no accepted snapshot, return `unavailable`.
 
-For each assessable airport calculate:
+### Supported query matrix
 
-- **2024 passenger volume**
-- **2023→2024 passenger growth**
-- **2024 seat occupancy = passengers / available seats**
+| Operation / metrics | Airports or region | Periods |
+|---|---|---|
+| `metric` / `compare`: T-100 passengers, seats, departures, seat occupancy, long-haul share | 26 listed origins | CY2023 or CY2024 after qualification |
+| `metric` / `compare` / `rank`: passenger growth | Those origins; regional ranking within the 22-member New England cohort | CY2024 versus CY2023 only |
+| `rank`: screen score, passenger volume, occupancy | New England or an explicit subset of its 22 members | CY2024 only |
+| `metric` / `compare`: cancellation, diversion, mean departure delay, taxi-out; congestion bundle | LAX, SNA, SFO | CY2024 only |
+| `metric`: DataSF enplaned trend, SFO capacity-pressure bundle | SFO | CY2023/24 levels; growth and bundle CY2024 versus CY2023 |
+| `explain` | A result in the current session | Its original scope, snapshots and methodology |
 
-Eligibility requires complete required months, positive 2023 passengers, and positive 2024 seats. Missing required inputs make the airport not assessable; do not impute.
+All examples default explicitly to CY2024 and scheduled passenger-service scope. Resolve “Anchorage” to ANC and “Santa Ana” to SNA; disclose “LA interpreted as LAX” with a correction affordance. Ask clarification for genuinely ambiguous airport/metro references. Cargo requests are `unsupported_scope`, not passenger results in disguise. Unsupported airports/years/metrics return allowed choices without changing stored context. Historical CY2024 outputs are not labeled current forecasts.
 
-Normalize each metric with percentile rank across the assessable cohort and calculate:
+## Deterministic methodology v1
 
-**score = 0.40 × growth percentile + 0.30 × volume percentile + 0.30 × occupancy percentile**
+### A. Traffic ranking plus a capacity-unlock rationale
 
-Display the component metrics beside the score. This is a **traffic-pressure screening score**, not a probability of investment success and not proof that a terminal project is the binding intervention.
+From the same T-100 passenger-service population calculate `P24`, growth `g = (P24-P23)/P23`, and seat occupancy `o = P24/S24`. Use a sum-of-passengers / sum-of-seats ratio, not a mean of row ratios or a passenger-mile load factor. Nonnegative valid measures, complete periods, `P23 > 0` and `S24 > 0` are required for the score. Raw levels can remain available when a derived ratio is undefined.
 
-Return the top screening candidates plus every excluded/unassessable airport and its reason.
+Let `n` be numerically eligible airports in the full 22-member cohort. For each component use ascending average rank `r`; percentile is `(r-1)/(n-1)`. Calculate:
 
-### 2. LAX vs SNA congestion comparison
+`screen_score = 100 * (0.40 * growth_percentile + 0.30 * volume_percentile + 0.30 * occupancy_percentile)`
 
-Use CY2024 BTS Reporting Carrier On-Time Performance, origin airport only, for domestic scheduled flights represented by reporting carriers.
+No score if `n < 2`. Ties use average component rank; final rank is `1 + count(strictly higher unrounded scores)`. Airport ID orders display ties only. Filtering preserves this reference cohort and existing scores. A “grew fastest” request sorts raw growth, not the composite. No user-editable weights in v1.
 
-Show side-by-side:
+Synthetic formula fixture (not airport data): A/B/C growth = 5/10/15%; volume = 1,000/3,000/2,000; occupancy = 90/70/80%. The expected scores are A=30, B=50, C=70. Also test equal components and a single eligible airport.
 
-- cancellation rate;
-- diversion rate;
-- mean DepDelayMinutes on non-cancelled/non-diverted flights;
-- mean TaxiOut on non-cancelled/non-diverted flights;
-- eligible row counts and non-null denominators.
+**Business interpretation:** growth is observed traffic momentum, volume is the scale of activity potentially affected, and occupancy describes airline seat utilization. These are heuristic reasons to investigate; they do not measure terminal utilization, prove demand exceeds supply, or calculate returns. Volume favors scale and may favor larger airports; disclose that tradeoff.
 
-Use the same population definition for both airports. Do not collapse these indicators into a fake precision score. The answer explains which airport is higher on each indicator and notes that carrier/route mix can affect the comparison.
+**Terminal shortlist:** after the numeric ranking, manually review only the first three numerically eligible airports, using score then ID to select three when tied. For each, record one compact note in `backend/data/evidence.json`: airport, official publisher/title/URL/page, document date, checked date, unresolved constraint, proposed intervention, terminal-fit status (`supported`, `contradicted`, `unknown`), counterevidence and next diligence question. Use an evidence-as-of date separate from the traffic period. A completed remedy or superseding plan invalidates a stale constraint claim. No admin UI, no automated extraction, no 22-airport review gate.
 
-### 3. ANC long-haul share
+A `supported` entry requires cited evidence of an unresolved terminal constraint and a plausible connection between the proposed intervention and added throughput; unresolved material counterevidence makes the conclusion `unknown`. Only numerically eligible `supported` entries receive a **conditional terminal-expansion diligence recommendation**, ordered by their unchanged screen score. Others are watchlist entries, never negative investment verdicts. Label the shortlist “evidence-reviewed subset of the top three traffic candidates,” not the best opportunities across all 22. Remaining airports are `not_reviewed`; selecting one shows that gap.
 
-Use eligible T-100 ANC-origin scheduled passenger-service records.
+Each recommendation states: **measured signal → evidenced constraint → proposed capacity unlock → counterevidence → next diligence**. It does not estimate extra flights, passengers or profit without the corresponding project inputs. A small sensitivity check reports top-three membership under equal weights without replacing v1 or changing the evidence-reviewed set; newly appearing candidates remain unreviewed.
 
-Define long-haul for this prototype as **distance >= 3,000 statute miles**.
+```mermaid
+flowchart TD
+    A[Qualified cohort traffic] --> B[Fixed numeric screen]
+    B --> C[Review evidence for first three]
+    C --> D{Unresolved terminal constraint and fit supported?}
+    D -->|Yes| E[Conditional capacity-unlock diligence candidate]
+    D -->|No or unknown| F[Traffic watchlist with evidence gap]
+    E --> G[Show counterevidence and next diligence]
+    F --> G
+```
 
-Weight by **DEPARTURES_PERFORMED**, not route-row count or passenger count.
+### B. Congestion comparison with a direct, qualified conclusion
 
-**long-haul share = long-haul performed departures / all eligible performed departures**
+Use all reporting carriers at each selected origin in qualified CY2024 FGJ domestic scheduled-flight records, not only carriers common to both airports. Show carrier lists, counts and scope: neither airport is represented as all-airline/international coverage.
 
-Show numerator, denominator, threshold, and missing-distance coverage. If distance coverage is incomplete, show a range rather than a false exact percentage.
+Let `N` be scheduled-flight rows with valid identity and flags. Cancellation rate = cancelled/N; diversion rate = diverted/N. For `Cancelled=0 AND Diverted=0`, calculate separate means of non-null `DepDelayMinutes` and `TaxiOut`. The delay label is “mean departure delay, early departures set to zero”; do not substitute signed `DepDelay`. Show each mean's denominator and coverage against eligible non-cancelled/non-diverted flights. Zero denominators make the affected metric unavailable.
 
-### 4. SFO demand-pressure answer
+The comparison rule uses the four displayed metrics (rates in percent, times in minutes, rounded to two decimal places). For each, report higher/lower/tied; exclude unavailable pairs from `m` and enumerate them. Summary: “LAX is higher on k of m comparable operational-strain indicators; SNA is higher on j; t are tied.” Equal displayed values are ties at display precision. If both airports are higher on different indicators, also say “mixed picture”; if `m=0`, no comparative conclusion.
 
-Use DataSF to calculate monthly/annual enplaned passenger trends for CY2023–CY2024. Optionally add the same CY2024 BTS operational indicators used above once qualified.
+This unweighted descriptive count is not a statistical significance claim, composite congestion score or proof of terminal causation. Do not normalize two airports into misleading 0/100 extremes. Cancellations, diversions, delays and taxi times can reflect different mechanisms. The answer explicitly identifies those interpretation limits.
 
-The answer separates:
+### C. Long-haul share
 
-- **Observed:** passengers, changes, cancellation/delay/taxi indicators.
-- **Calculated:** year-over-year change and comparable rates.
-- **Inferred:** evidence of demand pressure or operational strain.
-- **Unknown:** quantitative unmet demand and its causal source.
+For any supported origin, default long-haul to `DISTANCE >= 3000` statute miles. Allow an explicitly requested positive finite threshold no greater than 12,000 miles, always shown as an assumption; the ceiling is a prototype input bound, not an aviation standard. Count performed departures, not route rows, scheduled departures or passengers.
 
-If asked for a numeric quantity of unmet demand, return **not_identifiable** and list the missing inputs. Still provide the measured demand-pressure indicators instead of ending with a disclaimer.
+`T = sum(DEPARTURES_PERFORMED)` over the eligible annual population; `L` = performed departures on known distances meeting the threshold; `U` = performed departures with null/negative distance. A source-reported zero distance is known short under this endpoint-distance definition. Invalid/null/negative performed counts make the result unavailable because T is unknown.
 
-## AI agent contract
+If `T=0`, no share. Otherwise coverage = `(T-U)/T`. With `U=0`, share = `100*L/T`; with `U>0`, bounds = `[100*L/T, 100*(L+U)/T]`, no exact point estimate. Complete monthly coverage remains necessary. Render counts and service scope alongside the percentage. Cargo-only/private operations are outside this result.
 
-The LLM receives the user message plus minimal previous context and may return only a strict schema:
+### D. SFO quantitative proxy and the “why” answer
 
-- workflow: new_england_screen | lax_sna_compare | anc_long_haul | sfo_demand_pressure
-- airports
-- year or period
-- optional requested metric
-- optional long-haul threshold
-- clarification_needed
+Show DataSF enplaned passenger levels/growth separately from T-100 measures; do not join their different passenger populations as if interchangeable. Calculate the following **capacity-pressure proxy** entirely within matching T-100 scheduled passenger-service origin records:
 
-The backend rejects unknown workflows, unsupported periods, unknown airports, malformed values, or unsupported parameters.
+`passenger_growth = (P24/P23 - 1)`
 
-**The model never returns authoritative numbers, calculations, citations, or final answer prose.**
+`seat_growth = (S24/S23 - 1)`
 
-The request path allows at most **one model call per user message**. If the model is unavailable or invalid, the UI remains usable through the four quick prompts and a small deterministic parser for explicit requests.
+`growth_gap_pp = 100 * (passenger_growth - seat_growth)`
 
-Follow-up context lives in memory for the current process. Examples:
+Also show occupancy for both years and the separately scoped FGJ operational bundle. Positive baseline passengers/seats and complete periods are required; otherwise the proxy is `not_assessable`. Do not substitute DataSF passengers into a T-100 seat denominator.
 
-- “Show only cancellations” keeps LAX/SNA and the current year.
-- “Why is BOS above PVD?” keeps the latest New England ranking.
-- “What threshold did you use?” keeps the ANC result.
-- “Use 2023 for ANC” recomputes only if that period is qualified.
+Interpretation is literal: positive gap means transported passengers grew faster than supplied seats; negative means slower; zero means equal growth. Example fixture: passengers +10%, seats +5% gives +5 percentage points. This can describe tightening seat utilization, but **is not extra flights needed, terminal saturation, rejected bookings, or measured latent demand**. A negative gap does not establish the absence of unmet demand. Do not convert the gap into “missing passengers.”
 
-## UI scope
+Manually curate one SFO note in the same evidence file with dated official constraint evidence and a competing explanation or limitation. Template answer order: numeric scope/results; gap interpretation; documented constraint and its possible mechanism; counterevidence; what remains unidentified. A cited constraint is a hypothesis about relevance, not a proven cause of these aggregates. If the documents do not establish a constraint, say so; a completed source check with an explicit gap is acceptable, an unreviewed placeholder is not.
 
-The UI is intentionally small:
+Requests for quantified unmet demand return `not_identifiable` **alongside** this successful proxy result, with missing unconstrained booking/search demand, fares, airline supply and causal constraint evidence. ROI requests additionally need capex, operating costs, incremental commercial revenue and financing. Unknown business quantities do not invalidate supported calculations or authorize invented estimates.
 
-- one chat input;
-- four example prompt buttons;
-- one result area;
-- a compact comparison/ranking table;
-- a source/coverage/methodology details drawer;
-- clear loading, error, unavailable, and success states.
+## Reusable agent contract
 
-Use the ORBIT recording as styling inspiration only: near-black background, restrained white typography, muted secondary text, one accent color, and minimal chrome.
+Use one strict `AnalysisRequest`: `action = rank | compare | metric | explain`, supported airport IDs or `region=new_england`, allowed metric(s), period, optional long-haul threshold, optional current-session result reference, and clarification fields. The four quick prompts are request presets, not a closed set of question-specific workflow names. Use fixed handlers and the query matrix above; no model-written SQL/code, arbitrary HTTP or shell tool.
 
-**No globe is required for acceptance.** If the core is complete early, a simple map or selectively reused God’s Eye View/Cesium view may be added behind the same result objects. The analytical result must remain independent of camera position.
+At most **one model call per free-text message**, including retries (disable automatic SDK retries), 20-second model timeout, 512 output tokens and 4,000 input characters; 30-second query deadline. Quick-prompt structured requests use zero model calls. Pass only the message and compact previous context, not raw source archives, secrets or entire documents. Model timeout/invalid output returns deterministic explicit-input fallback or asks the user to choose a supported request. A failed model call never becomes a guessed numeric answer.
 
-## Step-by-step build plan
+Validate the requested action, scope, metric, period and parameter combinations server-side. The model cannot create sources, metrics, weights or authoritative answer prose. A parameter such as a threshold is a validated user-selected input, not an observed measurement. Render calculations/citations from the result and curated evidence; safe output rendering never inserts unsanitized HTML from source text.
 
-Each substep below has one outcome. If implementation needs more than two code files or becomes materially larger than the stated outcome, split it again instead of expanding the step.
+Minimal context stores the last successful request/result per server-issued session ID. `explain` can inspect two members of a stored ranking without renormalizing it. “Show only cancellations” selects a metric and reuses airports/year. “Use 2023 for ANC” recomputes only from qualified coverage. “Use 2023” after a CY2024 growth screen cannot fabricate 2022 baselines. Clarification, unsupported or unavailable results leave the previous successful context intact. Reject result references outside the session.
+
+Keep at most 100 sessions, one latest result each, expiring after 60 idle minutes. Restart loses context by design. After eviction, ask for a fresh analysis instead of guessing. These are simple local memory limits, not a persistent history system.
+
+## Atomic implementation steps
+
+All steps below are **planned, not implemented**. Paths are repository-relative. Test commands run from the root with `PYTHONPATH=backend python -m pytest ...`; live CLI flags and API schemas are interfaces to implement before using their checks. A missing command, zero collected tests, or a failed request is not a pass. Each row has one bounded outcome and at most two edited paths. Split a row before execution if it grows beyond a small module/function plus its test. Repeat per-file source imports sequentially; do not turn them into an orchestration platform.
 
 ### Phase 1 — Runnable shell
 
-**What:** get a browser and API running before building analytics.
+**What:** one API and browser. **How:** FastAPI plus static files and validated contracts. **Why:** prove the serving path before acquiring broad data.
 
-**How:** one FastAPI process serves health, API routes, and static files.
+| ID | Depends | Files | Single outcome / how | Completion check |
+|---|---|---|---|---|
+| 1.1 | none | `backend/requirements.txt`, `backend/app/main.py` | Create the loopback FastAPI health endpoint. | Start the planned server command; `/health` body equals `{"status":"ok"}`. |
+| 1.2 | none | `.gitignore`, `backend/.env.example` | Define safe local configuration exclusions with placeholder credential names. | `git check-ignore backend/.env backend/data/raw/probe.csv`; example has no values. |
+| 1.3 | 1.1 | `backend/app/static/index.html`, `backend/app/static/app.js` | Create a chat shell with four visible request presets. | Each button selects its intended request; no result claimed yet. |
+| 1.4 | 1.3 | `backend/app/main.py` | Mount the static shell at `/`. | Browser loads page and JavaScript without 404s. |
+| 1.5 | 1.1 | `backend/app/contracts.py`, `backend/tests/test_contracts.py` | Define operation/result contracts including supported combinations. | `test_contracts.py`: reject invalid combinations; accept comparison and explanation examples. |
 
-**Why:** it creates a real end-to-end path immediately and prevents infrastructure work from getting ahead of the product.
+### Phase 2 — First slice: public API to SFO passenger result
 
-#### 1.1 Create the FastAPI shell
-- Files: backend/app/main.py, backend/requirements.txt
-- Outcome: GET /health returns 200 with a small JSON body.
-- Check: start uvicorn and curl /health.
+**What:** a real source-to-screen result. **How:** bounded DataSF refresh and one calculation. **Why:** demonstrate API use before extra datasets or polish; this slice alone is not final AI/assignment acceptance.
 
-#### 1.2 Serve the static browser shell
-- Files: backend/app/static/index.html, backend/app/static/app.js
-- Outcome: / displays a chat input and the four assignment prompt buttons.
-- Check: open the page and click each button; each produces a request payload in the browser.
+| ID | Depends | Files | Single outcome / how | Completion check |
+|---|---|---|---|---|
+| 2.1 | 1.2,1.5 | `backend/app/sources/datasf.py`, `backend/tests/test_datasf.py` | Acquire complete bounded DataSF CSV using the declared request/paging contract. | `test_datasf.py`: full multi-page input succeeds; truncated/count-conflicting input fails. |
+| 2.2 | 2.1 | `backend/app/sources/datasf.py`, `backend/tests/test_datasf.py` | Publish only accepted Parquet snapshots with metadata. | `python -m app.sources.datasf --refresh` live run; failed refresh preserves the previous snapshot. |
+| 2.3 | 2.2 | `backend/app/calculations/sfo.py`, `backend/tests/test_sfo.py` | Calculate enplaned levels and growth from the accepted snapshot. | `test_sfo.py`: exclude other activities, reconcile a source aggregate, handle zero baseline. |
+| 2.4 | 1.4,1.5,2.3 | `backend/app/main.py`, `backend/app/responses.py` | Expose `POST /api/query` for an explicit SFO metric request. | API returns calculated values, snapshot ID and scope, not an empty success. |
+| 2.5 | 2.4 | `backend/app/static/app.js`, `backend/app/static/index.html` | Render the real SFO passenger result. | Browser quick prompt shows numbers matching the accepted snapshot. |
 
-#### 1.3 Define request/result contracts
-- Files: backend/app/contracts.py, backend/tests/test_contracts.py
-- Outcome: workflow, airport, period, status, metrics, coverage, and source metadata validate deterministically.
-- Check: pytest backend/tests/test_contracts.py.
+### Phase 3 — Reusable deterministic calculations
 
-### Phase 2 — First complete vertical slice: SFO passenger trends
+**What:** cover the remaining data/metrics. **How:** small loaders and pure functions. **Why:** all question variants share the same arithmetic.
 
-**What:** prove one public API can travel all the way from fetch to browser result.
+| ID | Depends | Files | Single outcome / how | Completion check |
+|---|---|---|---|---|
+| 3.1 | 1.2 | `backend/app/sources/faa.py`, `backend/tests/test_faa.py` | Reproduce the FAA cohort from the official download. | `test_faa.py`: exact 22 IDs; record acquisition URL/date. |
+| 3.2 | 1.2 | `backend/app/sources/t100.py`, `backend/tests/test_t100.py` | Import the required T-100 partitions with full-key deduplication. | `test_t100.py`: overlapping records collapse; conflicting measures fail. |
+| 3.3 | 3.2 | `backend/app/sources/t100.py`, `backend/tests/test_t100.py` | Produce origin/service-filtered Parquet with airport-period coverage. | `test_t100.py`: exclude cargo-only; preserve the recorded missing month. |
+| 3.4 | 3.3 | `backend/app/calculations/traffic.py`, `backend/tests/test_traffic.py` | Calculate airport volume, growth and occupancy. | `test_traffic.py`: independently aggregated values and undefined-ratio cases. |
+| 3.5 | 3.3 | `backend/app/calculations/long_haul.py`, `backend/tests/test_long_haul.py` | Calculate departure-weighted long-haul share for a supplied airport. | `test_long_haul.py`: exact share, unknown-distance bounds, zero/invalid total. |
+| 3.6 | 3.1,3.4 | `backend/app/calculations/screen.py`, `backend/tests/test_screen.py` | Calculate v1 ranking with frozen-cohort semantics. | `test_screen.py`: A/B/C=30/50/70, ties, n<2, raw-growth ordering, filtering invariance and equal-weight sensitivity. |
+| 3.7 | 1.2 | `backend/app/sources/ontime.py`, `backend/tests/test_ontime.py` | Import validated CY2024 FGJ archives sequentially. | `test_ontime.py`: ZIP/CSV validity, identity/flags, conflict detection; live acquisition records 12 months. |
+| 3.8 | 3.7 | `backend/app/sources/ontime.py`, `backend/tests/test_ontime.py` | Publish scoped LAX/SNA/SFO Parquet with coverage. | `test_ontime.py`: all requested airport-months qualified before annual queries; conditional nulls retained. |
+| 3.9 | 3.8 | `backend/app/calculations/operations.py`, `backend/tests/test_operations.py` | Calculate operational rates and conditional means. | `test_operations.py`: hand-checked denominators, nulls, origin direction and early-delay semantics. |
+| 3.10 | 3.9 | `backend/app/calculations/comparison.py`, `backend/tests/test_comparison.py` | Produce the descriptive congestion comparison. | `test_comparison.py`: higher/lower/tied, mixed picture, missing metrics and m=0. |
+| 3.11 | 2.3,3.4,3.9 | `backend/app/calculations/sfo.py`, `backend/tests/test_sfo.py` | Assemble the SFO pressure bundle. | `test_sfo.py`: +10%/+5%=+5 pp; matching T-100 scope; negative gap and zero baseline do not invent unmet demand. |
 
-**How:** use the already-qualified DataSF source and keep the first calculation narrow.
+### Phase 4 — Minimal investment reasoning
 
-**Why:** this is the fastest real end-to-end proof and satisfies the assignment’s public-API requirement before broader data work.
+**What:** connect metrics to the renovation question. **How:** four manually authored evidence notes, no retrieval infrastructure. **Why:** fix the mission gap without reviewing 22 airport projects or building RAG.
 
-#### 2.1 Implement the DataSF refresh adapter
-- Files: backend/app/sources/datasf.py, backend/tests/test_datasf.py
-- Outcome: fetch the bounded CY2023–CY2024 dataset, validate required columns/periods, and save an accepted snapshot.
-- Check: pytest backend/tests/test_datasf.py plus one live refresh command.
+| ID | Depends | Files | Single outcome / how | Completion check |
+|---|---|---|---|---|
+| 4.1 | 3.6 | `backend/data/evidence.json` | Curate one note per selected top-three airport using official documents. | Three completed notes or one per eligible airport if fewer; actual citations/checked dates, counterevidence and no placeholder status. |
+| 4.2 | 4.1 | `backend/data/evidence.json` | Curate the SFO constraint note. | Open cited pages; note supports the proposed mechanism or explicitly records the gap after review. |
+| 4.3 | 4.2 | `backend/app/evidence.py`, `backend/tests/test_evidence.py` | Validate evidence records and map them to result IDs. | `test_evidence.py`: missing citation, completed remedy and unreviewed airport never become supported terminal claims. |
+| 4.4 | 3.6,4.3 | `backend/app/calculations/screen.py`, `backend/tests/test_screen.py` | Attach evidence-based terminal dispositions to the ranking. | `test_screen.py`: same numeric scores; supported/unknown/contradicted and none-supported outcomes. |
+| 4.5 | 3.10,3.11,4.4 | `backend/app/responses.py`, `backend/tests/test_responses.py` | Render evidence-led explanations from deterministic results. | `test_responses.py`: each number/source resolves; terminal and SFO answers include counterevidence; proxy never becomes unmet flights. |
 
-#### 2.2 Implement SFO passenger-trend calculation
-- Files: backend/app/calculations/sfo.py, backend/tests/test_sfo.py
-- Outcome: return monthly/annual enplaned levels and 2024-vs-2023 changes with zero-baseline handling.
-- Check: pytest backend/tests/test_sfo.py against a hand-calculated fixture.
+### Phase 5 — General conversational access
 
-#### 2.3 Expose the SFO workflow
-- Files: backend/app/main.py, backend/app/responses.py
-- Outcome: POST /api/query with the explicit SFO workflow returns the deterministic SFO result and source metadata.
-- Check: curl the endpoint and compare one displayed metric with the fixture/source snapshot.
+**What:** answer more than four phrasings. **How:** one bounded parser call and a small shared dispatcher. **Why:** an analyst can ask nearby questions without adding new workflows.
 
-#### 2.4 Render the first real browser result
-- Files: backend/app/static/app.js, backend/app/static/index.html
-- Outcome: the SFO quick prompt shows real measured values, coverage, and the not_identifiable boundary for numeric unmet demand.
-- Check: use the browser prompt and verify the snapshot/source label shown on screen.
+| ID | Depends | Files | Single outcome / how | Completion check |
+|---|---|---|---|---|
+| 5.1 | 1.5 | `backend/app/session.py`, `backend/tests/test_session.py` | Store bounded current-session context. | `test_session.py`: isolation, expiry, eviction and unchanged state after failed/unsupported requests. |
+| 5.2 | 1.5,3.5,4.5 | `backend/app/dispatch.py`, `backend/tests/test_dispatch.py` | Map allowed operation/metric combinations to existing functions. | `test_dispatch.py`: BOS/PVD growth comparison, raw-growth ranking and stored-result explanation. |
+| 5.3 | 1.2,1.5,5.1 | `backend/app/intent.py`, `backend/tests/test_intent.py` | Parse free text into the strict request schema. | `test_intent.py`: one call ceiling, disabled retries, timeout/length bounds; six real question probes. |
+| 5.4 | 5.3 | `backend/app/intent.py`, `backend/tests/test_intent.py` | Provide explicit-input fallback when the model fails. | `test_intent.py`: quick prompts still work; ambiguity asks a question rather than guessing. |
+| 5.5 | 5.1,5.2,5.4 | `backend/app/main.py`, `backend/tests/test_api.py` | Connect validated queries to sessions and the shared dispatcher. | `test_api.py`: real handler calls, supported follow-up recomputation, safe errors and session-bound result references. |
+| 5.6 | 5.5 | `backend/app/static/app.js`, `backend/app/static/index.html` | Render conversational results and details on one screen. | Browser displays four examples plus generalization/follow-ups with matching values and citations. |
 
-### Phase 3 — Add the remaining deterministic workflows
+### Phase 6 — Verify and hand over
 
-**What:** implement the three remaining assignment calculations without changing the architecture.
+**What:** make the small demo usable and reproducible. **How:** targeted tests and an observed browser run. **Why:** clarity, reasoning and honest boundaries are the assessment priorities.
 
-**How:** add only the loaders and calculation functions each workflow needs.
+| ID | Depends | Files | Single outcome / how | Completion check |
+|---|---|---|---|---|
+| 6.1 | 5.6 | `backend/app/static/index.html`, `backend/app/static/app.js` | Make result states keyboard-accessible and narrow-screen usable. | Complete flows via keyboard; distinguish zero/missing/unavailable; visible focus, labels and no hidden sources. |
+| 6.2 | 6.1 | `backend/docs/ARCHITECTURE.md`, `README.md` | Document the runnable submission. | Fresh environment follows setup; architecture explains formulas, AI role, API/bulk tradeoff and evidence limitations. |
+| 6.3 | 6.2 | `backend/docs/evidence/demo-acceptance.md` | Record final numerical, model and browser acceptance. | All demonstrations above pass on real qualified snapshots; include missing-data/model-failure checks. |
 
-**Why:** each new capability becomes a small deterministic extension of the proven vertical slice.
+Planned local startup: `python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000` after installing `backend/requirements.txt`. Planned full suite: `PYTHONPATH=backend python -m pytest backend/tests -q`. These become runnable during implementation; documentation alone is not execution proof.
 
-#### 3.1 Load the FAA New England cohort
-- Files: backend/app/sources/faa.py, backend/tests/test_faa.py
-- Outcome: produce the defined CY2024 New England commercial-service airport set.
-- Check: pytest backend/tests/test_faa.py and assert the expected cohort count/IDs.
+## Final review contract
 
-#### 3.2 Load normalized T-100 snapshots
-- Files: backend/app/sources/t100.py, backend/tests/test_t100.py
-- Outcome: produce validated records needed for the New England CY2023/24 screen and ANC calculation.
-- Check: pytest backend/tests/test_t100.py; missing months remain missing, duplicates do not multiply totals.
+Review the whole README against the original assignment and the small-demo scope, not only changed lines. Validate findings before editing: an unsupported request for more infrastructure, an invented unmet-demand estimate, or normalization of two congestion values into a fake index is not a justified fix. Zero findings is a valid outcome; never impose a finding quota or omit a genuine concern to produce approval.
 
-#### 3.3 Implement ANC long-haul share
-- Files: backend/app/calculations/anc.py, backend/tests/test_anc.py
-- Outcome: return performed-departure long-haul share, counts, threshold, and distance coverage.
-- Check: pytest backend/tests/test_anc.py with a hand-calculated fixture and incomplete-distance case.
+Bind each independent review to the exact commit and README bytes. Keep findings and dispositions in the PR/review record. Fix a valid issue, rerun applicable checks, and request a fresh full-plan review on the new version. Earlier approvals do not survive content changes. Missing reviewer execution, a timeout or silence means **independent review not completed**, never approval. A clean review approves the plan only; all implementation/demo gates remain open until executed.
 
-#### 3.4 Implement New England ranking
-- Files: backend/app/calculations/screen.py, backend/tests/test_screen.py
-- Outcome: return the methodology-v1 ranking, component values, and explicit unassessable airports.
-- Check: pytest backend/tests/test_screen.py with hand-calculated percentile/weight/tie fixtures.
+## First milestone and optional polish
 
-#### 3.5 Load CY2024 on-time data
-- Files: backend/app/sources/ontime.py, backend/tests/test_ontime.py
-- Outcome: produce one qualified CY2024 origin-level dataset covering LAX, SNA, and SFO from the 12 monthly files.
-- Check: pytest backend/tests/test_ontime.py and assert all 12 requested months are represented before annual metrics are enabled.
-
-#### 3.6 Implement LAX/SNA comparison
-- Files: backend/app/calculations/operations.py, backend/tests/test_operations.py
-- Outcome: return the side-by-side cancellation, diversion, delay, taxi-out, and denominator values for both airports.
-- Check: pytest backend/tests/test_operations.py against an independently aggregated fixture.
-
-#### 3.7 Add SFO operational pressure
-- Files: backend/app/calculations/sfo.py, backend/tests/test_sfo.py
-- Outcome: optionally attach the qualified CY2024 operational indicators to the existing passenger-trend result without turning them into a causal unmet-demand estimate.
-- Check: pytest backend/tests/test_sfo.py.
-
-### Phase 4 — Add the conversational agent
-
-**What:** make the deterministic workflows conversational.
-
-**How:** one constrained intent call selects a workflow and validated arguments; in-memory context supports follow-ups.
-
-**Why:** the assignment asks for an AI-powered agent and conversational follow-up, but the AI should not become the calculator.
-
-#### 4.1 Add in-memory conversation context
-- Files: backend/app/session.py, backend/tests/test_session.py
-- Outcome: store latest workflow, airports, period, and result ID for one local process.
-- Check: pytest backend/tests/test_session.py, including isolation between two session IDs.
-
-#### 4.2 Add constrained intent parsing
-- Files: backend/app/intent.py, backend/tests/test_intent.py
-- Outcome: natural-language questions map to the strict allowlist; invalid output is rejected.
-- Check: unit tests plus one real-model probe for each of the four example questions.
-
-#### 4.3 Add deterministic fallback
-- Files: backend/app/intent.py, backend/tests/test_intent.py
-- Outcome: when the model is unavailable/invalid, the four quick prompts and explicit requests still work.
-- Check: disable the model dependency and rerun intent tests.
-
-#### 4.4 Wire intent, session, and calculations
-- Files: backend/app/main.py, backend/app/responses.py
-- Outcome: all four natural-language workflows and supported follow-ups execute the correct deterministic calculation.
-- Check: curl all four prompts and at least one follow-up using the returned session ID.
-
-### Phase 5 — Finish the reviewer-facing UI and submission
-
-**What:** make the working core easy to inspect and demo.
-
-**How:** display results, sources, assumptions, and methodology clearly; then document the architecture.
-
-**Why:** clarity and reasoning are more important here than visual spectacle.
-
-#### 5.1 Render ranking/comparison tables
-- Files: backend/app/static/index.html, backend/app/static/app.js
-- Outcome: tables distinguish real zero, missing, unavailable, and not assessable values.
-- Check: exercise fixtures for all four states in the browser.
-
-#### 5.2 Add source/methodology details
-- Files: backend/app/static/index.html, backend/app/static/app.js
-- Outcome: every result exposes period, population, source, coverage, and methodology/threshold.
-- Check: verify each of the four workflows has a visible details section.
-
-#### 5.3 Add basic accessibility/responsiveness
-- Files: backend/app/static/index.html, backend/app/static/app.js
-- Outcome: keyboard use, labels, focus, and a narrow viewport remain usable.
-- Check: complete the four flows with keyboard navigation and a narrow browser width.
-
-#### 5.4 Write the architecture note
-- Files: backend/docs/ARCHITECTURE.md, README.md
-- Outcome: document scoring, AI boundaries, source scope, tradeoffs, and known limitations.
-- Check: a clean-environment reader can start the app using only repository instructions.
-
-#### 5.5 Run final acceptance
-- Files: backend/docs/evidence/demo-acceptance.md
-- Outcome: record the four real flows, one supported follow-up, model-failure fallback, and one missing-data case.
-- Check: every Definition of Done bullet has a linked observed result; any failure leaves prototype acceptance not passed.
-
-## Final demo flow
-
-A short demonstration should prove the assignment, not every possible feature:
-
-1. Ask: “Which New England airports look strongest for terminal-expansion diligence?”
-   - show ranked results and the three score components;
-   - open methodology and explain that this is a traffic-pressure screen, not a return forecast.
-2. Ask: “Compare LAX and Santa Ana congestion.”
-   - show cancellation, delay, and taxi-out side by side.
-3. Ask: “What percentage of Anchorage flights are long-haul?”
-   - show threshold, numerator, denominator, and percentage.
-4. Ask: “What is the unmet demand at SFO and why?”
-   - show measured passenger/operational pressure;
-   - state why a numeric latent-demand quantity is not identifiable.
-5. Ask one follow-up such as “Show only cancellations” or “Why is BOS above PVD?”
-   - prove the same session context is reused.
-
-## Optional polish only after the core passes
-
-If every Definition of Done item already passes:
-
-1. apply more of the ORBIT visual language;
-2. optionally add a simple airport map;
-3. only then consider selective God’s Eye View/Cesium reuse.
-
-None of those enhancements may change the underlying AnalysisResult or delay the required four workflows.
-
-## Existing evidence
-
-The repository already contains source-research artifacts under backend/docs/evidence/. They remain useful provenance for implementation, but they are **not** additional runtime systems and they do not expand the product scope.
-
-The historical backend/docs/evidence/plan-review-20260926.md applies only to the earlier plan hash recorded inside that file. This README is the current normative plan.
+First prove DataSF → accepted snapshot → SFO passenger calculation → browser result. Then complete reusable analytics, the small evidence file, and conversational access. Only after numerical and AI acceptance passes consider a simple map or selective GEV reuse. No UI reference, existing source-research note or previous review substitutes for the mission demonstrations.
