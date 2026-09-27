@@ -1,6 +1,6 @@
 # Airport Investment Analyst — Bounded Demo Plan
 
-**Plan revision 4; deterministic prototype implemented, model interpretation gated.** This is a small home-assignment prototype, not an aviation platform. New England screening, LAX/SNA/SFO operations, ANC long-haul, SFO trend/pressure, session handling, the query API, and the results UI are implemented. The current clean-environment suite passes 212 backend tests (one Starlette deprecation warning); UI tests pass 8/8. See the [execution ledger](TODO.md) and [architecture/setup/verification note](backend/docs/ARCHITECTURE.md). Free-text model interpretation remains disabled pending its separately gated admission/demo; independent and native review runners remain open.
+**Plan revision 4; deterministic prototype implemented, model calls disabled by default.** This is a small home-assignment prototype, not an aviation platform. New England screening, LAX/SNA/SFO operations, ANC long-haul, SFO trend/pressure, session handling, the query API, and results UI are implemented. Historical Phase 7 verification recorded 291 backend tests and 8 UI tests against packaged snapshots. The current patched working tree passes 302 backend tests (one Starlette deprecation warning), 8 UI tests, Ruff, JSON validation and diff checks; a 168-case post-fix contract matrix had zero unexpected exceptions. The contract fixes are committed locally in `23e3621`; final architect review is pending. The offline model adapter and free-text route are implemented but disabled by default; the candidate evaluator gate passes offline. No real provider run has occurred. See the [execution ledger](TODO.md) and [architecture/setup note](backend/docs/ARCHITECTURE.md).
 
 This README is the master plan. The [API ↔ UI contract](docs/API_UI_MAP.md) defines the concrete request/result/error fields used by the connections below. [PLAN_GRAPH.json](docs/PLAN_GRAPH.json) mirrors the step goals, dependencies and file scopes. Earlier review records are historical and apply only to their recorded versions. No upstream Agentic OS or Claude configuration is changed by this plan.
 
@@ -24,13 +24,13 @@ Build a **screening assistant**, not a profitability or latent-demand forecastin
 
 ## 2. Small architecture
 
-One local FastAPI process (Python 3.11) serves a static HTML/JavaScript UI. DuckDB reads local Parquet snapshots. An in-memory dictionary holds the latest successful result per session. One manually curated JSON file holds evidence notes. Deterministic handlers calculate and explain supported structured requests. The planned model interpretation path is currently disabled and makes no provider calls.
+One local FastAPI process (Python 3.11) serves a static HTML/JavaScript UI. DuckDB reads packaged accepted Parquet snapshots. An in-memory dictionary holds the latest successful result per session. One manually curated JSON file holds evidence notes. Deterministic handlers calculate and explain supported structured requests. The offline model adapter and request route exist; live provider calls are disabled by default and have not been run.
 
 ```mermaid
 flowchart LR
     Chat["Chat / quick prompts / scope changes"] -->|"POST /api/query"| Query["Backend: main.py"]
-    Query -.->|"disabled; gated before admission"| Model["Planned model interpretation"]
-    Model -.->|"not active"| Validate["contracts.py: validated request"]
+    Query -.->|"free-text route; disabled by default"| Model["Implemented offline adapter + strict schema"]
+    Model -.->|"strict output validation; provider gated by admission + budget"| Validate["contracts.py: validated request"]
     Query -->|"Structured preset"| Validate
     Validate --> Dispatch["dispatch.py: rank / compare / metric / explain"]
     Data["Accepted snapshots + evidence"] --> Dispatch
@@ -81,7 +81,7 @@ These are deliberate prototype limits, not aviation standards. Enforce them in r
 | Actions | One of `rank`, `compare`, `metric`, `explain` per request. `metric` has one airport; `compare` has exactly two. Rank only the New England cohort or a subset. At most 22 ranked rows. |
 | Question length | At most 4,000 user-input characters. Reject larger input; do not silently truncate it. |
 | Work in flight | One active analytical request in the local process. Return `busy` for another; no queue. Disable the send control while waiting. Data refresh/import is a separate setup action and is not run during an analysis. |
-| Model | Currently disabled; no provider call is made. If separately admitted, the planned limits are at most one call per free-text request, no SDK retries or model switching, a 20-second timeout, 512 output tokens and an 8,000-token serialized prompt cap. Presets use zero calls. |
+| Model | Free-text is disabled by default. The offline adapter and `--live` candidate CLI are implemented; no real provider run has occurred. Admission requires exact adapter hash, provider/model identity and prices, budget ledger/context, and the predeclared outcome gates. Presets use zero calls. |
 | Query deadline | 30 seconds for the query path. On timeout or request cancellation, the HTTP handler returns/ends but shielded thread work is not forcibly interrupted. Keep the busy slot until that worker finishes and discard its late result. This does not promise immediate database cancellation. No generic worker pool is needed. |
 | Cost | Model cost controls are not active because calls are disabled. Before admission, set the proposed maximum $0.02 per request and $2 per local process, record the selected model and dated rate card, and check/reserve worst-case cost. Restarting a demo counter would not be an account-wide billing control. |
 | Sessions | At most 100, latest successful request/result only, expire after 60 idle minutes. Unknown/expired sessions ask for a fresh analysis. No persistent conversation history. |
@@ -113,7 +113,7 @@ Use the [existing source-qualification record](backend/docs/evidence/source-qual
 | BTS Reporting Carrier On-Time (`FGJ`) | Twelve CY2024 months for LAX/SNA/SFO operational comparisons are validated in the accepted local snapshot. February–December were newly acquired for it; January was retained/reused from a previously qualified archive, whose manifest has no recovered acquisition timestamp. |
 | Official FAA/airport documents | Four small evidence notes: top-three traffic candidates plus SFO. No automated document retrieval system. |
 
-The latest real-source/API qualification, including the fresh DataSF/FAA calls, local BTS snapshot identity checks, supported API responses and independent numerical reconciliation, is summarized in [the 2026-09-27 source check](backend/docs/evidence/real-source-check-20260927.md); its machine-readable receipt retains exact response bodies and hashes. That receipt does not claim a fresh T-100 or on-time acquisition.
+The [2026-09-27 source/API check](backend/docs/evidence/real-source-check-20260927.md) is historical evidence: it records DataSF/FAA calls from that date, local BTS snapshot identity checks, supported API responses and numerical reconciliation. It is not a live-call claim for this commit. Accepted snapshots are packaged for backend tests and clean-checkout use; no fresh BTS acquisition is claimed.
 
 New England: `BDL, HVN, PWM, BGR, PQI, RKD, BHB, AUG, BOS, ACK, ORH, MVY, HYA, PVC, MHT, PSM, LEB, PVD, WST, BID, BTV, RUT`. Add `ANC, LAX, SNA, SFO` for the 26 T-100 origins. This is a bounded US-origin scope; qualified international segments involving those origins can be included. It is not worldwide airport analytics.
 
@@ -187,13 +187,13 @@ The strict request has `action`, airport IDs or `region=new_england`, supported 
 
 Freeze a small evaluation corpus before tuning: 30 unique cases, categories `demo` (6), `safety` (8), `other` (16). Each has `id`, `category`, `text`, optional prior `context`, and an independently authored `expected` request or safe outcome. Safety expectations may be explicit unsupported/error/clarification responses; an error on a required supported demonstration is not success.
 
-One evaluator supports baseline and candidate modes, `--acceptance` and `--output`. Baseline mode measures the simple explicit-input parser; it need not meet the candidate bar. Candidate mode uses the same cases, validates the corpus first and records actual outcomes, errors, usage and latency. It can be tested with a stub before paid access exists.
+One evaluator supports baseline and candidate modes, `--acceptance`, `--output` and the implemented `--live` option. Baseline mode measures the simple explicit-input parser; it need not meet the candidate bar. Candidate mode validates the corpus and records outcomes, errors, usage and latency. The live option has not been used with a real provider.
 
-Retain the predeclared candidate bar: at least 29/30 correct semantic outcomes, all six demonstrations and all eight safety cases correct. Compare with the baseline and explain regressions; no second model or automated tuning loop. Do not lower a threshold after seeing a failing run. Record model, prompt/corpus identities, rate card and sampled latency/cost. A failed run leaves AI disabled; presets remain usable, but the final AI demonstration remains TODO.
+The candidate evaluator enforces the predeclared bar: at least 29/30 correct semantic outcomes, all six demonstrations and all eight safety cases correct. The offline candidate-evaluator gate is complete; compare with the historical 30/30 baseline and explain regressions. No second model or automated tuning loop. Before separately authorized live admission, record exact adapter hash, provider/model identity and prices, prompt/corpus identities, budget ledger/context, latency and actual usage. A failed run leaves AI disabled; presets remain usable, but the final AI demonstration remains open.
 
 ## 7. Build and review method
 
-Work through the existing 42 small steps, one builder at a time. [Execution mode](docs/execution-mode.json) is a dependency graph for ordering, not a requirement for parallel agents or a new runtime orchestrator. Do not edit the same file concurrently. The README owns the plan and formulas; docs/API_UI_MAP.md owns the concrete wire contract. Update the derived graph when step goals, dependencies or scopes change. Do not introduce conflicting wire fields in an implementation note.
+Work through the existing 47 small steps, one builder at a time. [Execution mode](docs/execution-mode.json) is a dependency graph for ordering, not a requirement for parallel agents or a new runtime orchestrator. Do not edit the same file concurrently. The README owns the plan and formulas; docs/API_UI_MAP.md owns the concrete wire contract. Update the derived graph when step goals, dependencies or scopes change. Do not introduce conflicting wire fields in an implementation note.
 
 Keep each change to its named file pair where practical. If it grows, split that change before coding; do not compress code to satisfy a paperwork limit. The owner has narrowed this to a sensible prototype review, not a hunt for perfect formatting or zero possible comments. Retain the real protections: correct calculations, source scope, credentials, bounded cost/work, truthful errors and successful end-to-end examples.
 
@@ -575,9 +575,9 @@ The steps below define the implementation sequence and acceptance targets. `TODO
 
 **Files:** `backend/docs/evidence/intent-admission.json`. **Depends on:** 5.4, 5.0b. **Execution tier:** COMMIT.
 
-**How / acceptance:** Run the already-built candidate evaluator on the frozen cases, within approved access and the stated budget. Record usage, costs, latency and failures. Failure leaves the model disabled and remains TODO, not an approved AI demonstration.
+**How / acceptance:** Before a separately authorized live run, bind the exact adapter hash, provider/model identity, prices, budget ledger/context and frozen cases. Run the implemented candidate `--live` mode only after the evaluator enforces the stated outcome gates. Record usage, cost, latency and failures; no live provider call has occurred. Failure leaves the model disabled.
 
-**Check:** `PYTHONPATH=backend python backend/scripts/eval_intents.py --mode candidate --cases backend/tests/fixtures/intent_eval.json --acceptance --output backend/docs/evidence/intent-admission.json`.
+**Check (gated; do not run without separate authorization):** `PYTHONPATH=backend python backend/scripts/eval_intents.py --mode candidate --live --cases backend/tests/fixtures/intent_eval.json --acceptance --output backend/docs/evidence/intent-admission.json`.
 
 ### Step 5.5 — query-api
 
@@ -629,9 +629,9 @@ The steps below define the implementation sequence and acceptance targets. `TODO
 
 **Check:** Run the full available unit/lint/typecheck suite, then the real API/model/browser protocol below. Record commands, counts, source snapshots, model usage and screenshots. Runtime not available means TODO, not approval.
 
-## 9. Final live demonstration protocol — TODO until implemented
+## 9. Final live demonstration protocol
 
-After setup and authorized access, run `PYTHONPATH=backend python -m pytest backend/tests -q`, then the existing-source lint/typecheck commands. Run `PYTHONPATH=backend python -m app.sources.datasf --refresh` and record the accepted snapshot identity. These are proposed application commands, not currently available capabilities.
+After setup and authorized access, run `PYTHONPATH=backend python -m pytest backend/tests -q`, then the existing-source lint/typecheck commands. The DataSF refresh command is implemented; record its accepted snapshot identity whenever a refresh is run. The Phase 7 full-suite and 2026-09-27 source/API receipts linked above are historical. The patched revision `23e3621` passes 302 backend tests, 8 UI tests, Ruff, JSON validation and diff checks; the 168-case post-fix contract matrix had zero unexpected exceptions. Final architect review remains pending.
 
 Start the local app with `python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000`. In the actual browser:
 
@@ -640,12 +640,33 @@ Start the local app with `python -m uvicorn app.main:app --app-dir backend --hos
 3. Try an unsupported airport/year, incomplete dataset and a concurrent request. Each should produce the defined safe error, with no bogus replacement of a previous result.
 4. Disable model access or simulate a timeout/quota failure. Confirm a safe error and working structured presets; do not create a paid outage loop to test this.
 
-Record the exact revision, environment, snapshot IDs, real model usage, observations and screenshots in `backend/docs/evidence/demo-acceptance.md`. A mocked failure test is useful but is labeled as such; at least the successful API/model/browser paths must actually run. Ordinary errors do not require new features, but a broken required supported flow must be fixed or disclosed as incomplete.
+Record the exact revision, environment, snapshot IDs, real model usage, observations and screenshots in `backend/docs/evidence/demo-acceptance.md`. Structured API/browser paths are verified locally. The offline model route and candidate evaluator are implemented, and the offline candidate gate passes; no real provider call or admission has occurred, so free text remains disabled by default. A real model demonstration is still required for complete acceptance; offline tests do not substitute for it. Ordinary errors do not require new features, but a broken required supported flow must be fixed or disclosed as incomplete.
 
 ## 10. Remaining unknowns
 
-Actual source reacquisition/coverage, a qualifying affordable model, and support for the reviewed terminal theses are execution work. Resolve them with the named source loaders, fixed evaluation and manual official-document checks. An unavailable source makes its analysis unavailable; a failed model leaves presets usable; no supported terminal case means no terminal recommendation. None requires automatic provider substitution or speculative infrastructure.
+Accepted snapshots are packaged and were used by the recorded full suite; 2026-09-27 source/API checks are historical, not live calls for this commit. Model admission remains open; terminal evidence remains unknown where current measured constraints were not established. An unavailable source makes its analysis unavailable; a failed model leaves presets usable; no supported terminal case means no terminal recommendation. None requires automatic provider substitution or speculative infrastructure.
 
 Formal domain-agent/independent reviews and native factory validation have not been run for this revision. Keep those in TODO rather than claim approval or repeatedly probe an unavailable runner. Historical receipts under backend/docs/evidence remain historical; they are not fresh validation of these bytes.
 
-**First milestone:** real DataSF data -> validated snapshot -> SFO calculation -> result on screen. Then extend the same architecture to the remaining required questions.
+**Completed local milestone:** packaged accepted snapshots -> deterministic calculations -> structured API/UI, alongside offline model-route handling. Live model admission/demo remains open; hosted deployment follows only after it.
+
+## 11. Backend model phase — offline implementation complete, admission open
+
+The offline adapter, free-text route/follow-up binding and candidate `--live` CLI are implemented. The candidate evaluator's offline gate is complete; the route remains disabled by default, and no real provider call or model admission is claimed.
+
+- Offline candidate acceptance is complete: the evaluator enforces at least 29/30 and all six demos/eight safety cases. Preserve the historical 30/30 baseline. The separately gated live provider run remains outstanding.
+- Before a separately authorized live run, record exact adapter hash, provider/model identity and prices, budget ledger/context, and frozen prompt/corpus identities.
+- The candidate CLI's `--live` mode exists but has not been run with a provider. Keep live model admission and the successful free-text demo gated.
+- Accepted snapshots are packaged for tests and clean-checkout use. The 2026-09-27 external source checks are historical, not fresh calls for this commit.
+
+## 12. Deferred final phase — Vercel and shared access code
+
+Start this phase only after the deterministic backend/UI, clean setup and tests, and separately authorized successful model demonstration/admission are complete. This phase is not part of current local prototype readiness; no deployment is authorized by this plan.
+
+1. **Check hosting feasibility before choosing placement.** Review the then-current [Vercel Python runtime support](https://vercel.com/docs/functions/runtimes/python) and [function runtime limits/filesystem behavior](https://vercel.com/docs/functions/runtimes). The current prototype pins Python 3.11, while the verified Vercel Python runtime documentation lists 3.12+; reconcile that pin with compatible DuckDB wheels, accepted snapshot packaging, read-only deployment files plus `/tmp`, session behavior and automatic scaling. Decide whether the API belongs on Vercel or another minimal host only after measuring runtime/data/session feasibility. No runtime change is made in this plan phase.
+2. **Add a server-side shared access-code gate.** Protect the analyst UI, query API and any paid route before work/provider calls. Explicitly allow only the login page/code-submission route, idempotent logout, required login static assets and minimal health/liveness. Keep the code/verifier in server-only secret configuration and deny missing/invalid credentials by default.
+3. **Use a secure expiring authorization session.** Issue an `HttpOnly`, `Secure`, `SameSite` cookie over HTTPS with expiry, explicit logout/revocation and code rotation. Bind it to the existing per-user result context; do not store the shared code as the session token.
+4. **Bound abuse and cost across deployment instances.** Throttle access-code attempts and queries. Enforce a deployment-wide model-cost cap with concurrency-safe state; process-local counters are insufficient under automatic scaling. Select the smallest suitable shared mechanism only if feasibility requires it; do not mandate a new database or framework in advance.
+5. **Prove denial and release only at the final authorized stage.** Test protected UI/API denial, zero provider calls when denied, throttle behavior, expiry, logout, code rotation, session isolation and the shared cap. Review data/runtime/session risks; deploy and smoke-test only after explicit final authorization.
+
+Use one direct model call plus strict schema and deterministic calculations. Do not add LangGraph, LangChain, a database, or another platform component unless the feasibility checks show a concrete need.

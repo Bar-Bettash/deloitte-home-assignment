@@ -1,6 +1,6 @@
 {
   "threshold": {
-    "units": 42,
+    "units": 47,
     "deps_affect_ordering": true,
     "two_independent": true
   },

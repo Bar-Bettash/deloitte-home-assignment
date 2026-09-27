@@ -1,6 +1,6 @@
 # Execution TODOs
 
-**Execution status:** Steps 0.1 through 5.2 and 5.5–5.6 have local implementation and verification evidence; Steps 6.1 and 6.2 are complete. The gated model-backed work in Steps 5.3–5.4b and live model demonstration in Step 6.3, plus independent/native review runners, remain open. This checklist follows README plan revision 4; it is not a second specification.
+**Execution status:** Deterministic workflows, sessions, query/UI, offline model route and candidate CLI are implemented. Real provider admission/demo remains gated; Vercel/access-code deployment is deferred. Two contract findings have been fixed and tested in the working tree; 302 backend tests and a 168-case post-fix contract matrix (zero unexpected exceptions) pass. The code fixes are committed locally in `23e3621`; final architect review is pending. This checklist follows README plan revision 4; it is not a second specification.
 
 ## Completed implementation and verification steps
 
@@ -28,7 +28,7 @@
 - [x] **Step 3.11 — SFO bundle:** focused SFO suite passed (9 tests). A production run with all three accepted snapshots returned `ok`: DataSF, T-100 and BTS on-time snapshot lineage all resolve. The T-100-only 2024 passenger-growth minus seat-growth gap is −0.036577 pp; matched-origin seat occupancy is 83.2996% (2023) / 83.2703% (2024). CY2024 SFO operational values are cancellation 1.3284%, diversion 0.2512%, mean `DepDelayMinutes` 17.3700, and mean `TaxiOut` 20.0966. The bundle keeps the sources/scopes separate and states these measures do not identify unmet demand, terminal saturation or cause.
 - [x] **Steps 4.1–4.5 — curated evidence and explanations:** official source notes and Pydantic contracts are implemented in `backend/data/evidence.json` / `backend/app/evidence.py`; focused suite passed (9 tests), Ruff and JSON/compile checks passed. PVD, PWM, BOS and SFO all remain `unknown`: current measured terminal constraints were not established. Notes preserve dates/locators, historical context, active or superseding project checks, counterevidence and next diligence. SFO profitability and quantitative unmet demand are explicitly `not_identifiable`. This is a bounded source review, not a supported terminal-expansion recommendation.
 
-The current Python 3.11 isolated-environment run reported **212 backend tests passed**, with one Starlette deprecation warning. `ruff check backend --ignore EXE002,SIM905`, the UI Node suite (**8/8**), `node --check backend/app/static/app.js`, and `git diff --check` passed. Browser acceptance against the latest local code verified structured 2023 passenger-only ranking scope and full-cohort ranks, including PVC at 7,535 passengers, rank 19. A PVC-only 2024 passenger-rank request returned safe `422 insufficient_data` while retaining the previous result. The separate complete-year screen continues to exclude PVC because December 2024 is missing. Raw passenger-growth ordering/ranks were HYA 48.12% rank 1, HVN 20.15% rank 2, and PVD 14.55% rank 3. The 390×844 view and visible keyboard focus were checked in the live browser; no screenshot artifact is claimed. The fresh live-source/API check is summarized in [the source-check receipt](backend/docs/evidence/real-source-check-20260927.md) with exact responses/hashes in the adjacent JSON. No model was invoked.
+Historical Phase 7 verification for commit `fcad8b7` recorded **291 backend tests passed** against packaged accepted snapshots and **8 UI tests passed**. Two contract findings were later identified and fixed. The current patched working tree passes 302 backend tests (one Starlette deprecation warning), 8 UI tests, Ruff, JSON validation and diff checks; the 168-case post-fix contract matrix had zero unexpected exceptions. Fixes are committed locally in `23e3621`; final architect review is pending. Earlier browser checks covered 2023 passenger ranks, PVC 2024 insufficient-data behavior, raw-growth ranks, SFO/operations/ANC flows, 390×844 layout and keyboard focus. The [2026-09-27 source/API receipt](backend/docs/evidence/real-source-check-20260927.md) is historical evidence only; it is not a live-source call for this commit. No real model provider call is claimed.
 
 ## Written corrections completed in revision 3
 
@@ -54,19 +54,25 @@ These checkmarks describe written design, not running routes, verified model cal
 
 ## Remaining implementation tasks
 
-- [x] **Steps 5.0–5.0b — intent evaluation:** the frozen 30-case corpus, deterministic baseline parser/evaluator and baseline result record are present. Baseline acceptance is 30/30 (100%); this is parser/evaluator evidence, not model accuracy or model admission. Candidate-mode behavior was exercised with stubs only.
+- [x] **Steps 5.0–5.0b — intent evaluation:** frozen corpus, deterministic baseline/evaluator and baseline record exist; historical baseline was 30/30. Candidate mode and `--live` CLI are implemented; no real provider run occurred. The evaluator enforces the README bar of at least 29/30 plus all six demos and eight safety cases; the offline candidate-evaluator gate is complete. No real provider run occurred.
 - [x] **Step 5.1 — sessions:** bounded opaque-cookie session and latest-result binding are implemented and covered by the backend suite.
 - [x] **Step 5.2 — dispatcher:** supported structured analyses route to deterministic calculations; coverage is included in the backend suite and browser demonstrations.
-- [ ] **Steps 5.3–5.4b — model parser, fallback and admission:** intentionally gated and unimplemented. Free-text returns the safe `503 ai_unavailable` response; no provider call or model admission occurred. Keep AI disabled until a separately authorized live evaluation meets the admission criteria.
+- [x] **Steps 5.3–5.4 — offline model path:** direct adapter/output validation, safe fallback and `/api/query` free-text/follow-up wiring are implemented and disabled by default. No real provider call occurred.
+- [ ] **Step 5.4b — model admission:** offline candidate gates are complete. Separately authorize any real `--live` run; admission evidence must bind exact adapter hash, provider/model identity and prices, budget ledger/context, corpus/prompt identities, usage and latency. No live run has occurred.
 - [x] **Step 5.5 — query API:** shared dispatch, cookie/result checks, busy/deadline handling and safe error behavior are implemented and covered by the backend suite.
 - [x] **Step 5.6 — results UI:** supported result bundles, evidence, limitations, previous-result retention and error states are implemented; UI Node checks and live browser flows passed.
 - [x] **Step 6.1 — UI audits:** live browser checks covered structured flows, safe unavailable-model behavior, 390×844 responsive layout and visible keyboard focus. This is a bounded local browser check, not a formal accessibility certification.
-- [x] **Step 6.2 — architecture note and clean setup:** `backend/docs/ARCHITECTURE.md` documents the implemented system. A fresh Python 3.11 environment at `/private/tmp/deloitte-clean-final-20260927` installed pinned `backend/requirements.txt`; `pip check` reported no broken requirements and the clean-environment full suite passed 212 tests (one Starlette deprecation warning).
-- [ ] **Step 6.3 — demo acceptance:** structured API, calculation and browser demonstrations passed, and clean-environment setup passed. Complete acceptance remains open only for the separately gated live model demonstration/admission; no model/provider call was made.
+- [x] **Step 6.2 — architecture note and clean setup:** architecture/setup guidance is present and accepted snapshots are packaged. Earlier clean Python 3.11 setup passed; Phase 7 recorded the packaged-snapshot full suite at 291 tests.
+- [ ] **Step 6.3 — demo acceptance:** deterministic API/calculation/browser demonstrations and packaged-snapshot tests are recorded. The contract findings are fixed and tested in the current working tree; final architect review and the separately authorized real model demonstration/admission remain open.
+
+### Remaining backend/model admission work
+
+- [x] Candidate evaluator acceptance gate: at least 29/30 and all six demos/eight safety cases; preserve the historical 30/30 baseline. Offline gate complete; no live provider run.
+- [ ] Before any separately authorized `--live` run, record the exact adapter hash, provider/model identity and prices, budget ledger/context, and corpus/prompt identities.
 
 ## Needs actual review/validation runners
 
-The final lead-architect review returned **APPROVED** after disposition of three findings. This is the required architecture review, not an independent or native PlanGraph review.
+An earlier lead-architect review returned **APPROVED** after three findings. A later review found two contract issues; both are fixed and tested in the current working tree. Final architect approval is pending. Independent/native PlanGraph review remains separate and unclaimed.
 
 - [ ] Native PlanGraph/execution-mode checks against the current files, with actual outputs and revision identity. Local author-side graph checks are not native factory validation.
 - [ ] Applicable real domain-agent, independent Codex/Gemini and final-model reviews when the authorized environment is available. Record findings and dispositions; do not claim a missing or author-only review is independent approval.

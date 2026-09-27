@@ -61,7 +61,7 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 
 Open `http://127.0.0.1:8000/`. `http://127.0.0.1:8000/health` returns `{"status":"ok"}`; it proves backend reachability, not source or model readiness. Use one process/worker, with no hosted deployment implied.
 
-The examples and scope controls submit structured requests. Explain uses the stored result. **Free-text interpretation is disabled:** message requests return `503 ai_unavailable`; setting model configuration alone does not enable a provider. The visible helper states this limitation. A successful conversational/model demonstration remains an unmet assignment requirement.
+The examples and scope controls submit structured requests. Explain uses the stored result. **Free-text interpretation is implemented but disabled by default:** message requests return `503 ai_unavailable` without exact runtime admission. Model configuration alone does not enable a provider. The visible helper states the default limitation. No real provider call or successful conversational/model demonstration has been recorded.
 
 ## Components and request flow
 
@@ -73,19 +73,22 @@ flowchart LR
     Dispatch --> Calc[Traffic / screen / operations / long haul / SFO]
     Calc --> Data[Accepted Parquet snapshots]
     Dispatch --> Evidence[Curated evidence JSON]
-    API <--> Session[Latest result in process memory]
+    API <--> Session[Latest result and request in process memory]
+    API -.->|Exact runtime admission| Budget[Process-local budget ledger]
+    Budget -.->|Reserve worst-case cost| Model[Direct Responses API adapter]
+    Model -.->|Validated outcome| Dispatch
     Dispatch --> Result[Typed AnalysisResult]
     Result --> UI
 ```
 
-`main.py` owns transport, safe errors and the query deadline; `contracts.py` owns strict request/result schemas; `dispatch.py` owns allowed operations and response projection. `calculations/` contains ordinary Python functions. There is no agent loop, SQL generation, database server, durable queue, or browser access to data providers.
+`main.py` owns transport, safe errors, the query deadline and model runtime gate; `contracts.py` owns strict request/result schemas; `dispatch.py` owns allowed operations and response projection. `calculations/` contains ordinary Python functions. For admitted free text, `session.py` supplies the saved validated request associated with the current result, `model_budget.py` reserves worst-case cost and settles bounded usage or forfeits uncertain work, and `model_adapter.py` makes one direct OpenAI Responses API call. Runtime admission binds the configured model name and complete adapter file hash to the admitted name/hash and requires positive input/output token prices. The candidate evaluator has an explicit `--mode candidate --live` path using the same adapter; its default candidate mode makes no provider call and a candidate run alone does not enable runtime use. These paths have offline coverage; live provider behavior remains unproven. There is no agent loop, SQL generation, database server, durable queue, or browser access to data providers.
 
 | Route | Behavior |
 |---|---|
 | `GET /` | Analyst screen |
 | `GET /static/app.js` | Static UI behavior; only the static directory is mounted |
 | `GET /health` | Liveness response, no provider request |
-| `POST /api/query` | Structured analysis, stored explanation, or explicitly unavailable free text |
+| `POST /api/query` | Structured analysis, stored explanation, or gated model interpretation of free text; default free text is unavailable |
 
 Success is a bare `AnalysisResult` with `ok` or `partial` status. Failures are non-2xx `ErrorResponse` objects with a safe code/message/request ID. The frontend renders server values, ranks, comparison directions, numerators/denominators, eligible counts, source/evidence details and limitations; it does not recompute percentages. Sources and evidence expand locally without API calls. Errors retain the last displayed result labeled **Previous result**. Duplicate sends are disabled, and input-change generation checks prevent a stale response replacing a newer draft.
 
@@ -96,7 +99,7 @@ Success is a bare `AnalysisResult` with `ok` or `partial` status. Failures are n
 - Operations: LAX, SNA and SFO, CY2024 only. SFO trend/pressure bundles: SFO only.
 - `explain` requires the displayed `context_result_id`; it reads stored values and leaves the stored result ID/scope unchanged. Fresh independent structured requests omit the reference.
 
-The server issues an opaque `airport_session` cookie (`HttpOnly`, `SameSite=Strict`, path `/`, one-hour maximum age). At most 100 process-local sessions hold one latest successful result each, with a one-hour idle timeout. Restart loses context. Wrong/expired session references return 409; this is a local session boundary, not authenticated multi-user access control. Host/Origin checks restrict requests to the local application; no wildcard CORS is enabled.
+The server issues an opaque `airport_session` cookie (`HttpOnly`, `SameSite=Strict`, path `/`, one-hour maximum age). At most 100 process-local sessions hold one latest successful result and its validated analysis request each, with a one-hour idle timeout. Restart loses context. Wrong/expired session references return 409; this is a local session boundary, not authenticated multi-user access control. Host/Origin checks restrict requests to the local application; no wildcard CORS is enabled.
 
 One numerical query runs at a time; another receives `409 busy`. The HTTP deadline is 30 seconds. Currently timed-out thread work is allowed to finish while the busy slot remains held; its late result is not saved. This is **not** a claim of immediate database cancellation. No durable jobs, automatic retries or exactly-once replay are provided. `settings.py` validates bounded settings without loading dotenv files; the HTTP deadline is currently a constant in `main.py`, not dynamically wired to every settings override.
 
@@ -150,8 +153,8 @@ Optional existing developer tooling, not installed by requirements:
 ruff check backend --ignore EXE002,SIM905 --output-format concise
 ```
 
-`EXE002` is excluded for the external volume's executable file modes. Preserve source/test findings outside those declared exclusions. Verification against the current local tree: **212 backend tests passed** (one Starlette deprecation warning), `ruff check backend --ignore EXE002,SIM905` passed, `node --test backend/tests/ui.test.cjs` passed **8/8**, `node --check backend/app/static/app.js` passed, and `git diff --check` passed. Clean-environment verification used Python 3.11 at `/private/tmp/deloitte-clean-final-20260927`: pinned `backend/requirements.txt` installed successfully, `pip check` reported no broken requirements, and the full backend suite passed all 212 tests (one Starlette deprecation warning). The accepted snapshot artifacts are part of the fresh-checkout handoff above. No model/provider call was made.
+`EXE002` is excluded for the external volume's executable file modes. Preserve source/test findings outside those declared exclusions. Against the current tree after the `23e3621` contract fix, the full suite passed **302 backend tests** and **8/8 Node UI tests**; Ruff with the declared exclusions, `git diff --check`, and JSON validation passed. A 168-case post-fix request matrix reported zero unexpected exceptions. The fix rejects `screen_score` metric/compare requests with 422 and keeps unavailable ratio numerator/denominator fields null. The earlier phase-7 fresh-archive verification passed 291 backend tests and 8/8 UI tests; the accepted snapshot artifacts were part of that handoff. The older Python 3.11 clean-environment check at `/private/tmp/deloitte-clean-final-20260927` passed 212 backend tests, `pip check`, Ruff, JavaScript syntax and 8/8 UI tests. The 291- and 212-test records are historical. No real model/provider call or live candidate admission has been recorded.
 
-Live browser checks against the current local app verified the 2023 passenger-only ranking response and full-cohort ranks, including PVC at 7,535 passengers, rank 19. A PVC-only 2024 passenger-rank request returned safe `422 insufficient_data` and retained the previous result. The separate complete-year screen excludes PVC because December 2024 is missing. Raw-growth results were HYA 48.12% rank 1, HVN 20.15% rank 2, and PVD 14.55% rank 3. Earlier flows also exercised the SFO pressure bundle, operations comparison, ANC long-haul result, safe unavailable-model response with previous-result retention, evidence details, a 390×844 viewport, and visible keyboard focus. These were interactive local checks; no screenshot artifact is retained and they do not constitute a formal accessibility certification or independent review.
+Historical local browser checks verified the 2023 passenger-only ranking response and full-cohort ranks, including PVC at 7,535 passengers, rank 19. A PVC-only 2024 passenger-rank request returned safe `422 insufficient_data` and retained the previous result. The separate complete-year screen excludes PVC because December 2024 is missing. Raw-growth results were HYA 48.12% rank 1, HVN 20.15% rank 2, and PVD 14.55% rank 3. Other historical flows exercised the SFO pressure bundle, operations comparison, ANC long-haul result, safe unavailable-model response with previous-result retention, evidence details, a 390×844 viewport, and visible keyboard focus. These checks predate the latest offline model changes; they are not current browser proof or a formal accessibility certification.
 
-The final lead-architect review returned **APPROVED** after disposition of three findings. Native PlanGraph validation and independent review runners remain unverified; this architecture review is not evidence of either.
+The earlier lead-architect review returned **APPROVED** after disposition of three findings. That verdict predates the latest offline model changes. Native PlanGraph validation and independent review runners remain unverified; the historical architecture review is not evidence of either.

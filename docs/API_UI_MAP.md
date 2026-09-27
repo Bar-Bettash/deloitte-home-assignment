@@ -1,6 +1,6 @@
 # Backend ↔ frontend connection contract
 
-**Implemented structured API contract; model interpretation remains planned and disabled.** Companion to [README plan revision 4](../README.md). The README owns scope, calculations and limits; this file records HTTP field names and their UI consumers. The structured `/api/query` flows, sessions and result UI are implemented. No additional service, client SDK, queue or general-purpose rendering framework is used.
+**Implemented structured API and offline model path; model use remains disabled by default.** Companion to [README plan revision 4](../README.md). The README owns scope, calculations and limits; this file records HTTP field names and their UI consumers. The `/api/query` flows, sessions and result UI are implemented. The model path has offline coverage but no real provider call or live admission proof. No additional service, client SDK, queue or general-purpose rendering framework is used.
 
 ## 1. Source-derived decisions and explicit project choices
 
@@ -28,7 +28,7 @@ The config's API canon describes `/api/v1/` mechanics, while the protocol-select
 
 Opening Sources/Methodology or a row's already-returned evidence is **local rendering**, not another API request. Source links open the cited official page; there is no URL-fetch proxy. `GET /health` does not call a model or source provider and is not polled. A failed health probe does not schedule retries.
 
-No browser endpoint for data import/refresh, model configuration, history, credentials, individual airport CRUD or error reporting. The setup command `PYTHONPATH=backend python -m app.sources.datasf --refresh` produces the accepted snapshot read by the query handler. Stop the local server before refreshing/importing; start it again afterward. The UI never calls DataSF/BTS/FAA or the model provider directly. Free-text requests currently return safe `503 ai_unavailable`; the provider path is disabled and has not been invoked.
+No browser endpoint for data import/refresh, model configuration, history, credentials, individual airport CRUD or error reporting. The setup command `PYTHONPATH=backend python -m app.sources.datasf --refresh` produces the accepted snapshot read by the query handler. Stop the local server before refreshing/importing; start it again afterward. The UI never calls DataSF/BTS/FAA or the model provider directly. With default settings, free-text requests return safe `503 ai_unavailable`; no real provider call or live admission has occurred.
 
 ```mermaid
 flowchart LR
@@ -41,10 +41,10 @@ flowchart LR
     Input -->|"POST /api/query"| API["main.py: query route"]
     Explain -->|"POST /api/query: explain"| API
     API --> Contract["contracts.py: validate input"]
-    Contract -.->|"disabled; gated before admission"| Intent["Planned model interpretation"]
-    Intent -.->|"not active"| Contract2["Validate parsed AnalysisRequest"]
+    Contract -.->|"default disabled; exact admission required"| Intent["model_adapter.py: one Responses API call"]
+    Intent -.->|"offline implemented"| Contract2["Validate parsed AnalysisRequest"]
     Contract -->|"structured analysis"| Dispatch["dispatch.py: allowed operation"]
-    Contract2 -.->|"inactive until admission"| Dispatch
+    Contract2 -.->|"admitted model outcome"| Dispatch
     Session["session.py: latest result"] <--> API
     Dispatch --> Calc["calculations/* + evidence.py"]
     Calc --> Response["dispatch.py assembles AnalysisResult using contracts.py"]
@@ -53,22 +53,22 @@ flowchart LR
     View -->|"Expand details: no request"| View
 ```
 
-The diagram shows the implemented structured path. The dashed model edge is a disabled future path; free text currently receives `503 ai_unavailable`. All structured operations use the shared dispatcher and its typed `AnalysisResult` assembly; there is one handler for `/api/query`. Explanations read the stored result without recalculation or a model call.
+The diagram shows the active structured path and the implemented, default-disabled model path. Runtime admission requires the enabled flag, configured model and key, exact admitted model name and complete adapter SHA-256, and positive input/output prices. `main.py` validates the session reference and saved request context before interpretation; `model_budget.py` reserves the worst-case request cost before `model_adapter.py` makes one direct Responses API call. The server validates the model's typed outcome and dispatches calculations itself. Admission has not been established with a real provider call. All structured operations use the shared dispatcher and its typed `AnalysisResult` assembly; there is one handler for `/api/query`. Explanations read the stored result without recalculation or a model call.
 
 ## 3. Request contract
 
 `POST /api/query` requires `Content-Type: application/json`. The root contains **exactly one** of `message` or `analysis`, plus optional `context_result_id`. Reject both/neither, null substitutes, unknown keys and invalid nested combinations. Use the README's character, airport, period, cost and deadline limits; also cap the serialized request body at **32 KiB** before processing it. This is an explicit prototype byte limit, so an otherwise valid unusually large escaped request may be rejected rather than silently shortened.
 
-- `message`: nonblank string, at most 4,000 characters. The wire shape is reserved for future model interpretation; currently the route returns safe `503 ai_unavailable` and makes no model call. If enabled after admission, the model may propose only an `AnalysisRequest` or a declared safe-outcome code; the backend owns status and safe-message mapping and does not accept session identity, citations or authoritative values from a model.
+- `message`: nonblank string, at most 4,000 characters. The implemented route returns safe `503 ai_unavailable` under default settings. After exact runtime admission, the model may propose only an `AnalysisRequest` or a declared safe-outcome code; the backend owns status and safe-message mapping and does not accept session identity, citations or authoritative values from a model.
 - `analysis`: typed structured request. `action` is `rank|compare|metric|explain`. `metric` is one allowed metric/bundle. `year` is a supported integer year; growth at 2024 uses the fixed 2023 baseline. Explicit requests supply their year; the interpreter can propose a disclosed 2024 default for free text.
 - Airport selection: `metric` requires one airport; `compare` exactly two distinct airports; `rank` requires `region:"new_england"` **or** a nonempty unique subset of its 22 IDs, not both. The result still uses full-cohort score normalization. Reject other regions. No arbitrary identifier, SQL, provider URL or client-selected population.
 - `threshold_miles`: accepted only with `long_haul_share`, with the README's bounds and visible default. Do not accept it on another metric and ignore it silently.
-- `context_result_id`: UUID of the browser's last displayed successful result, optional for an unrelated new analysis, required for structured `explain`. It must equal that session's latest stored result. A new preset omits it. The future admitted free-text flow would send it on follow-ups; currently message requests receive `503 ai_unavailable`. A resolved independent question does not inherit old scope.
+- `context_result_id`: UUID of the browser's last displayed successful result, optional for an unrelated new analysis, required for structured `explain`. It must equal that session's latest stored result. A new preset omits it. An admitted free-text follow-up uses the saved, validated `AnalysisRequest` for that result as bounded model context. A resolved independent question does not inherit old scope.
 - Structured `explain` omits metric/year/threshold and may select at most two airports from the referenced result. It explains stored values/sources without recalculation, renormalization, source refresh or another model call.
 
-Canonical wire metrics (aliases are interpreted before validation): `passengers`, `seats`, `departures`, `passenger_growth`, `seat_occupancy`, `long_haul_share`, `screen_score`, `congestion`, `cancellation_rate`, `diversion_rate`, `departure_delay_minutes`, `taxi_out_minutes`, `sfo_enplaned_trend`, `sfo_pressure`. They do not widen the README's query matrix: rank supports screen score/passengers/growth/occupancy; operations are LAX/SNA/SFO in 2024; SFO-specific metrics are single-airport only. The `congestion` and `sfo_pressure` names are bundles of the existing indicators, not new formulas.
+Canonical wire metrics (aliases are interpreted before validation): `passengers`, `seats`, `departures`, `passenger_growth`, `seat_occupancy`, `long_haul_share`, `screen_score`, `congestion`, `cancellation_rate`, `diversion_rate`, `departure_delay_minutes`, `taxi_out_minutes`, `sfo_enplaned_trend`, `sfo_pressure`. They do not widen the README's query matrix: rank supports screen score/passengers/growth/occupancy; `screen_score` with `metric` or `compare` returns 422; operations are LAX/SNA/SFO in 2024; SFO-specific metrics are single-airport only. The `congestion` and `sfo_pressure` names are bundles of the existing indicators, not new formulas.
 
-Free-text request shape (currently disabled; returns `503 ai_unavailable`):
+Free-text request shape (default settings return `503 ai_unavailable`):
 
 ```json
 {"message":"Compare LAX and Santa Ana congestion."}
@@ -114,7 +114,7 @@ Successful requests return the **bare typed `AnalysisResult`**, not `{success:tr
 | `evidence` | Already-returned reviewed notes with source locators, dates and limitations. No evidence-fetch endpoint. |
 | `exclusions`, `limitations` | Unassessable airport reasons and business boundaries. Empty lists are allowed; no numeric zero stands for missing evidence. |
 
-Each row has `airport` and a bounded list of metrics. Each metric has `key`, `value`, `unit`, `status` and `source_ids`; add numerator/denominator for ratios and a reason when unavailable. Output keys are declared by the result schema, not arbitrary model-supplied fields. `source_ids` resolve to returned `sources`. Source populations remain distinct even when shown in one bundle.
+Each row has `airport` and a bounded list of metrics. Each metric has `key`, `value`, `unit`, `status` and `source_ids`; available ratios require numerator/denominator, while unavailable ratios may retain observed components or use a null pair and require a reason. Output keys are declared by the result schema, not arbitrary model-supplied fields. `source_ids` resolve to returned `sources`. Source populations remain distinct even when shown in one bundle.
 
 Wire units are explicit: `count` is an integer; `percent` is expressed in percentage units (40 means 40%, not 0.40; growth may be negative or exceed 100%); `percentage_points` is a difference of percentages; `minutes` and `score` are not percentages. Unavailable values are JSON null with a reason, never NaN, a stringified number or zero. The backend performs percentage scaling and rounding conventions. The frontend must not recompute any KPI.
 
@@ -180,7 +180,7 @@ All rows below use the implemented **`POST /api/query`** handler in `main.py`; i
 Use the existing test files and browser acceptance; this contract does not introduce another test framework. The structured API/UI implementation has passed the recorded suite. Clean-environment setup and test evidence is in [ARCHITECTURE.md](../backend/docs/ARCHITECTURE.md); step-level outcomes and remaining model/review gates are in [TODO.md](../TODO.md).
 
 - **1.4 / 2.5:** serve only the static assets; verify `/`, `/static/app.js`, one health call and the first SFO query in the browser's network trace. A green health check is not source readiness.
-- **1.5 / 2.4:** contract/API tests cover request XOR, exact field types, valid real calculation output, unknown fields, insufficient data and normalized 422 errors. Assert non-2xx errors and bare 200 success.
-- **5.1 / 5.5:** cookie/result binding, zero provider calls on structured input, read-only explain, busy/deadline handling, no state overwrite on errors and refusal of foreign/stale references are implemented and covered by the backend suite. At-most-one model call on free text is not yet implemented or verified; free text remains disabled.
+- **1.5 / 2.4:** contract/API tests cover request XOR, exact field types, valid real calculation output, unknown fields, insufficient data, `screen_score` metric/compare rejection, unavailable ratio nulls and normalized 422 errors. Assert non-2xx errors and bare 200 success.
+- **5.1 / 5.3–5.5:** cookie/result binding, saved request context, zero provider calls on structured input, read-only explain, busy/deadline handling, no state overwrite on errors and refusal of foreign/stale references are implemented and covered by the backend suite. The single-call Responses API adapter, conservative process-local budget ledger, exact model/adapter/price admission gate and candidate CLI `--live` mode have offline coverage. No real provider call, candidate admission or live model demonstration has been recorded; default free text remains disabled.
 - **5.6 / 6.1:** a partial result, an error after success and an unavailable backend display differently. Source expansion makes no request; metric/year changes make exactly one. Verify percentages are not multiplied again and no stale response wins.
 - **6.3:** structured DataSF snapshot → calculation → API values/IDs → visible result and supported structured examples were exercised; clean-environment verification is recorded in ARCHITECTURE.md. The separately gated live model demonstration/admission remains open; writing this map or parsing these JSON examples is not that proof.
