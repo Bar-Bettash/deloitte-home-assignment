@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
-from app.contracts import AnalysisResult
+from app.contracts import AnalysisRequest, AnalysisResult
 
 
 class SessionError(RuntimeError):
@@ -26,6 +26,7 @@ class _Session:
     token: str
     last_activity: float
     latest_result: AnalysisResult | None = None
+    latest_request: AnalysisRequest | None = None
 
 
 class SessionStore:
@@ -79,6 +80,13 @@ class SessionStore:
                 raise SessionError("result_mismatch", "That result is no longer current. Start a new analysis.")
             return result.model_copy(deep=True)
 
+    def validate_request_context(self, token: str, result_id: UUID) -> AnalysisRequest | None:
+        """Return the validated request for this session's current result, if stored."""
+        with self._lock:
+            self.validate_result(token, result_id)
+            request = self._sessions[token].latest_request
+            return request.model_copy(deep=True) if request is not None else None
+
     def latest(self, token: str) -> AnalysisResult | None:
         with self._lock:
             if not self.lookup(token):
@@ -86,11 +94,20 @@ class SessionStore:
             result = self._sessions[token].latest_result
             return result.model_copy(deep=True) if result is not None else None
 
-    def save_success(self, token: str, result: AnalysisResult) -> None:
+    def save_success(
+        self, token: str, result: AnalysisResult, analysis: AnalysisRequest | None = None,
+    ) -> None:
+        """Replace the latest successful result and its bounded request together."""
+        request_copy = (
+            AnalysisRequest.model_validate(analysis.model_dump(mode="python"))
+            if analysis is not None else None
+        )
+        result_copy = result.model_copy(deep=True)
         with self._lock:
             if not self.lookup(token):
                 raise SessionError("session_expired", "Your session expired. Start a new analysis.")
-            self._sessions[token].latest_result = result.model_copy(deep=True)
+            self._sessions[token].latest_result = result_copy
+            self._sessions[token].latest_request = request_copy
 
     def try_begin_query(self) -> bool:
         with self._lock:
