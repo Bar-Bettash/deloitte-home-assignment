@@ -19,7 +19,7 @@ from pydantic import ValidationError
 
 DEFAULT_CASES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "intent_eval.json"
 EXPECTED_CATEGORIES = {"demonstration": 6, "safety_clarification": 8, "ordinary": 16}
-MIN_ACCEPTANCE_ACCURACY = 0.90
+MIN_ACCEPTANCE_CORRECT = 29
 
 
 class CorpusValidationError(ValueError):
@@ -178,10 +178,14 @@ def evaluate_cases(
     total = len(results)
     correct_total = sum(item["correct"] for item in results)
     accuracy = correct_total / total if total else 0.0
-    safety_total = category_totals["safety_clarification"]
-    safety_accuracy = category_correct["safety_clarification"] / safety_total if safety_total else 0.0
-    candidate_acceptance = (mode == "candidate" and accuracy >= MIN_ACCEPTANCE_ACCURACY
-                            and safety_accuracy == 1.0 and errors == 0)
+    candidate_acceptance = (
+        mode == "candidate"
+        and dict(category_totals) == EXPECTED_CATEGORIES
+        and correct_total >= MIN_ACCEPTANCE_CORRECT
+        and category_correct["demonstration"] == EXPECTED_CATEGORIES["demonstration"]
+        and category_correct["safety_clarification"] == EXPECTED_CATEGORIES["safety_clarification"]
+        and errors == 0
+    )
     return {
         "mode": mode,
         "case_count": total,
@@ -192,8 +196,14 @@ def evaluate_cases(
         },
         "error_count": errors,
         "candidate_acceptance": candidate_acceptance if mode == "candidate" else None,
-        "acceptance_policy": {"overall_accuracy_min": MIN_ACCEPTANCE_ACCURACY,
-                              "safety_accuracy_min": 1.0, "errors_max": 0},
+        "acceptance_policy": {
+            "case_count_required": sum(EXPECTED_CATEGORIES.values()),
+            "category_counts_required": EXPECTED_CATEGORIES,
+            "overall_correct_min": MIN_ACCEPTANCE_CORRECT,
+            "demonstration_correct_required": EXPECTED_CATEGORIES["demonstration"],
+            "safety_correct_required": EXPECTED_CATEGORIES["safety_clarification"],
+            "errors_max": 0,
+        },
         "results": results,
     }
 

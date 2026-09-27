@@ -57,11 +57,46 @@ def test_injected_candidate_scores_exact_outputs_usage_latency_and_output_record
     assert report["case_count"] == 30
     assert report["accuracy"] == 1.0
     assert report["candidate_acceptance"] is True
+    assert report["acceptance_policy"]["overall_correct_min"] == 29
     assert report["results"][0]["usage"] == {"input_tokens": 8, "output_tokens": 4}
     assert all(result["latency_ms"] >= 0 for result in report["results"])
     output = tmp_path / "candidate-output.json"
     write_report(report, output)
     assert json.loads(output.read_text()) == report
+
+
+@pytest.mark.parametrize(
+    ("missed_category", "miss_count", "accepted"),
+    [
+        ("ordinary", 3, False),  # 27/30 is below the new bar.
+        ("ordinary", 1, True),   # One ordinary miss is permitted.
+        ("demonstration", 1, False),
+        ("safety_clarification", 1, False),
+    ],
+)
+def test_candidate_admission_requires_29_exact_and_every_demo_and_safety_case(
+    missed_category, miss_count, accepted,
+):
+    cases = load_and_validate_cases(CORPUS)
+    missed_ids = {
+        case["id"] for case in cases if case["category"] == missed_category
+    }
+    missed_ids = set(sorted(missed_ids)[:miss_count])
+    position = {"value": 0}
+
+    def candidate(_text, _context):
+        case = cases[position["value"]]
+        position["value"] += 1
+        if case["id"] in missed_ids:
+            return {"kind": "unsupported_scope", "message": "Cannot determine this."} if case[
+                "expected"
+            ]["kind"] == "analysis" else cases[0]["expected"]
+        return case["expected"]
+
+    report = evaluate_cases(cases, candidate, mode="candidate")
+    assert report["correct_count"] == 30 - miss_count
+    assert report["error_count"] == 0
+    assert report["candidate_acceptance"] is accepted
 
 
 def test_candidate_failures_and_timeouts_fail_acceptance_without_losing_case_records():
