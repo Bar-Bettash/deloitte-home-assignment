@@ -1,0 +1,173 @@
+{
+  "schema_version": 1,
+  "inventory_id": "recent-source-qualification-20260927",
+  "status": "qualified_read_only",
+  "purpose": "Immutable acquisition and qualification evidence for the 2024/2025 analysis candidate. This inventory does not promote any candidate snapshot or accepted pointer.",
+  "qualification_receipts": [
+    {
+      "source": "t100",
+      "path_at_qualification": "/private/tmp/deloitte-2025-fmg-qualification/qualification.json",
+      "sha256": "85cb994590e1408ff141323f07ef8a628b00af087e2fe741dcf185e2e8971c47"
+    },
+    {
+      "source": "ontime",
+      "path_at_qualification": "/private/tmp/deloitte-2025-ontime-qualification/qualification.json",
+      "sha256": "06f8150a88a9196ecc0c51816d9230116fe8be2285034857cdbb6b9fc39cffa4"
+    },
+    {
+      "source": "datasf,faa",
+      "path_at_qualification": "/private/tmp/deloitte-2025-datasf-faa/qualification-manifest.json",
+      "sha256": "f40bb603c100bf3e9b8d38cb687d736dfc3df200f221d2c92fb59e9de99df567"
+    },
+    {
+      "source": "aip",
+      "path_at_qualification": "/private/tmp/deloitte-aip-qualification/qualification-summary.json",
+      "sha256": "860d7aaffd6597e1a6acc413799b8e3cda87d5535713311f11e8d2d7815f8c5a"
+    }
+  ],
+  "sources": {
+    "t100": {
+      "publisher": "Bureau of Transportation Statistics",
+      "table": "FMG",
+      "name": "T-100 Segment All Carriers",
+      "qualified_at_utc": "2026-09-27T10:50:31.052108Z",
+      "request_url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG",
+      "release_info_observation": {"url": "https://www.transtats.bts.gov/releaseinfo.asp", "retrieved_at_utc": "2026-09-27T10:47:18Z", "http_status": 200, "latest_available": "2026-06", "observed_release_date": "2026-09-14", "response_bytes": 153396, "response_sha256": "e226c49d3f05022416079a14400875b32efa3b518f3896b211ecfafc75193cb8"},
+      "request_fields": [
+        "DEPARTURES_SCHEDULED",
+        "DEPARTURES_PERFORMED",
+        "SEATS",
+        "PASSENGERS",
+        "DISTANCE",
+        "UNIQUE_CARRIER",
+        "AIRLINE_ID",
+        "UNIQUE_CARRIER_NAME",
+        "UNIQUE_CARRIER_ENTITY",
+        "REGION",
+        "ORIGIN_AIRPORT_ID",
+        "ORIGIN",
+        "ORIGIN_STATE_ABR",
+        "ORIGIN_COUNTRY",
+        "DEST_AIRPORT_ID",
+        "DEST",
+        "DEST_STATE_ABR",
+        "DEST_COUNTRY",
+        "AIRCRAFT_TYPE",
+        "AIRCRAFT_CONFIG",
+        "YEAR",
+        "MONTH",
+        "CLASS",
+        "DATA_SOURCE"
+      ],
+      "request_period": "All",
+      "partition_grain": "one downloaded archive per requested state and year",
+      "partition_count": 16,
+      "recent_origin_population": {"count": 27, "locids": ["ACK", "ANC", "AUG", "BDL", "BGR", "BHB", "BID", "BOS", "BTV", "EWB", "HVN", "HYA", "LAX", "LEB", "MHT", "MVY", "ORH", "PQI", "PSM", "PVC", "PVD", "PWM", "RKD", "RUT", "SFO", "SNA", "WST"]},
+      "totals": {
+        "input_rows": 327548,
+        "unique_rows": 323434,
+        "eligible_rows": 63292,
+        "eligible_rows_by_year": {"2024": 31453, "2025": 31839},
+        "exact_cross_partition_overlaps": 4114,
+        "conflicting_raw_keys": 0
+      },
+      "qualified_coverage": {"default": "all 12 calendar months for each origin-year", "exceptions": {"PVC-2024": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], "PVC-2025": [5, 6, 7, 8, 9, 10, 11]}, "explicit_full_year_checks": {"EWB-2024": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], "EWB-2025": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}},
+      "partitions": [
+        {"year": 2024, "state": "AK", "geography": "Alaska", "retrieved_at_utc": "2026-09-27T10:42:52Z", "http_status": 200, "zip_bytes": 589484, "zip_sha256": "cde3874661af59138e9e7f1898719ead9e7a23d8729e6babee56ebc0ec4379a7", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 6851718, "csv_sha256": "9c815a72c909ff167b062d489d6a26aeed66bc9222adf873f4c8fa0da2c0ec74", "rows": 54759},
+        {"year": 2024, "state": "CA", "geography": "California", "retrieved_at_utc": "2026-09-27T10:43:16Z", "http_status": 200, "zip_bytes": 1021860, "zip_sha256": "758218ff304763979909585b15f2082f17a2e2676e9311c353e8db5406977586", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 9608003, "csv_sha256": "ec61355d29c610f2464c63ddbfa0a95c53b128be85cf466bc2c6e21351efa3c7", "rows": 77193},
+        {"year": 2024, "state": "CT", "geography": "Connecticut", "retrieved_at_utc": "2026-09-27T10:43:37Z", "http_status": 200, "zip_bytes": 57669, "zip_sha256": "a8d7688c6c642b2efb0e32ccae38d5f4f2e40c54d46248361dcc9c2eb74e7008", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 639346, "csv_sha256": "baf64771500926215470851bc5aa82b0d78d0bfedfa2742bad8cbe4b0aa3ff80", "rows": 5064},
+        {"year": 2024, "state": "MA", "geography": "Massachusetts", "retrieved_at_utc": "2026-09-27T10:43:49Z", "http_status": 200, "zip_bytes": 212165, "zip_sha256": "60661bdb8f5e8414a1ba24de147984e7af1023957d216d17d7aed1f8a612e641", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 2077327, "csv_sha256": "a40470e27946ff3a52d1715091cf22a2ea99bfacb71d97bd7875c840f3121dfb", "rows": 17116},
+        {"year": 2024, "state": "ME", "geography": "Maine", "retrieved_at_utc": "2026-09-27T10:44:02Z", "http_status": 200, "zip_bytes": 36243, "zip_sha256": "0a79016e728f2be410d1d64eedcd0df80c1c883b5fbf822194802b536a0e48ce", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 356868, "csv_sha256": "3f00e8e830c3a7b0cfd9a2920f10e701a6ee5b4ae01ca89aa1a353a8d762a89f", "rows": 2912},
+        {"year": 2024, "state": "NH", "geography": "New Hampshire", "retrieved_at_utc": "2026-09-27T10:44:13Z", "http_status": 200, "zip_bytes": 18514, "zip_sha256": "f4671c622dc498ca227eac8a67a0880b3b4b17ca34166b44e073669391ef0dd7", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 189114, "csv_sha256": "394973a4723e9353a0ca3b1c3f0a9599eb056e8df8dc9b78ecf163190259d9dd", "rows": 1542},
+        {"year": 2024, "state": "RI", "geography": "Rhode Island", "retrieved_at_utc": "2026-09-27T10:44:22Z", "http_status": 200, "zip_bytes": 31529, "zip_sha256": "f9158261934dd1b994211d950d7f5b94fa97726d02cb7c1925470e175b77111a", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 328996, "csv_sha256": "92acfdc83687baf27edb023d46c2dfdd56de1cb009fce5bf22aca8d523c71f18", "rows": 2636},
+        {"year": 2024, "state": "VT", "geography": "Vermont", "retrieved_at_utc": "2026-09-27T10:44:32Z", "http_status": 200, "zip_bytes": 15562, "zip_sha256": "1817906dc87b2c321a4eb179aea8c267165b78d840e3edb6b4dbc4e2e495f0d5", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 156826, "csv_sha256": "12f398ff51f43aaf7ce5d89d5b4981d8cf9457aa1e68b10236b8c21011b52d6f", "rows": 1279},
+        {"year": 2025, "state": "AK", "geography": "Alaska", "retrieved_at_utc": "2026-09-27T10:44:48Z", "http_status": 200, "zip_bytes": 613831, "zip_sha256": "acc8898f4d5b82a1a25e2c7f91dbed6403818de9e16c1552661cd8c1f2d81f09", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 7196562, "csv_sha256": "ca6aa78f3ae098038898e2cd1ef112f27138f0eeeea5b47279dc36ec67442ce1", "rows": 57138},
+        {"year": 2025, "state": "CA", "geography": "California", "retrieved_at_utc": "2026-09-27T10:45:09Z", "http_status": 200, "zip_bytes": 1013912, "zip_sha256": "f327575c539f7db4369dff67dc75bd6915645c71b76f0eea2fb4b7d10f252b33", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 9582457, "csv_sha256": "23a784d65cc5bafdfcfc6e8aa4c928deeb72c08f88bc62ebc1b56a7bc6e036f4", "rows": 77020},
+        {"year": 2025, "state": "CT", "geography": "Connecticut", "retrieved_at_utc": "2026-09-27T10:45:26Z", "http_status": 200, "zip_bytes": 62444, "zip_sha256": "e8f0d6a1d9006ee8a2722660911207499ece2e99df906bc01eaf5f35db6002bf", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 695589, "csv_sha256": "1898729e500a54fae9b8ea6df5b2f3cdb112c1d0a69b6ed0d754cb080a0dca61", "rows": 5451},
+        {"year": 2025, "state": "MA", "geography": "Massachusetts", "retrieved_at_utc": "2026-09-27T10:45:40Z", "http_status": 200, "zip_bytes": 208764, "zip_sha256": "2ec89c2f7490b70c10fa37d1e6440c4ec919b50f755aa51a7efc8d46557d2c48", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 2025435, "csv_sha256": "6d632d53095e9a4b7e4e7f54c80f47df208a2ac4debde367807ff160186c6e71", "rows": 16664},
+        {"year": 2025, "state": "ME", "geography": "Maine", "retrieved_at_utc": "2026-09-27T10:45:52Z", "http_status": 200, "zip_bytes": 35709, "zip_sha256": "6ffcb88ea7ac105e70db48fbc65ea8bf7d0edebdca7fb04259c017dcb886f104", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 358179, "csv_sha256": "1316d4d59c7500e18ac842bbd98191b052b99e96568aba5bbc06817de2e9c347", "rows": 2913},
+        {"year": 2025, "state": "NH", "geography": "New Hampshire", "retrieved_at_utc": "2026-09-27T10:46:02Z", "http_status": 200, "zip_bytes": 19633, "zip_sha256": "ee28a1a804e0632b826ca48c4e2984993dfbedc72d9c7addcfcf4051e3c52555", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 208288, "csv_sha256": "e3a3584e19d543395a5627091e854c62d405761a8a151f20a60233367e34e54b", "rows": 1697},
+        {"year": 2025, "state": "RI", "geography": "Rhode Island", "retrieved_at_utc": "2026-09-27T10:46:12Z", "http_status": 200, "zip_bytes": 33325, "zip_sha256": "12784c04f907a6389d0c09c19c82ef196eac5c62434fff68a2fe64f750ba92b4", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 357740, "csv_sha256": "13e4bc1308859c86e8580651f377a8b50adea560c0cf6b838fe3a28c1b759425", "rows": 2869},
+        {"year": 2025, "state": "VT", "geography": "Vermont", "retrieved_at_utc": "2026-09-27T10:42:16Z", "http_status": 200, "zip_bytes": 15366, "zip_sha256": "8757c116be4d6bb129478fd0b804a3f2e91d05ff9e2bb4737bb5bc73bc516dcb", "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv", "csv_bytes": 159259, "csv_sha256": "665994e4dce54c3e13eb1ec755f3c2f478cb56bb3f3f04d7ba8d80652a835a51", "rows": 1295}
+      ],
+      "validation": {
+        "all_http_status_200": true,
+        "all_zip_crc_passed": true,
+        "all_schemas_exact": true,
+        "all_row_validations_passed": true
+      }
+    },
+    "ontime": {
+      "publisher": "Bureau of Transportation Statistics",
+      "table": "FGJ",
+      "name": "Reporting Carrier On-Time Performance",
+      "qualified_at_utc": "2026-09-27T11:26:44.774115Z",
+      "request": {"year": 2025, "months": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], "origin_airports": ["ANC", "LAX", "SFO", "SNA"]},
+      "partition_grain": "one BTS PREZIP archive per calendar month",
+      "partition_count": 12,
+      "totals": {"zip_bytes": 355420830, "source_rows": 7001619, "scoped_rows": 398824, "unique_scoped_identities": 398824, "exact_duplicate_rows": 0, "conflicting_identity_keys": 0},
+      "partitions": [
+        {"year": 2025, "month": 1, "retrieved_at_utc": "2026-09-27T10:52:38Z", "last_modified": "Thu, 08 May 2025 14:59:27 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_1.zip", "http_status": 200, "zip_bytes": 27108664, "zip_sha256": "868387dcedaef1b8d8392e608e642219fde50d594c3cf2094aec858167629ccf", "csv_bytes": 243177378, "csv_crc32": "33f841f7", "csv_sha256": "d7c7d59452cad1215d9605e8ff350a4bad7282750765084fe57928a5ad275453", "source_rows": 539747, "scoped_rows": 30661},
+        {"year": 2025, "month": 2, "retrieved_at_utc": "2026-09-27T10:54:13Z", "last_modified": "Wed, 28 May 2025 14:22:03 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_2.zip", "http_status": 200, "zip_bytes": 25302583, "zip_sha256": "12dc8dbdb3c8b3c20d4c00a8b188196ae202f781a8760871ae502a9c733d0ecd", "csv_bytes": 228245475, "csv_crc32": "8ce52789", "csv_sha256": "fd6b7aa423cfe89be9d8dfa9374ffe23e6d42ea306b710b58313dba0ca0cfa0e", "source_rows": 504884, "scoped_rows": 27986},
+        {"year": 2025, "month": 3, "retrieved_at_utc": "2026-09-27T11:02:37Z", "last_modified": "Wed, 18 Jun 2025 14:37:56 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_3.zip", "http_status": 200, "zip_bytes": 30544825, "zip_sha256": "9c80fbc2112cdbf3f0613ec2001ba019b3ad75511cd69657080736e7eda9cef4", "csv_bytes": 271623365, "csv_crc32": "9bf325a0", "csv_sha256": "ba031a484a67f743869bc1284a09fa1de61cf35a6da010e87674a3dc128590d0", "source_rows": 600872, "scoped_rows": 33046},
+        {"year": 2025, "month": 4, "retrieved_at_utc": "2026-09-27T11:05:21Z", "last_modified": "Wed, 09 Jul 2025 14:33:36 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_4.zip", "http_status": 200, "zip_bytes": 29369186, "zip_sha256": "f3718431e988e2afd53a1714dfca37f67355b6fc06b02eb506bffa39300d608c", "csv_bytes": 264080573, "csv_crc32": "24081822", "csv_sha256": "1124d8e68633acc2aeff5e1f1994a6bdc90af18370aa0440ad8bcbd2928f3307", "source_rows": 583950, "scoped_rows": 32753},
+        {"year": 2025, "month": 5, "retrieved_at_utc": "2026-09-27T11:05:21Z", "last_modified": "Mon, 11 Aug 2025 14:35:30 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_5.zip", "http_status": 200, "zip_bytes": 30830593, "zip_sha256": "17c3419d7169b313b2bc8ddd3fd57e1e2d4d959c35f2da17f6a5610d4bac7d63", "csv_bytes": 274325754, "csv_crc32": "3b65833c", "csv_sha256": "644c6d36949a7d563b7dc44a3f5fe4091edfcf12384b7b1cd89324536e57f5f8", "source_rows": 605648, "scoped_rows": 35058},
+        {"year": 2025, "month": 6, "retrieved_at_utc": "2026-09-27T11:07:12Z", "last_modified": "Thu, 11 Sep 2025 14:35:32 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_6.zip", "http_status": 200, "zip_bytes": 31131411, "zip_sha256": "087b75e4e059516ca1181e58955d062f341933adb2706e5b2404ed10c9ecbdc6", "csv_bytes": 277398709, "csv_crc32": "ffc80b5e", "csv_sha256": "a5b0b743e01ea5c06fe721f4435923cab6ffc400b714823b614e187a2bea833e", "source_rows": 611575, "scoped_rows": 35268},
+        {"year": 2025, "month": 7, "retrieved_at_utc": "2026-09-27T11:08:01Z", "last_modified": "Tue, 14 Oct 2025 14:36:20 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_7.zip", "http_status": 200, "zip_bytes": 32208704, "zip_sha256": "74309a3a734d5104b4c212390c06eb3acacff15124b9cea49ba7d69a609a0d19", "csv_bytes": 286174102, "csv_crc32": "d2b3d7f7", "csv_sha256": "8e1889b42eb9a78bad273d7bb415305e4fe86af4d154fe40203484c402081eb5", "source_rows": 631428, "scoped_rows": 36348},
+        {"year": 2025, "month": 8, "retrieved_at_utc": "2026-09-27T11:10:18Z", "last_modified": "Fri, 12 Dec 2025 13:35:36 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_8.zip", "http_status": 200, "zip_bytes": 30864245, "zip_sha256": "405668b8a807266236a635efbc1e9364abfb756db1a5c895e45abc9c7b7684f1", "csv_bytes": 272692924, "csv_crc32": "445a8d7d", "csv_sha256": "8300437f9b545871a3914fe33e4855fa15e3237c6aa3f6996d7e3f34abe6167f", "source_rows": 602378, "scoped_rows": 35233},
+        {"year": 2025, "month": 9, "retrieved_at_utc": "2026-09-27T11:12:00Z", "last_modified": "Fri, 12 Dec 2025 13:36:50 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_9.zip", "http_status": 200, "zip_bytes": 28151630, "zip_sha256": "adc722b1c14944451b20ddcdbeec69bbc092310ab8044f758b8f4b82fde8d017", "csv_bytes": 254072675, "csv_crc32": "9fe83034", "csv_sha256": "6b189acc187fcb51deb4821f12b87ab68b43a1ea2a34e3bb073a8fd807b1120b", "source_rows": 562439, "scoped_rows": 32569},
+        {"year": 2025, "month": 10, "retrieved_at_utc": "2026-09-27T11:14:36Z", "last_modified": "Tue, 13 Jan 2026 14:50:17 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_10.zip", "http_status": 200, "zip_bytes": 30723803, "zip_sha256": "05d14d3fd67fa3e04b97c4d6bc7386f4a6c1cda13d2506cf0e9f0a6c620ed111", "csv_bytes": 274710359, "csv_crc32": "e8a05871", "csv_sha256": "1162446fa628fd43729e28f5741bd1ad5b2a8012deace8efff6595c69f1b3070", "source_rows": 605844, "scoped_rows": 34215},
+        {"year": 2025, "month": 11, "retrieved_at_utc": "2026-09-27T11:16:06Z", "last_modified": "Tue, 10 Feb 2026 13:16:23 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_11.zip", "http_status": 200, "zip_bytes": 28847755, "zip_sha256": "6d5b68eea3ebb25f3cb2843e701a6c809b5455301b3bbd7802a20d522ed770c8", "csv_bytes": 258071953, "csv_crc32": "e034b04c", "csv_sha256": "6d6d63f3bb312a6695d4a8b17958bc47e4e71fdf7396ec882c9c9a61faa6efc2", "source_rows": 570550, "scoped_rows": 32521},
+        {"year": 2025, "month": 12, "retrieved_at_utc": "2026-09-27T11:16:52Z", "last_modified": "Fri, 20 Mar 2026 12:51:57 GMT", "url": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_12.zip", "http_status": 200, "zip_bytes": 30337431, "zip_sha256": "a2af96d186bc9997fef47382b8589198281c9a722286d88f30032af8ee7dcd0f", "csv_bytes": 264519889, "csv_crc32": "316fc561", "csv_sha256": "ed0a645562652fe2d816fbcb13ba46df6e3306344d9c4728c7ce5fe57bbd0db5", "source_rows": 582304, "scoped_rows": 33166}
+      ],
+      "csv_sha256_method": "SHA-256 over the exact uncompressed bytes of each sole qualified CSV ZIP member, streamed without decoding, newline conversion, or other normalization.",
+      "shared_csv_contract": {"csv_member_pattern": "On_Time_Reporting_Carrier_On_Time_Performance_(1987_present)_2025_<month>.csv", "header_count": 110, "header_sha256": "41be5e807ae7bd684dcf38b82c36146838bdcbd88eb564537341676690e3f706", "required_schema_status": "passed", "zip_crc_status": "passed"}
+    },
+    "datasf": {
+      "publisher": "San Francisco Open Data",
+      "dataset_id": "rkru-6vcg",
+      "checked_at_utc": "2026-09-27T10:59:29.578480Z",
+      "request": {"activity_period_start": "202401", "activity_period_end": "202512", "predicate": "activity_period >= '202401' AND activity_period <= '202512'", "order": ":id", "page_size": 2500, "selected_column_count": 15},
+      "metadata_request": {"url": "https://data.sf.gov/api/views/rkru-6vcg", "http_status": 200, "bytes": 24739, "sha256": "46341e90d9d4d0f6ef80f92778ba00048e97ffdf35e528d63d243918661bcc84"},
+      "count_request": {"url": "https://data.sf.gov/resource/rkru-6vcg.csv?%24select=count%28%2A%29+AS+count&%24where=activity_period+%3E%3D+%27202401%27+AND+activity_period+%3C%3D+%27202512%27", "pre_count": 4075, "post_count": 4075, "response_bytes": 15, "response_sha256": "dcfba6a5e964248558969c5cc7e8277289ac1d1893fb0925748df83b59ea9b33"},
+      "partition_grain": "one ordered Socrata result page",
+      "partition_count": 2,
+      "partitions": [
+        {"offset": 0, "rows": 2500, "bytes": 511559, "sha256": "2b14c2864b10309ea71705bbbc74598e67e3b76777bccefbbb7915ea23b63cae", "http_status": 200, "url": "https://data.sf.gov/resource/rkru-6vcg.csv?%24select=activity_period%2Cactivity_period_start_date%2Coperating_airline%2Coperating_airline_iata_code%2Cpublished_airline%2Cpublished_airline_iata_code%2Cgeo_summary%2Cgeo_region%2Cactivity_type_code%2Cprice_category_code%2Cterminal%2Cboarding_area%2Cpassenger_count%2Cdata_as_of%2Cdata_loaded_at&%24where=activity_period+%3E%3D+%27202401%27+AND+activity_period+%3C%3D+%27202512%27&%24order=%3Aid&%24limit=2500&%24offset=0"},
+        {"offset": 2500, "rows": 1575, "bytes": 322447, "sha256": "a26e6b9c498ec418eb98e39b86f27d0657fd100c3c196a366f47fc30f54ed06f", "http_status": 200, "url": "https://data.sf.gov/resource/rkru-6vcg.csv?%24select=activity_period%2Cactivity_period_start_date%2Coperating_airline%2Coperating_airline_iata_code%2Cpublished_airline%2Cpublished_airline_iata_code%2Cgeo_summary%2Cgeo_region%2Cactivity_type_code%2Cprice_category_code%2Cterminal%2Cboarding_area%2Cpassenger_count%2Cdata_as_of%2Cdata_loaded_at&%24where=activity_period+%3E%3D+%27202401%27+AND+activity_period+%3C%3D+%27202512%27&%24order=%3Aid&%24limit=2500&%24offset=2500"}
+      ],
+      "totals": {"rows": 4075, "rows_by_year": {"2024": 2015, "2025": 2060}, "annual_enplaned": {"2024": 26054586, "2025": 27250806}, "enplaned_month_geography_cells": 48, "canonical_content_sha256": "17faa7814d2d24dc153138048bbe6fe50148ebb2d9217fcbb142e04aed7c30a1", "duplicate_raw_keys": 0, "conflicting_raw_keys": 0},
+      "validation": {"schema_exact_15_columns": true, "count_stable_across_pagination": true, "accepted_pointer_updated": false}
+    },
+    "faa": {
+      "publisher": "Federal Aviation Administration",
+      "document": "CY 2025 Commercial Service Enplanements Preliminary",
+      "publication_status": "preliminary",
+      "checked_at_utc": "2026-09-27T10:59:29.578480Z",
+      "url": "https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger/arp-cy2025-commercial-service-enplanements-preliminary.pdf",
+      "http_status": 200,
+      "content_type": "application/pdf",
+      "bytes": 1708683,
+      "sha256": "e88218c048d512e3e702922768df8c82961d8b81faaa4e359c0360f20cc1f583",
+      "partition_grain": "one FAA preliminary annual PDF",
+      "partition_count": 1,
+      "counts": {"table_rows": 515, "unique_locids": 515, "unique_ranks": 515, "new_england_airports": 23},
+      "new_england_locids": ["BOS", "BDL", "PVD", "PWM", "HVN", "BTV", "MHT", "BGR", "ACK", "ORH", "PSM", "MVY", "HYA", "PQI", "BID", "WST", "BHB", "LEB", "RKD", "PVC", "RUT", "AUG", "EWB"],
+      "validation": {"fresh_download_matches_qualified_local_pdf": true, "preliminary_title_present": true, "publication_date_present": true, "page_23_of_23_present": true, "totals_present": true},
+      "caveat": "The source is preliminary. Values may be revised in a later final FAA publication."
+    },
+    "faa_aip_fy2025_awards": {
+      "status": "qualified_award_context_only",
+      "source": {"publisher": "Federal Aviation Administration", "report_title": "FY 2025 FAA Grant Detail Report", "as_of": "2025-10-02", "url": "https://www.faa.gov/sites/faa.gov/files/2025-11/FY_2025_AIP_Grants.xlsx", "http_status": 200, "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "bytes": 430906, "sha256": "1c16930f818879bc144d5d531c85f4dc1c3e992b08ceb937dadddc4a7484adcb", "xlsx_crc_status": "passed"},
+      "retrieved_at_utc": null,
+      "retrieval_time_note": "The source-backed qualification receipt did not record a retrieval timestamp; no timestamp is inferred.",
+      "partition_grain": "one FAA fiscal-year workbook",
+      "partition_count": 1,
+      "workbook": {"sheet": "Data", "header_row": 3, "data_rows": 3707, "grain": "one row per unique grant number", "unique_grant_numbers": 3707, "exact_duplicate_rows": 0, "amount_reconciliation_mismatches": 0, "award_date_min": "2024-12-04", "award_date_max": "2025-09-26"},
+      "new_england_cohort": {"airport_count": 23, "airports_with_listed_grants": 20, "airports_without_listed_grants": ["BID", "HYA", "WST"], "listed_grants": 66, "total_amount_usd": "259112386.00"},
+      "aggregation_rule": "Match exact uppercase LocID, deduplicate by Grant Number, and sum Total Amount. Funding component columns already sum to Total Amount and must not be added again.",
+      "planned_total_reconciliation": {"planned_total_amount_usd": "259112386.20", "workbook_total_amount_usd": "259112386.00", "variance_workbook_minus_planned_usd": "-0.20", "status": "planned_value_contradicted", "evidence": "Exact summation of Total Amount across the 66 deduplicated New England grant rows.", "candidate_check_rule": "Candidate snapshots must equal the workbook total to exact cents and must reject the contradicted planned value."},
+      "caveat": "A row establishes that an award is listed in the FAA report. The workbook does not provide construction or completion status, profitability, ROI, remaining need, or an unawarded funding gap."
+    }
+  }
+}

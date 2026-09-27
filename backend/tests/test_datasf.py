@@ -9,7 +9,7 @@ import socketserver
 import threading
 import time
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
 import duckdb
@@ -35,12 +35,34 @@ def test_fetches_sequential_pages_with_fixed_scope_and_matching_counts() -> None
     rows = _run_fetch(client)
 
     assert len(rows) == 5_001
-    assert [request.get("$offset") for request in requests] == [None, ["0"], ["5000"], None]
+    assert [request.get("$offset") for request in requests] == [
+        None,
+        ["0"],
+        ["5000"],
+        None,
+    ]
     assert requests[0] == {"$select": ["count(*) AS count"], "$where": [PREDICATE]}
     assert requests[1]["$order"] == [":id"]
     assert requests[1]["$limit"] == ["5000"]
     assert requests[1]["$select"] == [",".join(REQUIRED_COLUMNS)]
     assert requests[-1] == requests[0]
+
+
+def test_fetches_2024_2025_with_exact_derived_predicate() -> None:
+    year_pair = (2024, 2025)
+    requests: list[dict[str, list[str]]] = []
+    rows = _run_fetch(
+        _client_for_rows([_row(index, year_pair=year_pair) for index in range(48)], observed=requests),
+        year_pair=year_pair,
+    )
+
+    assert len(rows) == 48
+    assert {request["$where"][0] for request in requests} == {"activity_period >= '202401' AND activity_period <= '202512'"}
+
+
+def test_rejects_unsupported_year_pair_before_request() -> None:
+    with pytest.raises(ValueError, match="2023, 2024.*2024, 2025"):
+        _run_fetch(_client_for_rows([]), year_pair=(2025, 2026))
 
 
 @pytest.mark.parametrize("post_count", [5_000, 5_002])
@@ -76,9 +98,7 @@ def test_rejects_extra_rows_beyond_pre_count() -> None:
         (lambda row: row.__setitem__("data_loaded_at", "not-a-date"), "data_loaded_at"),
     ],
 )
-def test_rejects_invalid_schema_or_values(
-    mutate: Callable[[dict[str, str]], object], message: str
-) -> None:
+def test_rejects_invalid_schema_or_values(mutate: Callable[[dict[str, str]], object], message: str) -> None:
     rows = [_row(index) for index in range(48)]
     mutate(rows[0])
 
@@ -103,11 +123,14 @@ def test_rejects_duplicate_declared_raw_key() -> None:
         _run_fetch(_client_for_rows(rows))
 
 
-def test_rejects_missing_enplaned_month_geography_cell() -> None:
-    rows = [_row(index) for index in range(47)]
+@pytest.mark.parametrize("year_pair", [(2023, 2024), (2024, 2025)])
+def test_rejects_missing_enplaned_month_geography_cell(
+    year_pair: tuple[int, int],
+) -> None:
+    rows = [_row(index, year_pair=year_pair) for index in range(47)]
 
     with pytest.raises(DataSFError, match="missing.*Enplaned"):
-        _run_fetch(_client_for_rows(rows))
+        _run_fetch(_client_for_rows(rows), year_pair=year_pair)
 
 
 def test_rejects_row_count_above_four_page_cap_without_fetching_pages() -> None:
@@ -237,7 +260,7 @@ def test_absolute_deadline_interrupts_real_httpx_trickling_headers(monkeypatch) 
 
 def test_publishes_typed_parquet_manifest_and_current_pointer(tmp_path) -> None:
     data_root = tmp_path / "raw" / "datasf"
-    retrieved_at = datetime(2026, 9, 26, 12, 30, tzinfo=timezone.utc)
+    retrieved_at = datetime(2026, 9, 26, 12, 30, tzinfo=UTC)
 
     metadata = _run_publish(
         _client_for_rows([_row(index) for index in range(48)]),
@@ -266,30 +289,112 @@ def test_publishes_typed_parquet_manifest_and_current_pointer(tmp_path) -> None:
         params=[str(parquet_path)],
     ).fetchone() == (48, 0, 47)
     assert duckdb.sql(
-        "SELECT typeof(passenger_count), typeof(activity_period_start_date) "
-        "FROM read_parquet(?) LIMIT 1",
+        "SELECT typeof(passenger_count), typeof(activity_period_start_date) FROM read_parquet(?) LIMIT 1",
         params=[str(parquet_path)],
     ).fetchone() == ("BIGINT", "TIMESTAMP")
 
 
+def test_2024_2025_snapshot_is_staged_without_moving_current_pointer(tmp_path) -> None:
+    data_root = tmp_path / "raw" / "datasf"
+    _run_publish(_client_for_rows([_row(index) for index in range(48)]), data_root=data_root)
+    pointer_before = (data_root / "current.json").read_bytes()
+    year_pair = (2024, 2025)
+
+    metadata = _run_publish(
+        _client_for_rows([_row(index, year_pair=year_pair) for index in range(48)]),
+        data_root=data_root,
+        year_pair=year_pair,
+    )
+
+    assert metadata["validation_status"] == "staged"
+    assert metadata["scope"]["activity_period_start"] == "202401"
+    assert metadata["scope"]["activity_period_end"] == "202512"
+    assert (data_root / "current.json").read_bytes() == pointer_before
+    assert (data_root / "snapshots" / metadata["snapshot_id"] / "manifest.json").is_file()
+
+
+def test_verify_only_binds_saved_snapshot_to_qualification_without_network_or_pointer_change(tmp_path, monkeypatch) -> None:
+    data_root = tmp_path / "raw" / "datasf"
+    _run_publish(_client_for_rows([_row(index) for index in range(48)]), data_root=data_root)
+    pointer_before = (data_root / "current.json").read_bytes()
+    rows = [_row(index, year_pair=(2024, 2025)) for index in range(48)]
+    metadata = _run_publish(_client_for_rows(rows), data_root=data_root, year_pair=(2024, 2025))
+    qualification = tmp_path / "qualification.json"
+    qualification.write_text(json.dumps(_qualification(rows)), encoding="utf-8")
+    monkeypatch.setattr(datasf, "DEFAULT_DATA_ROOT", data_root)
+    monkeypatch.setattr(
+        datasf.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("network used")),
+    )
+
+    result = datasf.main(
+        [
+            "--verify-only",
+            "--snapshot-id",
+            str(metadata["snapshot_id"]),
+            "--qualification",
+            str(qualification),
+        ]
+    )
+
+    assert result == 0
+    assert (data_root / "current.json").read_bytes() == pointer_before
+
+
+def test_verify_only_fails_closed_on_incomplete_qualification(tmp_path, monkeypatch) -> None:
+    data_root = tmp_path / "raw" / "datasf"
+    rows = [_row(index, year_pair=(2024, 2025)) for index in range(48)]
+    metadata = _run_publish(_client_for_rows(rows), data_root=data_root, year_pair=(2024, 2025))
+    qualification_payload = _qualification(rows)
+    qualification_payload["sources"]["datasf"]["totals"].pop("canonical_content_sha256")
+    qualification = tmp_path / "qualification.json"
+    qualification.write_text(json.dumps(qualification_payload), encoding="utf-8")
+    monkeypatch.setattr(datasf, "DEFAULT_DATA_ROOT", data_root)
+
+    args = [
+        "--verify-only",
+        "--snapshot-id",
+        str(metadata["snapshot_id"]),
+        "--qualification",
+        str(qualification),
+    ]
+    assert datasf.main(args) == 1
+
+
+def test_verify_only_rejects_valid_shaped_alias_snapshot_id(tmp_path) -> None:
+    data_root = tmp_path / "raw" / "datasf"
+    rows = [_row(index, year_pair=(2024, 2025)) for index in range(48)]
+    metadata = _run_publish(
+        _client_for_rows(rows), data_root=data_root, year_pair=(2024, 2025)
+    )
+    original = data_root / "snapshots" / str(metadata["snapshot_id"])
+    alias_id = "datasf-" + "0" * 64
+    alias = data_root / "snapshots" / alias_id
+    original.rename(alias)
+    manifest = json.loads((alias / "manifest.json").read_text())
+    manifest["snapshot_id"] = alias_id
+    (alias / "manifest.json").write_text(json.dumps(manifest))
+    qualification = tmp_path / "qualification.json"
+    qualification.write_text(json.dumps(_qualification(rows)))
+
+    with pytest.raises(DataSFError, match="manifest or qualification"):
+        datasf.verify_datasf_snapshot(alias_id, qualification, data_root=data_root)
+
+
 @pytest.mark.parametrize("failure_stage", ["fetch", "validation", "write"])
-def test_failed_publication_preserves_previous_pointer_and_snapshot(
-    tmp_path, monkeypatch, failure_stage: str
-) -> None:
+def test_failed_publication_preserves_previous_pointer_and_snapshot(tmp_path, monkeypatch, failure_stage: str) -> None:
     data_root = tmp_path / "raw" / "datasf"
     _run_publish(
         _client_for_rows([_row(index) for index in range(48)]),
         data_root=data_root,
-        retrieved_at=datetime(2026, 9, 26, tzinfo=timezone.utc),
+        retrieved_at=datetime(2026, 9, 26, tzinfo=UTC),
     )
     pointer_before = (data_root / "current.json").read_bytes()
-    snapshots_before = {
-        path.relative_to(data_root): path.read_bytes()
-        for path in (data_root / "snapshots").rglob("*")
-        if path.is_file()
-    }
+    snapshots_before = {path.relative_to(data_root): path.read_bytes() for path in (data_root / "snapshots").rglob("*") if path.is_file()}
 
     if failure_stage == "fetch":
+
         def failing_handler(request: httpx.Request) -> httpx.Response:
             raise httpx.ReadTimeout("timed out", request=request)
 
@@ -308,11 +413,7 @@ def test_failed_publication_preserves_previous_pointer_and_snapshot(
         _run_publish(client, data_root=data_root)
 
     assert (data_root / "current.json").read_bytes() == pointer_before
-    assert {
-        path.relative_to(data_root): path.read_bytes()
-        for path in (data_root / "snapshots").rglob("*")
-        if path.is_file()
-    } == snapshots_before
+    assert {path.relative_to(data_root): path.read_bytes() for path in (data_root / "snapshots").rglob("*") if path.is_file()} == snapshots_before
     assert not list((data_root / "snapshots").glob(".staging-*"))
 
 
@@ -354,9 +455,7 @@ def _client_for_rows(
             observed.append(params)
         if params.get("$select") == ["count(*) AS count"]:
             count_calls += 1
-            value = (len(rows) if pre_count is None else pre_count) if count_calls == 1 else (
-                len(rows) if post_count is None else post_count
-            )
+            value = (len(rows) if pre_count is None else pre_count) if count_calls == 1 else (len(rows) if post_count is None else post_count)
             return httpx.Response(200, content=f"count\r\n{value}\r\n".encode(), request=request)
         offset = int(params["$offset"][0])
         page = rows[offset : offset + 5_000]
@@ -376,9 +475,9 @@ def _csv(rows: list[dict[str, str]]) -> bytes:
     return output.getvalue().encode()
 
 
-def _row(index: int) -> dict[str, str]:
+def _row(index: int, *, year_pair: tuple[int, int] = (2023, 2024)) -> dict[str, str]:
     month_index = index % 24
-    year = 2023 + month_index // 12
+    year = year_pair[month_index // 12]
     month = month_index % 12 + 1
     geography = "Domestic" if (index // 24) % 2 == 0 else "International"
     return {
@@ -397,4 +496,32 @@ def _row(index: int) -> dict[str, str]:
         "passenger_count": str(index),
         "data_as_of": "2026-09-22T00:00:00.000",
         "data_loaded_at": "2026-09-22T12:00:00.000",
+    }
+
+
+def _qualification(rows: list[dict[str, str]]) -> dict[str, object]:
+    digest = datasf._canonical_sha256([tuple(row[column] for column in REQUIRED_COLUMNS) for row in rows])
+    request = {
+        "predicate": "activity_period >= '202401' AND activity_period <= '202512'",
+        "order": ":id",
+        "activity_period_start": "202401",
+        "activity_period_end": "202512",
+    }
+    totals = {
+        "rows": len(rows),
+        "enplaned_month_geography_cells": 48,
+        "canonical_content_sha256": digest,
+        "duplicate_raw_keys": 0,
+        "conflicting_raw_keys": 0,
+    }
+    return {
+        "sources": {
+            "datasf": {
+                "dataset_id": "rkru-6vcg",
+                "request": request,
+                "count_request": {"pre_count": len(rows), "post_count": len(rows)},
+                "totals": totals,
+                "validation": {"schema_exact_15_columns": True, "accepted_pointer_updated": False},
+            }
+        }
     }

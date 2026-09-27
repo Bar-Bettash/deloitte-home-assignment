@@ -11,6 +11,7 @@ from pathlib import Path
 import duckdb
 import httpx
 import pytest
+from app.sources import ontime
 from app.sources.ontime import (
     MONTHS,
     OUTPUT_FIELDS,
@@ -19,6 +20,7 @@ from app.sources.ontime import (
     _consume_archive,
     acquire_archives,
     archive_filename,
+    archive_url,
     publish_ontime_snapshot,
 )
 
@@ -47,6 +49,111 @@ def test_publishes_complete_typed_snapshot_and_preserves_conditional_nulls(tmp_p
     finally:
         connection.close()
     assert nulls == 36
+
+
+def test_stages_all_2025_archives_without_changing_accepted_pointer(tmp_path: Path) -> None:
+    data_root = tmp_path / "data"
+    historical = tmp_path / "historical"
+    recent = tmp_path / "recent"
+    _complete_archives(historical)
+    publish_ontime_snapshot(historical, data_root=data_root)
+    accepted_pointer = (data_root / "current.json").read_bytes()
+    _complete_archives(recent, year=2025)
+
+    manifest = publish_ontime_snapshot(recent, data_root=data_root, source_year=2025)
+
+    assert manifest["validation_status"] == "staged"
+    assert manifest["request"]["year"] == 2025
+    assert [item["month"] for item in manifest["archives"]] == list(MONTHS)
+    assert all(item["filename"] == archive_filename(item["month"], 2025) for item in manifest["archives"])
+    assert all(item["url"] == archive_url(item["month"], 2025) for item in manifest["archives"])
+    assert (data_root / "current.json").read_bytes() == accepted_pointer
+
+
+def test_stage_cli_reads_month_nested_qualification_archives(tmp_path: Path, capsys) -> None:
+    data_root = tmp_path / "data"
+    historical = tmp_path / "historical"
+    recent = tmp_path / "recent"
+    _complete_archives(historical)
+    publish_ontime_snapshot(historical, data_root=data_root)
+    accepted_pointer = (data_root / "current.json").read_bytes()
+    _complete_archives(recent, year=2025, monthly_layout=True)
+
+    assert ontime.main([
+        "--stage", "--year", "2025", "--input-dir", str(recent),
+        "--data-root", str(data_root),
+    ]) == 0
+
+    snapshot_id = capsys.readouterr().out.strip()
+    manifest = json.loads(
+        (data_root / "snapshots" / snapshot_id / "manifest.json").read_text()
+    )
+    assert manifest["validation_status"] == "staged"
+    assert [item["month"] for item in manifest["archives"]] == list(MONTHS)
+    assert (data_root / "current.json").read_bytes() == accepted_pointer
+
+
+def test_stage_and_verify_only_cli_preserve_pointer_and_do_not_regenerate(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    data_root, historical, recent = (tmp_path / name for name in ("data", "historical", "recent"))
+    _complete_archives(historical)
+    publish_ontime_snapshot(historical, data_root=data_root)
+    pointer = (data_root / "current.json").read_bytes()
+    _complete_archives(recent, year=2025)
+
+    assert ontime.main([
+        "--stage", "--year", "2025", "--input-dir", str(recent),
+        "--data-root", str(data_root),
+    ]) == 0
+    snapshot_id = capsys.readouterr().out.strip()
+    manifest = json.loads(
+        (data_root / "snapshots" / snapshot_id / "manifest.json").read_text()
+    )
+    qualification = tmp_path / "qualification.json"
+    qualification.write_text(json.dumps(_qualification(manifest)), encoding="utf-8")
+    monkeypatch.setattr(ontime, "acquire_archives", lambda *a, **k: (_ for _ in ()).throw(AssertionError("fetch")))
+    monkeypatch.setattr(ontime, "publish_ontime_snapshot", lambda *a, **k: (_ for _ in ()).throw(AssertionError("regenerate")))
+
+    assert ontime.main([
+        "--verify-only", "--snapshot-id", snapshot_id,
+        "--qualification", str(qualification), "--data-root", str(data_root),
+    ]) == 0
+    assert (data_root / "current.json").read_bytes() == pointer
+    final = data_root / "snapshots" / snapshot_id
+    alias_id = "ontime-" + "0" * 64
+    alias = data_root / "snapshots" / alias_id
+    final.rename(alias)
+    manifest["snapshot_id"] = alias_id
+    (alias / "manifest.json").write_text(json.dumps(manifest))
+    assert ontime.main([
+        "--verify-only", "--snapshot-id", alias_id,
+        "--qualification", str(qualification), "--data-root", str(data_root),
+    ]) == 1
+    manifest["snapshot_id"] = snapshot_id
+    (alias / "manifest.json").write_text(json.dumps(manifest))
+    alias.rename(final)
+    bad_qualification = _qualification(manifest)
+    bad_qualification["sources"]["ontime"]["request"]["year"] = 2024
+    qualification.write_text(json.dumps(bad_qualification))
+    assert ontime.main([
+        "--verify-only", "--snapshot-id", snapshot_id,
+        "--qualification", str(qualification), "--data-root", str(data_root),
+    ]) == 1
+    bad_qualification = _qualification(manifest)
+    bad_qualification["sources"]["ontime"]["partitions"].pop()
+    qualification.write_text(json.dumps(bad_qualification))
+    assert ontime.main([
+        "--verify-only", "--snapshot-id", snapshot_id,
+        "--qualification", str(qualification), "--data-root", str(data_root),
+    ]) == 1
+    qualification.write_text(json.dumps(_qualification(manifest)))
+    manifest["archives"][0]["csv_sha256"] = "0" * 64
+    (data_root / "snapshots" / snapshot_id / "manifest.json").write_text(json.dumps(manifest))
+    assert ontime.main([
+        "--verify-only", "--snapshot-id", snapshot_id,
+        "--qualification", str(qualification), "--data-root", str(data_root),
+    ]) == 1
 
 
 def test_missing_month_fails_before_pointer_replacement(tmp_path: Path) -> None:
@@ -172,32 +279,63 @@ def test_qualified_january_probe_matches_recorded_scope(tmp_path: Path) -> None:
     writer = csv.writer(output)
     writer.writerow(OUTPUT_FIELDS)
 
-    _, _, source_rows, scoped_rows = _consume_archive(
+    _, _, csv_sha256, csv_crc32, source_rows, scoped_rows = _consume_archive(
         source, 1, writer, identities, coverage, carriers
     )
 
     assert source_rows == 547_271
     assert scoped_rows == 29_003
+    assert len(csv_sha256) == 64
+    assert len(csv_crc32) == 8
     assert coverage == Counter({("LAX", 1): 15_228, ("SFO", 1): 10_133, ("SNA", 1): 3_642})
 
 
-def _complete_archives(directory: Path) -> None:
+def _complete_archives(
+    directory: Path, *, year: int = 2024, monthly_layout: bool = False
+) -> None:
     directory.mkdir(parents=True)
+    airports = ("ANC", "LAX", "SFO", "SNA") if year == 2025 else ("LAX", "SFO", "SNA")
     for month in MONTHS:
-        rows = [_row(month, airport, index) for index, airport in enumerate(("LAX", "SFO", "SNA"), 1)]
-        _write_archive(directory / archive_filename(month), rows)
+        rows = [
+            _row(month, airport, index, year=year)
+            for index, airport in enumerate(airports, 1)
+        ]
+        archive_dir = directory / str(month) if monthly_layout else directory
+        _write_archive(archive_dir / archive_filename(month, year), rows)
 
 
-def _row(month: int, origin: str, number: int) -> dict[str, str]:
+def _qualification(manifest: dict[str, object]) -> dict[str, object]:
+    coverage = manifest["coverage"]
+    partitions = []
+    for archive in manifest["archives"]:
+        month = archive["month"]
+        scoped_rows = sum(value for key, value in coverage.items() if key.endswith(f"-{month:02d}"))
+        partitions.append({
+            "month": month, "year": 2025, "url": archive["url"],
+            "zip_bytes": archive["zip_bytes"], "zip_sha256": archive["sha256"],
+            "csv_bytes": archive["csv_bytes"], "csv_sha256": archive["csv_sha256"],
+            "csv_crc32": archive["csv_crc32"],
+            "source_rows": archive["source_rows"], "scoped_rows": scoped_rows,
+        })
+    return {"sources": {"ontime": {
+        "request": manifest["request"], "partition_count": 12, "partitions": partitions,
+        "totals": {"scoped_rows": manifest["row_count"], "exact_duplicate_rows": 0,
+                   "conflicting_identity_keys": 0},
+    }}}
+
+
+def _row(month: int, origin: str, number: int, *, year: int = 2024) -> dict[str, str]:
     row = {field: "" for field in SELECTED_FIELDS}
     row.update(
         {
-            "Year": "2024",
+            "Year": str(year),
             "Month": str(month),
-            "FlightDate": f"2024-{month:02d}-01",
+            "FlightDate": f"{year}-{month:02d}-01",
             "Reporting_Airline": "AA",
             "Flight_Number_Reporting_Airline": str(number),
-            "OriginAirportID": {"LAX": "12892", "SFO": "14771", "SNA": "14908"}[origin],
+            "OriginAirportID": {
+                "ANC": "10299", "LAX": "12892", "SFO": "14771", "SNA": "14908"
+            }[origin],
             "DestAirportID": "12478",
             "CRSDepTime": "0800",
             "CRSArrTime": "1600",
@@ -221,7 +359,7 @@ def _write_archive(path: Path, rows: list[dict[str, str]], fields: tuple[str, ..
     writer.writerows(rows)
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr(
-            f"On_Time_Reporting_Carrier_On_Time_Performance_(1987_present)_2024_{rows[0].get('Month', '1')}.csv",
+            f"On_Time_Reporting_Carrier_On_Time_Performance_(1987_present)_{rows[0].get('Year', '2024')}_{rows[0].get('Month', '1')}.csv",
             csv_buffer.getvalue().encode(),
         )
 
