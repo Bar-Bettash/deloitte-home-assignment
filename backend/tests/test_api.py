@@ -95,6 +95,46 @@ def test_query_errors_are_non_2xx_safe_envelopes_with_server_request_ids(monkeyp
     assert "AssertionError" not in response.text
 
 
+@pytest.mark.parametrize("action,airports", [("metric", ["BOS"]), ("compare", ["BOS", "PVD"])])
+def test_screen_score_non_rank_requests_are_rejected_before_dispatch(monkeypatch, action, airports):
+    def should_not_dispatch(*_args, **_kwargs):
+        raise AssertionError("invalid scope must not reach the dispatcher")
+
+    monkeypatch.setattr(main, "dispatch_analysis", should_not_dispatch)
+    response = client.post("/api/query", json={"analysis": {
+        "action": action, "airports": airports, "metric": "screen_score", "year": 2024,
+    }})
+    assert response.status_code == 422
+    payload = response.json()
+    assert payload["success"] is False
+    assert payload["error"]["code"] == "invalid_request"
+    assert UUID(response.headers["X-Request-ID"]) == UUID(payload["error"]["request_id"])
+
+
+@pytest.mark.parametrize("metric", ["seat_occupancy", "long_haul_share"])
+def test_unavailable_pvc_ratio_returns_insufficient_data_and_mixed_compare_is_partial(metric):
+    unavailable = client.post("/api/query", json={"analysis": {
+        "action": "metric", "airports": ["PVC"], "metric": metric, "year": 2024,
+    }})
+    assert unavailable.status_code == 422
+    assert unavailable.json()["error"]["code"] == "insufficient_data"
+
+    mixed = client.post("/api/query", json={"analysis": {
+        "action": "compare", "airports": ["BOS", "PVC"], "metric": metric, "year": 2024,
+    }})
+    assert mixed.status_code == 200, mixed.text
+    payload = mixed.json()
+    assert payload["status"] == "partial"
+    rows = {row["airport"]: row["metrics"][0] for row in payload["rows"]}
+    assert rows["BOS"]["status"] == "ok"
+    assert rows["BOS"]["numerator"] is not None
+    assert rows["BOS"]["denominator"] is not None
+    assert rows["PVC"]["status"] == "unavailable"
+    assert rows["PVC"]["value"] is None
+    assert rows["PVC"]["numerator"] is None
+    assert rows["PVC"]["denominator"] is None
+
+
 def test_bad_json_content_type_and_oversized_body_are_rejected_before_parsing():
     wrong_media = client.post("/api/query", content=json.dumps(SFO_REQUEST), headers={"content-type": "text/plain"})
     assert wrong_media.status_code == 415

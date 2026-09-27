@@ -4,6 +4,7 @@ import pytest
 from app.contracts import (
     MAX_REQUEST_BYTES,
     AnalysisResult,
+    MetricValue,
     QueryRequest,
     validate_request_body_size,
 )
@@ -55,6 +56,8 @@ def test_request_rejects_missing_or_both_modes_and_extra_fields():
         {"action": "compare", "airports": ["BOS", "PVD"], "metric": "passenger_growth", "year": 2023},
         {"action": "metric", "airports": ["ANC"], "metric": "passenger_growth", "year": 2023},
         {"action": "metric", "airports": ["BOS"], "metric": "screen_score", "year": 2023},
+        {"action": "metric", "airports": ["BOS"], "metric": "screen_score", "year": 2024},
+        {"action": "compare", "airports": ["BOS", "PVD"], "metric": "screen_score", "year": 2024},
         {"action": "rank", "airports": ["ANC"], "metric": "passengers", "year": 2024},
         {"action": "metric", "airports": ["ANC"], "metric": "long_haul_share", "year": 2024, "threshold_miles": 0},
         {"action": "metric", "airports": ["ANC"], "metric": "passengers", "year": 2024, "threshold_miles": 3000},
@@ -65,6 +68,27 @@ def test_request_rejects_missing_or_both_modes_and_extra_fields():
 def test_analysis_rejects_invalid_scope_combinations(analysis):
     with pytest.raises(ValidationError):
         QueryRequest.model_validate({"analysis": analysis})
+
+
+def test_screen_score_remains_valid_for_rank():
+    request = QueryRequest.model_validate({"analysis": {
+        "action": "rank", "region": "new_england", "metric": "screen_score", "year": 2024,
+    }})
+    assert request.analysis.metric == "screen_score"
+
+
+@pytest.mark.parametrize("key", ["seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"])
+def test_unavailable_ratio_allows_null_components_but_available_ratio_requires_them(key):
+    unavailable = MetricValue.model_validate({
+        "key": key, "value": None, "unit": "percent", "status": "unavailable",
+        "source_ids": ["fixture-source"], "reason": "No qualifying data.",
+    })
+    assert unavailable.numerator is None and unavailable.denominator is None
+    with pytest.raises(ValidationError):
+        MetricValue.model_validate({
+            "key": key, "value": 50.0, "unit": "percent", "status": "ok",
+            "source_ids": ["fixture-source"],
+        })
 
 
 def test_request_byte_cap_is_exact_and_rejects_oversize():

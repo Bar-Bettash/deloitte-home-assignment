@@ -3,9 +3,9 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-from pydantic import ValidationError
 from app.contracts import AnalysisRequest, AnalysisResult
 from app.session import SessionError, SessionStore
+from pydantic import ValidationError
 
 
 def _result() -> AnalysisResult:

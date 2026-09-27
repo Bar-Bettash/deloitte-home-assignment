@@ -39,7 +39,7 @@ METRICS = frozenset(
 )
 RANK_METRICS = frozenset({"screen_score", "passengers", "passenger_growth", "seat_occupancy"})
 T100_METRICS = frozenset(
-    {"passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share", "screen_score"}
+    {"passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share"}
 )
 
 
@@ -201,7 +201,7 @@ class MetricValue(StrictModel):
         }[self.key]
         if self.unit != expected_unit:
             raise ValueError(f"{self.key} must use {expected_unit}")
-        if self.key in {"seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"} and self.numerator is None:
+        if self.status == "ok" and self.key in {"seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"} and self.numerator is None:
             raise ValueError("ratio metric requires numerator and denominator")
         return self
 
