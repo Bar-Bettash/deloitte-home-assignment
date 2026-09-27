@@ -1,8 +1,14 @@
+import hashlib
 import json
 from collections import Counter
 from pathlib import Path
 
 import pytest
+from app.contracts import AnalysisRequest
+from app.model_adapter import ModelAdapterError, ModelInterpretation, ModelUsage
+from app.model_budget import BudgetLedger
+from app.settings import load_settings
+from scripts import eval_intents
 from scripts.eval_intents import (
     CorpusValidationError,
     evaluate_cases,
@@ -12,6 +18,17 @@ from scripts.eval_intents import (
 )
 
 CORPUS = Path(__file__).parent / "fixtures" / "intent_eval.json"
+
+
+def _live_settings(**overrides):
+    values = {
+        "OPENAI_API_KEY": "fake-key-never-output",
+        "OPENAI_MODEL": "fake.model-v1",
+        "MODEL_INPUT_USD_PER_MILLION_TOKENS": "0.15",
+        "MODEL_OUTPUT_USD_PER_MILLION_TOKENS": "0.6",
+    }
+    values.update(overrides)
+    return load_settings(values)
 
 
 def test_frozen_corpus_has_exact_unique_inventory_and_valid_context_and_outputs():
@@ -137,6 +154,89 @@ def test_candidate_outputs_are_projected_and_cli_has_no_provider_adapter(tmp_pat
     capsys.readouterr()
     assert recorded["candidate_status"] == "unconfigured_no_provider_call_made"
     assert recorded["error_count"] == 30
+
+
+def test_live_candidate_cli_uses_shared_adapter_and_records_bounded_cost_metadata(tmp_path, monkeypatch, capsys):
+    cases = load_and_validate_cases(CORPUS)
+    settings = _live_settings()
+    monkeypatch.setattr(eval_intents, "load_settings", lambda: settings)
+    calls = []
+
+    async def fake_interpret(text, *, context, settings):
+        case = cases[len(calls)]
+        assert (text, context) == (case["input"]["text"], case["input"]["context"])
+        calls.append(text)
+        expected = case["expected"]
+        analysis = AnalysisRequest.model_validate(expected["analysis"]) if expected["kind"] == "analysis" else None
+        return ModelInterpretation(expected["kind"], analysis, expected.get("message"), ModelUsage(10, 5))
+
+    monkeypatch.setattr(eval_intents.model_adapter, "interpret_message", fake_interpret)
+    output = tmp_path / "live.json"
+    assert main(["--mode", "candidate", "--live", "--acceptance", "--output", str(output)]) == 0
+    report = json.loads(output.read_text())
+    capsys.readouterr()
+    assert len(calls) == 30
+    assert report["candidate_acceptance"] is True
+    assert report["model"] == "fake.model-v1"
+    assert report["prompt_sha256"] == eval_intents.model_adapter.PROMPT_SHA256
+    assert report["adapter_sha256"] == eval_intents.model_adapter.ADAPTER_SHA256
+    assert report["corpus_sha256"] == hashlib.sha256(CORPUS.read_bytes()).hexdigest()
+    assert report["rate_card_usd_per_million_tokens"] == {"input": 0.15, "output": 0.6}
+    assert report["aggregate_cost_usd"] == pytest.approx(30 * 4.5 / 1_000_000)
+    assert all(item["usage"] == {"input_tokens": 10, "output_tokens": 5, "cost_usd": 4.5 / 1_000_000}
+               for item in report["results"])
+    assert all(item["cost_usd"] == 4.5 / 1_000_000 for item in report["results"])
+    assert all(item["latency_ms"] >= 0 for item in report["results"])
+    assert "fake-key-never-output" not in output.read_text()
+
+
+def test_live_candidate_missing_config_makes_no_adapter_call(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(eval_intents, "load_settings", lambda: load_settings({}))
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("adapter must not be called")
+
+    monkeypatch.setattr(eval_intents.model_adapter, "interpret_message", forbidden)
+    output = tmp_path / "missing.json"
+    assert main(["--mode", "candidate", "--live", "--acceptance", "--output", str(output)]) == 1
+    report = json.loads(output.read_text())
+    capsys.readouterr()
+    assert report["candidate_status"] == "missing_model_configuration_no_provider_call_made"
+    assert report["aggregate_cost_usd"] == 0.0
+
+
+def test_live_candidate_budget_denial_prevents_adapter_call(monkeypatch):
+    settings = _live_settings(MODEL_REQUEST_BUDGET_USD="0")
+
+    async def forbidden(*_args, **_kwargs):
+        pytest.fail("budget denial must precede adapter call")
+
+    monkeypatch.setattr(eval_intents.model_adapter, "interpret_message", forbidden)
+    report = eval_intents.evaluate_live_candidate(load_and_validate_cases(CORPUS), settings, "a" * 64)
+    assert report["error_count"] == 30
+    assert all(item["error"] == "error:BudgetExhausted" for item in report["results"])
+    assert all(item["cost_usd"] == 0.0 for item in report["results"])
+    assert report["aggregate_cost_usd"] == 0.0
+    assert report["candidate_acceptance"] is False
+
+
+def test_live_candidate_timeout_forfeits_reservation_then_denies_further_calls(monkeypatch):
+    settings = _live_settings(MODEL_PROCESS_BUDGET_USD="0.003")
+    reserved = BudgetLedger().reserve(settings).reserved_usd
+    calls = []
+
+    async def timed_out(*_args, **_kwargs):
+        calls.append(1)
+        raise ModelAdapterError("model_timeout")
+
+    monkeypatch.setattr(eval_intents.model_adapter, "interpret_message", timed_out)
+    report = eval_intents.evaluate_live_candidate(load_and_validate_cases(CORPUS), settings, "a" * 64)
+    assert len(calls) == 1
+    assert report["results"][0]["error"] == "timeout"
+    assert report["results"][0]["cost_usd"] == float(reserved)
+    assert all(item["error"] == "error:BudgetExhausted" for item in report["results"][1:])
+    assert report["aggregate_cost_usd"] == float(reserved)
+    assert report["candidate_acceptance"] is False
 
 
 def test_baseline_cli_records_output_and_acceptance_flag_does_not_apply_candidate_bar(tmp_path, capsys):

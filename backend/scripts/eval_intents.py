@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Validate and evaluate the frozen local intent corpus without provider calls."""
+"""Evaluate the frozen intent corpus; live candidate calls require --live."""
 
 from __future__ import annotations
 
 import argparse
+import asyncio
+import hashlib
 import json
 import math
 import sys
@@ -13,8 +15,11 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from app import model_adapter
 from app.contracts import AnalysisRequest
 from app.intent import parse_intent
+from app.model_budget import BudgetLedger
+from app.settings import Settings, load_settings
 from pydantic import ValidationError
 
 DEFAULT_CASES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "intent_eval.json"
@@ -213,13 +218,62 @@ def write_report(report: dict[str, Any], path: Path) -> None:
     path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def evaluate_live_candidate(cases: list[dict[str, Any]], settings: Settings, corpus_sha256: str) -> dict[str, Any]:
+    """Use the API adapter with a separate conservative budget for this CLI run."""
+    ledger = BudgetLedger()
+    charges: list[float] = []
+
+    def candidate(text: str, context: dict[str, Any] | None) -> dict[str, Any]:
+        before = ledger.charged_usd
+        try:
+            reservation = ledger.reserve(settings)
+            try:
+                interpreted = asyncio.run(model_adapter.interpret_message(text, context=context, settings=settings))
+            except Exception as exc:
+                reservation.forfeit()
+                if isinstance(exc, model_adapter.ModelAdapterError) and exc.code == "model_timeout":
+                    raise TimeoutError("model timeout") from None
+                raise
+            cost = reservation.settle(interpreted.usage)
+            return {
+                "outcome": interpreted.as_outcome(),
+                "usage": {
+                    "input_tokens": interpreted.usage.input_tokens,
+                    "output_tokens": interpreted.usage.output_tokens,
+                    "cost_usd": float(cost),
+                },
+            }
+        finally:
+            charges.append(float(ledger.charged_usd - before))
+
+    report = evaluate_cases(cases, candidate, mode="candidate")
+    for result, charge in zip(report["results"], charges, strict=True):
+        result["cost_usd"] = charge
+    report.update({
+        "candidate_status": "evaluated",
+        "model": settings.model_name,
+        "prompt_sha256": model_adapter.PROMPT_SHA256,
+        "adapter_sha256": model_adapter.ADAPTER_SHA256,
+        "corpus_sha256": corpus_sha256,
+        "rate_card_usd_per_million_tokens": {
+            "input": settings.model_input_usd_per_million_tokens,
+            "output": settings.model_output_usd_per_million_tokens,
+        },
+        "aggregate_cost_usd": float(ledger.charged_usd),
+    })
+    return report
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("baseline", "candidate"), required=True)
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--acceptance", action="store_true")
+    parser.add_argument("--live", action="store_true", help="call the configured model for candidate evaluation")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
+    if args.live and args.mode != "candidate":
+        parser.error("--live requires --mode candidate")
     try:
         cases = load_and_validate_cases(args.cases)
     except CorpusValidationError as exc:
@@ -227,8 +281,20 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.mode == "baseline":
         report = evaluate_cases(cases, parse_intent, mode="baseline")
+    elif args.live:
+        settings = load_settings()
+        if (settings.model_access_available
+                and settings.model_input_usd_per_million_tokens is not None
+                and settings.model_output_usd_per_million_tokens is not None):
+            report = evaluate_live_candidate(cases, settings, hashlib.sha256(args.cases.read_bytes()).hexdigest())
+        else:
+            def unconfigured_live(_text, _context):
+                raise RuntimeError("candidate model or prices are not configured")
+
+            report = evaluate_cases(cases, unconfigured_live, mode="candidate")
+            report["candidate_status"] = "missing_model_configuration_no_provider_call_made"
+            report["aggregate_cost_usd"] = 0.0
     else:
-        # Candidate adapter is intentionally absent in this offline slice.
         def unconfigured(_text, _context):
             raise RuntimeError("candidate adapter is not configured")
 
