@@ -11,6 +11,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 import httpx
@@ -32,6 +33,10 @@ in context; if it needs prior context and none is supplied, ask for clarificatio
 The server independently validates every analysis and supplies all user-visible
 safe-outcome wording. The message field must be null."""
 PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()
+# Admission binds the complete running adapter, including its schema and request
+# construction, rather than only the instruction text.
+ADAPTER_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+PROVIDER_FRAMING_ALLOWANCE_TOKENS = 4096
 
 _METRICS = [
     "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
@@ -115,13 +120,34 @@ def _make_input(message: str, context: Mapping[str, object] | None, settings: Se
     return payload
 
 
+def _request_json(settings: Settings, user_input: str) -> dict[str, object]:
+    return {
+        "model": settings.model_name,
+        "input": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_input}],
+        "text": {"format": {"type": "json_schema", "name": "airport_intent", "strict": True, "schema": OUTPUT_SCHEMA}},
+        "store": False,
+        "max_output_tokens": settings.model_max_output_tokens,
+    }
+
+
+def provider_input_token_ceiling(settings: Settings) -> int:
+    """Conservative billed-input bound including schema and provider framing.
+
+    The configured prompt cap applies only to system and user content. Structured
+    schema and request envelope also consume provider input tokens. UTF-8 bytes
+    conservatively bound their token contribution; framing adds a fixed reserve.
+    """
+    envelope_bytes = len(json.dumps(_request_json(settings, ""), ensure_ascii=True).encode("utf-8"))
+    return settings.model_max_prompt_tokens + envelope_bytes + PROVIDER_FRAMING_ALLOWANCE_TOKENS
+
+
 def _parse_usage(body: dict[str, object], settings: Settings) -> ModelUsage:
     usage = body.get("usage")
     if not isinstance(usage, dict):
         raise ModelAdapterError("model_invalid_response")
     input_tokens, output_tokens = usage.get("input_tokens"), usage.get("output_tokens")
     if (type(input_tokens) is not int or type(output_tokens) is not int
-            or input_tokens < 0 or input_tokens > settings.model_max_prompt_tokens
+            or input_tokens < 0 or input_tokens > provider_input_token_ceiling(settings)
             or output_tokens < 0 or output_tokens > settings.model_max_output_tokens):
         raise ModelAdapterError("model_invalid_response")
     return ModelUsage(input_tokens, output_tokens)
@@ -181,13 +207,7 @@ async def interpret_message(
     if not settings.model_access_available:
         raise ModelAdapterError("ai_unavailable")
     user_input = _make_input(message, context, settings)
-    request_json = {
-        "model": settings.model_name,
-        "input": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_input}],
-        "text": {"format": {"type": "json_schema", "name": "airport_intent", "strict": True, "schema": OUTPUT_SCHEMA}},
-        "store": False,
-        "max_output_tokens": settings.model_max_output_tokens,
-    }
+    request_json = _request_json(settings, user_input)
     headers = {"Authorization": f"Bearer {settings.model_api_key.get_secret_value()}", "Content-Type": "application/json"}
 
     async def call(http: httpx.AsyncClient) -> object:

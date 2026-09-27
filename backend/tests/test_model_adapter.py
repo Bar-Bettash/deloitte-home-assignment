@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+from copy import deepcopy
 from functools import wraps
+from pathlib import Path
 
 import httpx
 import pytest
+from app import model_adapter
 from app.model_adapter import (
+    ADAPTER_SHA256,
     MAX_RESPONSE_BYTES,
     OUTPUT_SCHEMA,
     PROMPT_SHA256,
     ModelAdapterError,
     interpret_message,
+    provider_input_token_ceiling,
 )
 from app.settings import Settings
 
@@ -85,6 +91,39 @@ async def test_one_request_exact_responses_contract_and_validated_analysis() -> 
     assert nested["additionalProperties"] is False
     assert set(nested["required"]) == set(nested["properties"])
     assert len(PROMPT_SHA256) == 64
+
+
+def test_adapter_identity_covers_complete_source_not_only_prompt() -> None:
+    source = Path(model_adapter.__file__).read_bytes()
+    assert ADAPTER_SHA256 == hashlib.sha256(source).hexdigest()
+    assert ADAPTER_SHA256 != hashlib.sha256(source + b"\n").hexdigest()
+    assert ADAPTER_SHA256 != PROMPT_SHA256
+
+
+def test_provider_input_ceiling_includes_schema_request_and_framing(monkeypatch) -> None:
+    settings = _settings()
+    original = provider_input_token_ceiling(settings)
+    assert original > settings.model_max_prompt_tokens + 4096
+    expanded = deepcopy(OUTPUT_SCHEMA)
+    expanded["description"] = "schema context " * 100
+    monkeypatch.setattr(model_adapter, "OUTPUT_SCHEMA", expanded)
+    assert provider_input_token_ceiling(settings) > original
+
+
+@run_async
+async def test_provider_usage_accepts_ceiling_and_rejects_above_it() -> None:
+    settings = _settings()
+    ceiling = provider_input_token_ceiling(settings)
+    assert ceiling > settings.model_max_prompt_tokens
+    accepted = _response(usage={"input_tokens": ceiling, "output_tokens": 70})
+    async with _client(lambda request: httpx.Response(200, json=accepted)) as client:
+        result = await interpret_message("question", settings=settings, client=client)
+    assert result.usage.input_tokens == ceiling
+    rejected = _response(usage={"input_tokens": ceiling + 1, "output_tokens": 70})
+    async with _client(lambda request: httpx.Response(200, json=rejected)) as client:
+        with pytest.raises(ModelAdapterError) as exc:
+            await interpret_message("question", settings=settings, client=client)
+    assert exc.value.code == "model_invalid_response"
 
 
 @run_async

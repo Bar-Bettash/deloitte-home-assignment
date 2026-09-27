@@ -9,7 +9,7 @@ from __future__ import annotations
 from decimal import Decimal
 from threading import RLock
 
-from app.model_adapter import ModelUsage
+from app.model_adapter import ModelUsage, provider_input_token_ceiling
 from app.settings import Settings
 
 _MILLION = Decimal(1_000_000)
@@ -54,8 +54,9 @@ class BudgetLedger:
         input_rate = _money(settings.model_input_usd_per_million_tokens)
         output_rate = _money(settings.model_output_usd_per_million_tokens)
         identity = (settings.model_name, input_rate, output_rate)
+        input_ceiling = provider_input_token_ceiling(settings)
         worst_case = (
-            Decimal(settings.model_max_prompt_tokens) * input_rate
+            Decimal(input_ceiling) * input_rate
             + Decimal(settings.model_max_output_tokens) * output_rate
         ) / _MILLION
         request_limit = Decimal(str(settings.model_request_budget_usd))
@@ -71,7 +72,7 @@ class BudgetLedger:
             self._identity = identity
             self._charged += worst_case
             return BudgetReservation(self, worst_case, input_rate, output_rate,
-                                     settings.model_max_prompt_tokens, settings.model_max_output_tokens)
+                                     input_ceiling, settings.model_max_output_tokens)
 
 
 class BudgetReservation:

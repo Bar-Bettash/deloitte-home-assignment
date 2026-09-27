@@ -37,7 +37,7 @@ class Settings(BaseModel):
     # this separate, exact admission record and explicit positive prices.
     model_runtime_enabled: Annotated[bool, Field(strict=True)] = False
     model_admitted_name: Annotated[str, Field(min_length=1, max_length=100)] | None = None
-    model_admitted_prompt_sha256: Annotated[str, Field(min_length=64, max_length=64)] | None = None
+    model_admitted_adapter_sha256: Annotated[str, Field(min_length=64, max_length=64)] | None = None
     model_input_usd_per_million_tokens: Annotated[float, Field(strict=True, gt=0, le=1000, allow_inf_nan=False)] | None = None
     model_output_usd_per_million_tokens: Annotated[float, Field(strict=True, gt=0, le=1000, allow_inf_nan=False)] | None = None
 
@@ -67,21 +67,21 @@ class Settings(BaseModel):
     def model_access_available(self) -> bool:
         return self.model_api_key is not None and self.model_name is not None
 
-    @field_validator("model_admitted_prompt_sha256")
+    @field_validator("model_admitted_adapter_sha256")
     @classmethod
-    def validate_admitted_prompt_hash(cls, value: str | None) -> str | None:
+    def validate_admitted_adapter_hash(cls, value: str | None) -> str | None:
         if value is not None and not re.fullmatch(r"[0-9a-f]{64}", value):
-            raise ValueError("admitted prompt hash must be lowercase SHA-256 hex")
+            raise ValueError("admitted adapter hash must be lowercase SHA-256 hex")
         return value
 
-    def model_runtime_admitted(self, prompt_hash: str) -> bool:
-        """Fail closed unless the exact model/prompt and prices are admitted."""
+    def model_runtime_admitted(self, adapter_hash: str) -> bool:
+        """Fail closed unless the exact model/adapter and prices are admitted."""
         return (
             self.model_runtime_enabled
             and self.model_access_available
             and self.model_admitted_name == self.model_name
-            and self.model_admitted_prompt_sha256 is not None
-            and self.model_admitted_prompt_sha256 == prompt_hash
+            and self.model_admitted_adapter_sha256 is not None
+            and self.model_admitted_adapter_sha256 == adapter_hash
             and self.model_input_usd_per_million_tokens is not None
             and self.model_output_usd_per_million_tokens is not None
         )
@@ -103,7 +103,7 @@ _ENV_FIELDS = {
     "OPENAI_MODEL": "model_name",
     "MODEL_RUNTIME_ENABLED": "model_runtime_enabled",
     "MODEL_ADMITTED_NAME": "model_admitted_name",
-    "MODEL_ADMITTED_PROMPT_SHA256": "model_admitted_prompt_sha256",
+    "MODEL_ADMITTED_ADAPTER_SHA256": "model_admitted_adapter_sha256",
     "MODEL_INPUT_USD_PER_MILLION_TOKENS": "model_input_usd_per_million_tokens",
     "MODEL_OUTPUT_USD_PER_MILLION_TOKENS": "model_output_usd_per_million_tokens",
 }

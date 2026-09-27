@@ -15,6 +15,9 @@ from app.calculations.sfo import SFOTrendError, calculate_sfo_enplaned_trend
 from app.calculations.traffic import MetricResult, calculate_traffic_batch
 from app.contracts import MAX_REQUEST_BYTES
 from app.dispatch import DispatchFailure
+from app.model_adapter import ModelAdapterError, ModelInterpretation, ModelUsage
+from app.model_budget import BudgetLedger
+from app.settings import Settings
 from fastapi.testclient import TestClient
 
 client = TestClient(main.app)
@@ -31,8 +34,22 @@ SFO_REQUEST = {
 @pytest.fixture(autouse=True)
 def reset_session_store():
     main.session_store.clear()
+    main.model_budget = BudgetLedger()
     yield
     main.session_store.clear()
+    main.model_budget = BudgetLedger()
+
+
+def admitted_settings(**overrides):
+    values = {
+        "model_api_key": "offline-test-only", "model_name": "fake-model",
+        "model_runtime_enabled": True, "model_admitted_name": "fake-model",
+        "model_admitted_adapter_sha256": main.ADAPTER_SHA256,
+        "model_input_usd_per_million_tokens": 1.0,
+        "model_output_usd_per_million_tokens": 1.0,
+    }
+    values.update(overrides)
+    return Settings.model_validate(values)
 
 
 def test_sfo_query_returns_real_typed_snapshot_result_and_matching_request_id():
@@ -140,6 +157,191 @@ def test_free_text_is_model_disabled_and_does_not_replace_last_result(monkeypatc
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "ai_unavailable"
     assert main.session_store.latest(token).result_id == UUID(result["result_id"])
+
+
+def test_admitted_free_text_dispatches_validated_analysis_and_stores_request(monkeypatch):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+    calls = []
+
+    async def interpret(message, *, settings, context):
+        calls.append((message, context))
+        analysis = main.AnalysisRequest(action="metric", airports=["SFO"], metric="sfo_enplaned_trend", year=2024)
+        return ModelInterpretation("analysis", analysis, None, ModelUsage(100, 20))
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    response = client.post("/api/query", json={"message": "How did SFO enplanements change?"})
+    assert response.status_code == 200, response.text
+    assert len(calls) == 1 and calls[0][1] is None
+    token = client.cookies.get(main.SESSION_COOKIE)
+    assert main.session_store.validate_request_context(token, UUID(response.json()["result_id"])).metric == "sfo_enplaned_trend"
+    assert main.model_budget.charged_usd > 0
+
+
+def test_independent_question_after_prior_result_has_no_context(monkeypatch):
+    first = client.post("/api/query", json=SFO_REQUEST)
+    assert first.status_code == 200
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+    contexts = []
+
+    async def interpret(_message, *, settings, context):
+        contexts.append(context)
+        analysis = main.AnalysisRequest(action="metric", airports=["PVD"], metric="passengers", year=2024)
+        return ModelInterpretation("analysis", analysis, None, ModelUsage(100, 20))
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    second = client.post("/api/query", json={"message": "How many PVD passengers in 2024?"})
+    assert second.status_code == 200, second.text
+    assert contexts == [None]
+    assert second.json()["scope"]["airports"] == ["PVD"]
+
+
+def test_old_prompt_hash_cannot_admit_changed_adapter_or_spend_budget(monkeypatch):
+    from app.model_adapter import PROMPT_SHA256
+
+    assert PROMPT_SHA256 != main.ADAPTER_SHA256
+    monkeypatch.setattr(main, "load_settings", lambda: admitted_settings(model_admitted_adapter_sha256=PROMPT_SHA256))
+
+    async def fail(*_args, **_kwargs):
+        raise AssertionError("unadmitted prompt reached model")
+
+    monkeypatch.setattr(main, "interpret_message", fail)
+    response = client.post("/api/query", json={"message": "How many PVD passengers in 2024?"})
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "ai_unavailable"
+    assert main.model_budget.charged_usd == 0
+
+
+def test_followup_passes_only_owned_stored_request_and_stale_id_keeps_cookie(monkeypatch):
+    first = client.post("/api/query", json={"analysis": {
+        "action": "rank", "region": "new_england", "metric": "passengers", "year": 2024,
+    }})
+    assert first.status_code == 200
+    first_id = first.json()["result_id"]
+    token = client.cookies.get(main.SESSION_COOKIE)
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+    contexts = []
+
+    async def interpret(_message, *, settings, context):
+        contexts.append(context)
+        analysis = main.AnalysisRequest.model_validate({**context, "metric": "passenger_growth"})
+        return ModelInterpretation("analysis", analysis, None, ModelUsage(100, 20))
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    second = client.post("/api/query", json={"message": "Show growth instead", "context_result_id": first_id})
+    assert second.status_code == 200, second.text
+    assert second.json()["scope"]["metric"] == "passenger_growth"
+    assert contexts == [{"action": "rank", "region": "new_england", "metric": "passengers", "year": 2024}]
+    stale = client.post("/api/query", json={"message": "And again", "context_result_id": first_id})
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "result_mismatch"
+    assert client.cookies.get(main.SESSION_COOKIE) == token
+    assert len(contexts) == 1
+    assert main.session_store.latest(token).result_id == UUID(second.json()["result_id"])
+
+
+def test_foreign_context_never_calls_model(monkeypatch):
+    first = client.post("/api/query", json=SFO_REQUEST)
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def fail(*_args, **_kwargs):
+        raise AssertionError("foreign context reached model")
+
+    monkeypatch.setattr(main, "interpret_message", fail)
+    foreign = TestClient(main.app)
+    response = foreign.post("/api/query", json={"message": "Show more", "context_result_id": first.json()["result_id"]})
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "session_expired"
+
+
+def test_context_without_stored_request_fails_before_model(monkeypatch):
+    first = client.post("/api/query", json=SFO_REQUEST)
+    result_id = UUID(first.json()["result_id"])
+    token = client.cookies.get(main.SESSION_COOKIE)
+    main.session_store.save_success(token, main.AnalysisResult.model_validate_json(first.text))
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def fail(*_args, **_kwargs):
+        raise AssertionError("missing stored request reached model")
+
+    monkeypatch.setattr(main, "interpret_message", fail)
+    response = client.post("/api/query", json={"message": "Show more", "context_result_id": str(result_id)})
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "result_mismatch"
+    assert client.cookies.get(main.SESSION_COOKIE) == token
+    assert main.session_store.latest(token).result_id == result_id
+
+
+def test_free_text_explain_keeps_latest_result(monkeypatch):
+    first = client.post("/api/query", json=SFO_REQUEST)
+    result_id = UUID(first.json()["result_id"])
+    token = client.cookies.get(main.SESSION_COOKIE)
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def interpret(_message, *, settings, context):
+        assert context["metric"] == "sfo_enplaned_trend"
+        return ModelInterpretation("analysis", main.AnalysisRequest(action="explain"), None, ModelUsage(100, 20))
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    response = client.post("/api/query", json={"message": "Explain that", "context_result_id": str(result_id)})
+    assert response.status_code == 200
+    assert response.json()["result_id"] == str(result_id)
+    assert main.session_store.latest(token).result_id == result_id
+
+
+@pytest.mark.parametrize("kind,expected", [
+    ("clarification_required", "clarification_required"),
+    ("unsupported_scope", "unsupported_scope"),
+])
+def test_model_safe_outcome_is_422_and_preserves_prior_result(monkeypatch, kind, expected):
+    first = client.post("/api/query", json=SFO_REQUEST)
+    token = client.cookies.get(main.SESSION_COOKIE)
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def interpret(_message, *, settings, context):
+        return ModelInterpretation(kind, None, "provider-controlled prose", ModelUsage(100, 20))
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    response = client.post("/api/query", json={"message": "Something ambiguous"})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == expected
+    assert "provider-controlled" not in response.text
+    assert main.session_store.latest(token).result_id == UUID(first.json()["result_id"])
+
+
+def test_budget_rejection_and_model_timeout_preserve_prior_result(monkeypatch):
+    first = client.post("/api/query", json=SFO_REQUEST)
+    token = client.cookies.get(main.SESSION_COOKIE)
+    called = []
+
+    async def interpret(*_args, **_kwargs):
+        called.append(True)
+        raise ModelAdapterError("model_timeout")
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    monkeypatch.setattr(main, "load_settings", lambda: admitted_settings(model_request_budget_usd=0))
+    rejected = client.post("/api/query", json={"message": "SFO trend?"})
+    assert rejected.status_code == 503
+    assert rejected.json()["error"]["code"] == "budget_exhausted"
+    assert called == []
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+    timed_out = client.post("/api/query", json={"message": "SFO trend?"})
+    assert timed_out.status_code == 504
+    assert timed_out.json()["error"]["code"] == "query_timeout"
+    assert len(called) == 1
+    assert main.model_budget.charged_usd > 0
+    assert main.session_store.latest(token).result_id == UUID(first.json()["result_id"])
+
+
+def test_structured_preset_never_calls_model_even_when_admitted(monkeypatch):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def fail(*_args, **_kwargs):
+        raise AssertionError("preset called model")
+
+    monkeypatch.setattr(main, "interpret_message", fail)
+    response = client.post("/api/query", json=SFO_REQUEST)
+    assert response.status_code == 200
+    assert main.model_budget.charged_usd == 0
 
 
 def test_cookie_is_opaque_and_explain_is_read_only():

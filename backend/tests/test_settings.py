@@ -52,13 +52,13 @@ def test_validated_environment_overrides_are_typed() -> None:
     assert settings.model_runtime_admitted("a" * 64) is False
 
 
-def test_exact_runtime_admission_requires_explicit_model_prompt_and_prices() -> None:
+def test_exact_runtime_admission_requires_explicit_model_adapter_and_prices() -> None:
     admitted = load_settings({
         "OPENAI_API_KEY": "fake-key",
         "OPENAI_MODEL": "demo.model-v1",
         "MODEL_RUNTIME_ENABLED": "TrUe",
         "MODEL_ADMITTED_NAME": "demo.model-v1",
-        "MODEL_ADMITTED_PROMPT_SHA256": "a" * 64,
+        "MODEL_ADMITTED_ADAPTER_SHA256": "a" * 64,
         "MODEL_INPUT_USD_PER_MILLION_TOKENS": "0.15",
         "MODEL_OUTPUT_USD_PER_MILLION_TOKENS": "0.6",
     })
@@ -71,7 +71,7 @@ def test_exact_runtime_admission_requires_explicit_model_prompt_and_prices() -> 
 
 @pytest.mark.parametrize("missing", [
     "OPENAI_API_KEY", "OPENAI_MODEL", "MODEL_RUNTIME_ENABLED",
-    "MODEL_ADMITTED_NAME", "MODEL_ADMITTED_PROMPT_SHA256",
+    "MODEL_ADMITTED_NAME", "MODEL_ADMITTED_ADAPTER_SHA256",
     "MODEL_INPUT_USD_PER_MILLION_TOKENS", "MODEL_OUTPUT_USD_PER_MILLION_TOKENS",
 ])
 def test_runtime_admission_fails_closed_when_any_field_is_missing(missing: str) -> None:
@@ -80,7 +80,7 @@ def test_runtime_admission_fails_closed_when_any_field_is_missing(missing: str) 
         "OPENAI_MODEL": "demo.model-v1",
         "MODEL_RUNTIME_ENABLED": "true",
         "MODEL_ADMITTED_NAME": "demo.model-v1",
-        "MODEL_ADMITTED_PROMPT_SHA256": "a" * 64,
+        "MODEL_ADMITTED_ADAPTER_SHA256": "a" * 64,
         "MODEL_INPUT_USD_PER_MILLION_TOKENS": "0.15",
         "MODEL_OUTPUT_USD_PER_MILLION_TOKENS": "0.6",
     }
@@ -94,7 +94,7 @@ def test_runtime_admission_requires_exact_model_name() -> None:
         "OPENAI_MODEL": "demo.model-v1",
         "MODEL_RUNTIME_ENABLED": "true",
         "MODEL_ADMITTED_NAME": "demo.model-v2",
-        "MODEL_ADMITTED_PROMPT_SHA256": "a" * 64,
+        "MODEL_ADMITTED_ADAPTER_SHA256": "a" * 64,
         "MODEL_INPUT_USD_PER_MILLION_TOKENS": "0.15",
         "MODEL_OUTPUT_USD_PER_MILLION_TOKENS": "0.6",
     })
@@ -107,9 +107,9 @@ def test_runtime_admission_requires_exact_model_name() -> None:
     {"MODEL_RUNTIME_ENABLED": "yes"},
     {"MODEL_RUNTIME_ENABLED": ""},
     {"MODEL_ADMITTED_NAME": "unsafe model name"},
-    {"MODEL_ADMITTED_PROMPT_SHA256": "a" * 63},
-    {"MODEL_ADMITTED_PROMPT_SHA256": "A" * 64},
-    {"MODEL_ADMITTED_PROMPT_SHA256": "g" * 64},
+    {"MODEL_ADMITTED_ADAPTER_SHA256": "a" * 63},
+    {"MODEL_ADMITTED_ADAPTER_SHA256": "A" * 64},
+    {"MODEL_ADMITTED_ADAPTER_SHA256": "g" * 64},
     {"MODEL_INPUT_USD_PER_MILLION_TOKENS": "0"},
     {"MODEL_OUTPUT_USD_PER_MILLION_TOKENS": "-1"},
     {"MODEL_INPUT_USD_PER_MILLION_TOKENS": "nan"},
