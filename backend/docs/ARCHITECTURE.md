@@ -17,7 +17,7 @@ Runtime dependencies are pinned FastAPI, Pydantic, HTTPX, DuckDB and Uvicorn; py
 
 ### Acquire/import accepted data before starting the server
 
-Source commands write under `backend/data/raw/<source>/`; failed acquisition does not replace a previously accepted snapshot. Stop the server before refreshing. Data files are local inputs, not installed by `pip` and not assumed present in a clean checkout.
+Source commands write under `backend/data/raw/<source>/`; failed acquisition does not replace a previously accepted snapshot. Stop the server before refreshing. The accepted demo snapshots described below travel with the Git checkout; source refreshes remain explicit operator actions.
 
 ```sh
 PYTHONPATH=backend python -m app.sources.datasf --refresh
@@ -39,6 +39,19 @@ PYTHONPATH=backend python -m app.sources.ontime --input-dir /path/to/ontime-zips
 Omit `--acquire` to validate/import archives already present. This command can make substantial downloads. It verifies required archive/schema/population coverage before publishing; it is never invoked by a browser query. No automatic source fallback is provided.
 
 Each source publishes a `current.json` pointer and a snapshot manifest. Analytical readers verify accepted status and Parquet checksums. Snapshot IDs, periods, known source retrieval times and separate import metadata become result provenance. API `retrieved_at` is nullable and means source retrieval time; it is never populated from a local import timestamp. The curated [evidence dataset](../data/evidence.json) is separate from numerical snapshots and is loaded by `backend/app/evidence.py`.
+
+### Fresh-checkout accepted snapshot handoff
+
+Git carries the exact `current.json`, accepted manifest and data artifact for each qualified source. After dependency installation, a fresh checkout can run every supported demo analysis without downloading the historical bulk inputs.
+
+| Source | Accepted snapshot ID | Data artifact SHA-256 |
+|---|---|---|
+| DataSF | `datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf` | `cc472e67b5dd529d513ff7b4482797450acaf98ce17b64c8d78076cfa2fc8ee1` |
+| FAA | `faa-3aed36dd6b33ba6e6c0a272926de2a9dda05630f4ee64450959e0e6443e4c3d4` | `458273de65b91eb0e7c26cc372616f812320b2dad163909edefd89c13cdff251` |
+| BTS T-100 | `t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac` | `1c023467175d599cbbb642e5ca5d22e711134178dc07cb77d8c9e3a3f7f6f8d5` |
+| BTS on-time | `ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b` | `1fe2d4bddfaa5f744a7bb09df80f0c5d0e893a8ee7e4a507575eaa375aac1231` |
+
+The T-100 and on-time manifests retain the qualified raw archive filenames, sizes, hashes and row metadata, so the demo does not need the 28 source ZIPs. The FAA PDF is retained as cohort evidence; runtime screening uses the frozen 22-airport cohort in `backend/app/calculations/screen.py`. This handoff reproduces the accepted analytical inputs, not a fresh upstream acquisition: T-100 still has no automated downloader, changed upstream bytes require requalification, and unknown source retrieval timestamps remain null rather than being replaced by import timestamps.
 
 ### Launch and use
 
@@ -106,7 +119,7 @@ The screen's real-data path batches all 22 airports: one snapshot validation and
 
 ## Observed data and evidence limits
 
-The following are local accepted-manifest observations on 2026-09-27, not a fresh upstream acquisition. Clean-environment setup verification is recorded separately below.
+The following are observations from the accepted artifacts shipped with the checkout on 2026-09-27, not a fresh upstream acquisition. Clean-environment setup verification is recorded separately below.
 
 | Source | Accepted local scope |
 |---|---|
@@ -137,7 +150,7 @@ Optional existing developer tooling, not installed by requirements:
 ruff check backend --ignore EXE002,SIM905 --output-format concise
 ```
 
-`EXE002` is excluded for the external volume's executable file modes. Preserve source/test findings outside those declared exclusions. Verification against the current local tree: **212 backend tests passed** (one Starlette deprecation warning), `ruff check backend --ignore EXE002,SIM905` passed, `node --test backend/tests/ui.test.cjs` passed **8/8**, `node --check backend/app/static/app.js` passed, and `git diff --check` passed. Clean-environment verification used Python 3.11 at `/private/tmp/deloitte-clean-final-20260927`: pinned `backend/requirements.txt` installed successfully, `pip check` reported no broken requirements, and the full backend suite passed all 212 tests (one Starlette deprecation warning). Accepted source snapshots are local. No model/provider call was made.
+`EXE002` is excluded for the external volume's executable file modes. Preserve source/test findings outside those declared exclusions. Verification against the current local tree: **212 backend tests passed** (one Starlette deprecation warning), `ruff check backend --ignore EXE002,SIM905` passed, `node --test backend/tests/ui.test.cjs` passed **8/8**, `node --check backend/app/static/app.js` passed, and `git diff --check` passed. Clean-environment verification used Python 3.11 at `/private/tmp/deloitte-clean-final-20260927`: pinned `backend/requirements.txt` installed successfully, `pip check` reported no broken requirements, and the full backend suite passed all 212 tests (one Starlette deprecation warning). The accepted snapshot artifacts are part of the fresh-checkout handoff above. No model/provider call was made.
 
 Live browser checks against the current local app verified the 2023 passenger-only ranking response and full-cohort ranks, including PVC at 7,535 passengers, rank 19. A PVC-only 2024 passenger-rank request returned safe `422 insufficient_data` and retained the previous result. The separate complete-year screen excludes PVC because December 2024 is missing. Raw-growth results were HYA 48.12% rank 1, HVN 20.15% rank 2, and PVD 14.55% rank 3. Earlier flows also exercised the SFO pressure bundle, operations comparison, ANC long-haul result, safe unavailable-model response with previous-result retention, evidence details, a 390×844 viewport, and visible keyboard focus. These were interactive local checks; no screenshot artifact is retained and they do not constitute a formal accessibility certification or independent review.
 

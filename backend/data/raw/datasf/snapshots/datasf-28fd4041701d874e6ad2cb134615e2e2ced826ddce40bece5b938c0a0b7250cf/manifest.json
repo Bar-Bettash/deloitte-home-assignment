@@ -1,0 +1,41 @@
+{
+  "content_sha256": "cc472e67b5dd529d513ff7b4482797450acaf98ce17b64c8d78076cfa2fc8ee1",
+  "enplaned_cell_count": 48,
+  "parquet_file": "data.parquet",
+  "request": {
+    "count": {
+      "$select": "count(*) AS count",
+      "$where": "activity_period >= '202301' AND activity_period <= '202412'"
+    },
+    "pages": {
+      "$limit": 5000,
+      "$offsets": [
+        0
+      ],
+      "$order": ":id",
+      "$select": "activity_period,activity_period_start_date,operating_airline,operating_airline_iata_code,published_airline,published_airline_iata_code,geo_summary,geo_region,activity_type_code,price_category_code,terminal,boarding_area,passenger_count,data_as_of,data_loaded_at",
+      "$where": "activity_period >= '202301' AND activity_period <= '202412'"
+    }
+  },
+  "retrieved_at_utc": "2026-09-26T20:10:43.951377Z",
+  "row_count": 3721,
+  "scope": {
+    "activity_period_end": "202412",
+    "activity_period_start": "202301",
+    "enplaned_geographies": [
+      "Domestic",
+      "International"
+    ]
+  },
+  "snapshot_id": "datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf",
+  "source": {
+    "dataset_id": "rkru-6vcg",
+    "name": "DataSF SFO passenger statistics",
+    "url": "https://data.sf.gov/resource/rkru-6vcg.csv"
+  },
+  "source_counts": {
+    "post": 3721,
+    "pre": 3721
+  },
+  "validation_status": "accepted"
+}
