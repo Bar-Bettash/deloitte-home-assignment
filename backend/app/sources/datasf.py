@@ -425,11 +425,20 @@ def main(argv: list[str] | None = None) -> int:
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument("--refresh", action="store_true")
     mode.add_argument("--verify-only", action="store_true")
+    parser.add_argument("--years", nargs=2, type=int, metavar=("START", "END"))
     parser.add_argument("--snapshot-id")
     parser.add_argument("--qualification", type=Path)
     args = parser.parse_args(argv)
-    if args.verify_only and (not args.snapshot_id or not args.qualification):
-        parser.error("--verify-only requires --snapshot-id and --qualification")
+    if args.refresh:
+        if tuple(args.years or ()) != STAGED_YEAR_PAIR:
+            parser.error("--refresh requires --years 2024 2025")
+        if args.snapshot_id or args.qualification:
+            parser.error("--snapshot-id and --qualification are only valid with --verify-only")
+    else:
+        if args.years:
+            parser.error("--years is only valid with --refresh")
+        if not args.snapshot_id or not args.qualification:
+            parser.error("--verify-only requires --snapshot-id and --qualification")
     try:
         if args.verify_only:
             metadata = verify_datasf_snapshot(args.snapshot_id, args.qualification, data_root=DEFAULT_DATA_ROOT)
@@ -438,7 +447,11 @@ def main(argv: list[str] | None = None) -> int:
 
         async def refresh() -> dict[str, object]:
             async with httpx.AsyncClient() as client:
-                return await publish_datasf_snapshot(client)
+                return await publish_datasf_snapshot(
+                    client,
+                    data_root=DEFAULT_DATA_ROOT,
+                    year_pair=STAGED_YEAR_PAIR,
+                )
 
         metadata = asyncio.run(refresh())
     except (DataSFError, OSError, duckdb.Error) as exc:

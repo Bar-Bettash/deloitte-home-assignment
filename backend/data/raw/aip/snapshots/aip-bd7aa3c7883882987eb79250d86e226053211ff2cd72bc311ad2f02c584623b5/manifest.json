@@ -1,0 +1,19 @@
+{
+  "amount_rule": "funding components equal Total Amount after cent normalization",
+  "byte_count": 430906,
+  "content_sha256": "1c16930f818879bc144d5d531c85f4dc1c3e992b08ceb937dadddc4a7484adcb",
+  "fiscal_year": 2025,
+  "grant_identity": "Grant Number",
+  "imported_at_utc": "2026-09-27T15:15:43.456249Z",
+  "new_england_awards": 66,
+  "new_england_total_usd": "259112386.00",
+  "row_count": 3707,
+  "snapshot_id": "aip-bd7aa3c7883882987eb79250d86e226053211ff2cd72bc311ad2f02c584623b5",
+  "source": {
+    "name": "FY 2025 FAA Grant Detail Report",
+    "url": "https://www.faa.gov/sites/faa.gov/files/2025-11/FY_2025_AIP_Grants.xlsx"
+  },
+  "source_file": "source.xlsx",
+  "total_amount_usd": "9044165010.08",
+  "validation_status": "staged"
+}

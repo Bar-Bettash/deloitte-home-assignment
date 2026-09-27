@@ -1,0 +1,271 @@
+{
+  "byte_count": 1708683,
+  "cohort": [
+    {
+      "cy2024_enplanements": 21090721,
+      "cy2025_enplanements": 21021153,
+      "hub": "L",
+      "locid": "BOS",
+      "percent_change": -0.33,
+      "rank": 16,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "MA"
+    },
+    {
+      "cy2024_enplanements": 3285194,
+      "cy2025_enplanements": 3283397,
+      "hub": "M",
+      "locid": "BDL",
+      "percent_change": -0.05,
+      "rank": 55,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "CT"
+    },
+    {
+      "cy2024_enplanements": 1984916,
+      "cy2025_enplanements": 2117401,
+      "hub": "S",
+      "locid": "PVD",
+      "percent_change": 6.67,
+      "rank": 72,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "RI"
+    },
+    {
+      "cy2024_enplanements": 1221913,
+      "cy2025_enplanements": 1287041,
+      "hub": "S",
+      "locid": "PWM",
+      "percent_change": 5.33,
+      "rank": 95,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "ME"
+    },
+    {
+      "cy2024_enplanements": 589409,
+      "cy2025_enplanements": 737789,
+      "hub": "S",
+      "locid": "HVN",
+      "percent_change": 25.17,
+      "rank": 122,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "CT"
+    },
+    {
+      "cy2024_enplanements": 670636,
+      "cy2025_enplanements": 709881,
+      "hub": "S",
+      "locid": "BTV",
+      "percent_change": 5.85,
+      "rank": 123,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "VT"
+    },
+    {
+      "cy2024_enplanements": 633257,
+      "cy2025_enplanements": 685594,
+      "hub": "S",
+      "locid": "MHT",
+      "percent_change": 8.26,
+      "rank": 125,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "NH"
+    },
+    {
+      "cy2024_enplanements": 376456,
+      "cy2025_enplanements": 437108,
+      "hub": "N",
+      "locid": "BGR",
+      "percent_change": 16.11,
+      "rank": 151,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "ME"
+    },
+    {
+      "cy2024_enplanements": 154173,
+      "cy2025_enplanements": 152789,
+      "hub": "N",
+      "locid": "ACK",
+      "percent_change": -0.9,
+      "rank": 207,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "MA"
+    },
+    {
+      "cy2024_enplanements": 112872,
+      "cy2025_enplanements": 106229,
+      "hub": "N",
+      "locid": "ORH",
+      "percent_change": -5.89,
+      "rank": 228,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "MA"
+    },
+    {
+      "cy2024_enplanements": 100298,
+      "cy2025_enplanements": 90771,
+      "hub": "N",
+      "locid": "PSM",
+      "percent_change": -9.5,
+      "rank": 240,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "NH"
+    },
+    {
+      "cy2024_enplanements": 83419,
+      "cy2025_enplanements": 88454,
+      "hub": "N",
+      "locid": "MVY",
+      "percent_change": 6.04,
+      "rank": 243,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "MA"
+    },
+    {
+      "cy2024_enplanements": 25626,
+      "cy2025_enplanements": 33895,
+      "hub": "N",
+      "locid": "HYA",
+      "percent_change": 32.27,
+      "rank": 307,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "MA"
+    },
+    {
+      "cy2024_enplanements": 21633,
+      "cy2025_enplanements": 21393,
+      "hub": "N",
+      "locid": "PQI",
+      "percent_change": -1.11,
+      "rank": 348,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "ME"
+    },
+    {
+      "cy2024_enplanements": 11867,
+      "cy2025_enplanements": 19914,
+      "hub": "N",
+      "locid": "BID",
+      "percent_change": 67.81,
+      "rank": 354,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "RI"
+    },
+    {
+      "cy2024_enplanements": 12320,
+      "cy2025_enplanements": 19694,
+      "hub": "N",
+      "locid": "WST",
+      "percent_change": 59.85,
+      "rank": 356,
+      "region_office": "NE",
+      "service_level": "P",
+      "state": "RI"
+    },
+    {
+      "cy2024_enplanements": 11042,
+      "cy2025_enplanements": 9936,
+      "hub": "None",
+      "locid": "BHB",
+      "percent_change": -10.02,
+      "rank": 418,
+      "region_office": "NE",
+      "service_level": "CS",
+      "state": "ME"
+    },
+    {
+      "cy2024_enplanements": 10934,
+      "cy2025_enplanements": 9304,
+      "hub": "None",
+      "locid": "LEB",
+      "percent_change": -14.91,
+      "rank": 421,
+      "region_office": "NE",
+      "service_level": "CS",
+      "state": "NH"
+    },
+    {
+      "cy2024_enplanements": 13309,
+      "cy2025_enplanements": 6540,
+      "hub": "None",
+      "locid": "RKD",
+      "percent_change": -50.86,
+      "rank": 456,
+      "region_office": "NE",
+      "service_level": "CS",
+      "state": "ME"
+    },
+    {
+      "cy2024_enplanements": 7033,
+      "cy2025_enplanements": 5566,
+      "hub": "None",
+      "locid": "PVC",
+      "percent_change": -20.86,
+      "rank": 470,
+      "region_office": "NE",
+      "service_level": "CS",
+      "state": "MA"
+    },
+    {
+      "cy2024_enplanements": 4519,
+      "cy2025_enplanements": 4986,
+      "hub": "None",
+      "locid": "RUT",
+      "percent_change": 10.33,
+      "rank": 480,
+      "region_office": "NE",
+      "service_level": "CS",
+      "state": "VT"
+    },
+    {
+      "cy2024_enplanements": 5241,
+      "cy2025_enplanements": 4327,
+      "hub": "None",
+      "locid": "AUG",
+      "percent_change": -17.44,
+      "rank": 489,
+      "region_office": "NE",
+      "service_level": "CS",
+      "state": "ME"
+    },
+    {
+      "cy2024_enplanements": 2060,
+      "cy2025_enplanements": 3145,
+      "hub": "None",
+      "locid": "EWB",
+      "percent_change": 52.67,
+      "rank": 540,
+      "region_office": "NE",
+      "service_level": "CS",
+      "state": "MA"
+    }
+  ],
+  "cohort_count": 23,
+  "content_sha256": "e88218c048d512e3e702922768df8c82961d8b81faaa4e359c0360f20cc1f583",
+  "publication_status": "preliminary",
+  "raw_pdf": "source.pdf",
+  "retrieved_at_utc": "2026-09-27T15:15:01.701388Z",
+  "snapshot_id": "faa-834930a0ccb14b84c2d401533b091ca4af04ae2a8367494a925af98c47079179",
+  "source": {
+    "name": "FAA CY2025 preliminary commercial-service enplanements",
+    "url": "https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger/arp-cy2025-commercial-service-enplanements-preliminary.pdf"
+  },
+  "table_row_count": 515,
+  "validation_status": "staged",
+  "year": 2025
+}

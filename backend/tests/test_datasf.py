@@ -313,6 +313,55 @@ def test_2024_2025_snapshot_is_staged_without_moving_current_pointer(tmp_path) -
     assert (data_root / "snapshots" / metadata["snapshot_id"] / "manifest.json").is_file()
 
 
+def test_refresh_cli_stages_2024_2025_without_moving_current_pointer(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    data_root = tmp_path / "raw" / "datasf"
+    _run_publish(_client_for_rows([_row(index) for index in range(48)]), data_root=data_root)
+    pointer_before = (data_root / "current.json").read_bytes()
+    rows = [_row(index, year_pair=(2024, 2025)) for index in range(48)]
+    client = _client_for_rows(rows)
+    monkeypatch.setattr(datasf, "DEFAULT_DATA_ROOT", data_root)
+    monkeypatch.setattr(datasf.httpx, "AsyncClient", lambda: client)
+
+    result = datasf.main(["--refresh", "--years", "2024", "2025"])
+
+    assert result == 0
+    snapshot_id = capsys.readouterr().out.strip()
+    manifest = json.loads(
+        (data_root / "snapshots" / snapshot_id / "manifest.json").read_text()
+    )
+    assert manifest["scope"]["activity_period_start"] == "202401"
+    assert manifest["scope"]["activity_period_end"] == "202512"
+    assert manifest["validation_status"] == "staged"
+    assert (data_root / "current.json").read_bytes() == pointer_before
+
+
+@pytest.mark.parametrize(
+    "args, message",
+    [
+        (["--refresh"], "--refresh requires --years 2024 2025"),
+        (
+            ["--refresh", "--years", "2023", "2024"],
+            "--refresh requires --years 2024 2025",
+        ),
+        (
+            ["--verify-only", "--years", "2024", "2025"],
+            "--years is only valid with --refresh",
+        ),
+        (
+            ["--refresh", "--years", "2024", "2025", "--snapshot-id", "unused"],
+            "--snapshot-id and --qualification are only valid with --verify-only",
+        ),
+    ],
+)
+def test_cli_rejects_invalid_mode_arguments(args, message, capsys) -> None:
+    with pytest.raises(SystemExit, match="2"):
+        datasf.main(args)
+
+    assert message in capsys.readouterr().err
+
+
 def test_verify_only_binds_saved_snapshot_to_qualification_without_network_or_pointer_change(tmp_path, monkeypatch) -> None:
     data_root = tmp_path / "raw" / "datasf"
     _run_publish(_client_for_rows([_row(index) for index in range(48)]), data_root=data_root)
