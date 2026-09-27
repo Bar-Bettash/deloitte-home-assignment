@@ -26,13 +26,13 @@ from app.calculations.traffic import (
     TrafficResult,
     calculate_traffic,
 )
+from app.sources.bundle import BundleContext, SnapshotRef
 
 DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[2] / "data" / "raw" / "datasf"
 DEFAULT_T100_DATA_ROOT = DEFAULT_T100_ROOT
 DEFAULT_OPERATIONS_DATA_ROOT = DEFAULT_OPERATIONS_ROOT
-_PERIODS = tuple(f"{year}{month:02d}" for year in (2023, 2024) for month in range(1, 13))
+_HISTORICAL_YEARS = (2023, 2024)
 _GEOGRAPHIES = ("Domestic", "International")
-_EXPECTED_CELLS = {(period, geography) for period in _PERIODS for geography in _GEOGRAPHIES}
 
 
 class SFOTrendError(RuntimeError):
@@ -119,12 +119,23 @@ class SFOPressureBundle:
     )
 
 
-def calculate_sfo_enplaned_trend(data_root: Path = DEFAULT_DATA_ROOT) -> SFOTrendResult:
-    """Return the combined 2023/24 SFO enplaned trend from the accepted snapshot."""
-    manifest, parquet_path = _load_accepted_snapshot(Path(data_root))
-    source = _source_from_manifest(manifest)
-    cells = _query_enplaned_cells(parquet_path)
-    if set(cells) != _EXPECTED_CELLS:
+def calculate_sfo_enplaned_trend(
+    data_root: Path = DEFAULT_DATA_ROOT,
+    *,
+    bundle: BundleContext | None = None,
+) -> SFOTrendResult:
+    """Return the combined SFO enplaned trend for the selected two-year period."""
+    years = _selected_years(bundle)
+    periods = tuple(f"{year}{month:02d}" for year in years for month in range(1, 13))
+    expected_cells = {(period, geography) for period in periods for geography in _GEOGRAPHIES}
+    manifest, parquet_path = _load_snapshot(Path(data_root), bundle)
+    if bundle is None:
+        source = _source_from_manifest(manifest)
+        cells = _query_enplaned_cells(parquet_path)
+    else:
+        source = _source_from_manifest(manifest, years)
+        cells = _query_enplaned_cells(parquet_path, years)
+    if set(cells) != expected_cells:
         raise SFOTrendError("accepted DataSF snapshot must contain all 48 Enplaned month/geography cells")
 
     series = tuple(
@@ -132,34 +143,39 @@ def calculate_sfo_enplaned_trend(data_root: Path = DEFAULT_DATA_ROOT) -> SFOTren
             period=period,
             passengers=sum(cells[(period, geography)] for geography in _GEOGRAPHIES),
         )
-        for period in _PERIODS
+        for period in periods
     )
     derived_annual_totals = {
         year: sum(point.passengers for point in series if point.period.startswith(str(year)))
-        for year in (2023, 2024)
+        for year in years
     }
-    source_annual_totals = _query_annual_source_totals(parquet_path)
+    source_annual_totals = (
+        _query_annual_source_totals(parquet_path)
+        if bundle is None
+        else _query_annual_source_totals(parquet_path, years)
+    )
     if source_annual_totals != derived_annual_totals:
         raise SFOTrendError("combined monthly series does not reconcile to annual source totals")
 
     annual_totals = tuple(
         AnnualPassengerTotal(year=year, passengers=source_annual_totals[year])
-        for year in (2023, 2024)
+        for year in years
     )
-    baseline = source_annual_totals[2023]
-    comparison = source_annual_totals[2024]
+    baseline_year, comparison_year = years
+    baseline = source_annual_totals[baseline_year]
+    comparison = source_annual_totals[comparison_year]
     if baseline == 0:
         growth = PassengerGrowth(
-            baseline_year=2023,
-            comparison_year=2024,
+            baseline_year=baseline_year,
+            comparison_year=comparison_year,
             percent=None,
             status="unavailable",
-            reason="2023 enplaned passenger total is zero; growth is undefined",
+            reason=f"{baseline_year} enplaned passenger total is zero; growth is undefined",
         )
     else:
         growth = PassengerGrowth(
-            baseline_year=2023,
-            comparison_year=2024,
+            baseline_year=baseline_year,
+            comparison_year=comparison_year,
             percent=(comparison - baseline) / baseline * 100,
             status="ok",
             reason=None,
@@ -173,30 +189,96 @@ def calculate_sfo_enplaned_trend(data_root: Path = DEFAULT_DATA_ROOT) -> SFOTren
     )
 
 
+def _selected_years(bundle: BundleContext | None) -> tuple[int, int]:
+    return _HISTORICAL_YEARS if bundle is None else (bundle.baseline_year, bundle.comparison_year)
+
+
+def _load_snapshot(
+    data_root: Path, bundle: BundleContext | None
+) -> tuple[dict[str, object], Path]:
+    return _load_accepted_snapshot(data_root) if bundle is None else _load_bundled_snapshot(bundle)
+
+
+def _load_bundled_snapshot(bundle: BundleContext) -> tuple[dict[str, object], Path]:
+    ref = bundle.sources.get("datasf")
+    years = _selected_years(bundle)
+    if ref is None or ref.years != years:
+        raise SFOTrendError("bundle DataSF period does not match the selected period")
+    if _sha256(ref.manifest_path, "bundle DataSF manifest") != ref.manifest_sha256:
+        raise SFOTrendError("bundle DataSF manifest checksum does not match its reference")
+    manifest = _read_json(ref.manifest_path, "bundle DataSF manifest")
+    _validate_bundled_manifest(manifest, ref, years)
+    if _sha256(ref.data_path, "bundle DataSF Parquet file") != ref.content_sha256:
+        raise SFOTrendError("bundle DataSF snapshot checksum does not match its reference")
+    return manifest, ref.data_path
+
+
+def _validate_bundled_manifest(
+    manifest: dict[str, object], ref: SnapshotRef, years: tuple[int, int]
+) -> None:
+    parquet_file = manifest.get("parquet_file")
+    expected_path = (
+        ref.manifest_path.parent / parquet_file
+        if isinstance(parquet_file, str) and Path(parquet_file).name == parquet_file
+        else None
+    )
+    scope = manifest.get("scope")
+    expected_start, expected_end = f"{years[0]}01", f"{years[1]}12"
+    if (
+        manifest.get("snapshot_id") != ref.snapshot_id
+        or manifest.get("validation_status") not in {"accepted", "staged"}
+        or manifest.get("content_sha256") != ref.content_sha256
+        or expected_path is None
+        or expected_path.resolve() != ref.data_path.resolve()
+        or not isinstance(scope, dict)
+        or scope.get("activity_period_start") != expected_start
+        or scope.get("activity_period_end") != expected_end
+    ):
+        raise SFOTrendError("bundle DataSF snapshot metadata does not match its reference")
+
+
+def _sha256(path: Path, label: str) -> str:
+    try:
+        with path.open("rb") as handle:
+            return hashlib.file_digest(handle, "sha256").hexdigest()
+    except OSError as exc:
+        raise SFOTrendError(f"{label} is unavailable") from exc
+
+
 def calculate_sfo_pressure(
     datasf_root: Path = DEFAULT_DATA_ROOT,
     t100_root: Path = DEFAULT_T100_DATA_ROOT,
     operations_root: Path = DEFAULT_OPERATIONS_DATA_ROOT,
+    *,
+    bundle: BundleContext | None = None,
 ) -> SFOPressureBundle:
     """Combine one accepted snapshot per source while retaining independent results.
 
     DataSF enplanements remain a separately scoped trend. The growth gap and
     occupancy are calculated only from SFO's matching T-100 origin population.
     """
+    enplaned_call = lambda: calculate_sfo_enplaned_trend(Path(datasf_root))
+    traffic_call = lambda: calculate_traffic("SFO", Path(t100_root))
+    operations_call = lambda: calculate_operations("SFO", Path(operations_root))
+    if bundle is not None:
+        enplaned_call = lambda: calculate_sfo_enplaned_trend(Path(datasf_root), bundle=bundle)
+        traffic_call = lambda: calculate_traffic("SFO", Path(t100_root), bundle=bundle)
+        operations_call = lambda: calculate_operations("SFO", Path(operations_root), bundle=bundle)
     enplaned = _component(
-        lambda: calculate_sfo_enplaned_trend(Path(datasf_root)),
+        enplaned_call,
         SFOTrendError,
         "DataSF accepted SFO snapshot is unavailable",
     )
     traffic = _component(
-        lambda: calculate_traffic("SFO", Path(t100_root)),
+        traffic_call,
         TrafficCalculationError,
         "accepted T-100 SFO snapshot is unavailable",
     )
+    operations_year = 2024 if bundle is None else bundle.comparison_year
     operations = _component(
-        lambda: calculate_operations("SFO", Path(operations_root)),
+        operations_call,
         OperationsCalculationError,
-        "accepted CY2024 SFO on-time snapshot is unavailable",
+        f"accepted CY{operations_year} SFO on-time snapshot is unavailable",
     )
 
     gap = _growth_gap(traffic.result) if traffic.result is not None else _unavailable_gap(
@@ -234,23 +316,31 @@ def _component(call, error_type, unavailable_reason):
 
 
 def _growth_gap(traffic: TrafficResult) -> PressureMetric:
-    """Compute 100*((P24/P23-1)-(S24/S23-1)) from matched T-100 origin rows."""
+    """Compare passenger and seat growth from the same T-100 origin periods."""
     by_year = {item.year: item for item in traffic.annual}
-    baseline = by_year.get(2023)
-    comparison = by_year.get(2024)
+    years = tuple(sorted(by_year))
+    if len(years) != 2:
+        return _unavailable_gap("T-100 growth gap requires exactly two annual periods")
+    baseline_year, comparison_year = years
+    baseline = by_year.get(baseline_year)
+    comparison = by_year.get(comparison_year)
     if baseline is None or comparison is None:
-        return _unavailable_gap("T-100 2023/2024 annual periods are not both available")
+        return _unavailable_gap("T-100 selected annual periods are not both available")
     if not baseline.coverage.complete or not comparison.coverage.complete:
-        return _unavailable_gap("T-100 growth gap requires complete 2023 and 2024 periods")
+        return _unavailable_gap(
+            f"T-100 growth gap requires complete {baseline_year} and {comparison_year} periods"
+        )
     measures = (baseline.passengers, comparison.passengers, baseline.seats, comparison.seats)
     if any(item.status != "ok" or item.value is None for item in measures):
         return _unavailable_gap("T-100 passengers and seats must be valid for both years")
-    p23, p24 = baseline.passengers.value, comparison.passengers.value
-    s23, s24 = baseline.seats.value, comparison.seats.value
-    if p23 <= 0 or s23 <= 0:
-        return _unavailable_gap("T-100 2023 passenger and seat baselines must be positive")
-    passenger_growth = 100.0 * (p24 / p23 - 1.0)
-    seat_growth = 100.0 * (s24 / s23 - 1.0)
+    baseline_passengers, comparison_passengers = baseline.passengers.value, comparison.passengers.value
+    baseline_seats, comparison_seats = baseline.seats.value, comparison.seats.value
+    if baseline_passengers <= 0 or baseline_seats <= 0:
+        return _unavailable_gap(
+            f"T-100 {baseline_year} passenger and seat baselines must be positive"
+        )
+    passenger_growth = 100.0 * (comparison_passengers / baseline_passengers - 1.0)
+    seat_growth = 100.0 * (comparison_seats / baseline_seats - 1.0)
     return PressureMetric(passenger_growth - seat_growth, "percentage_points", "ok", None)
 
 
@@ -295,7 +385,9 @@ def _load_accepted_snapshot(data_root: Path) -> tuple[dict[str, object], Path]:
     return manifest, parquet_path
 
 
-def _source_from_manifest(manifest: dict[str, object]) -> SnapshotSource:
+def _source_from_manifest(
+    manifest: dict[str, object], years: tuple[int, int] = _HISTORICAL_YEARS
+) -> SnapshotSource:
     source = manifest.get("source")
     if not isinstance(source, dict):
         raise SFOTrendError("DataSF snapshot manifest has invalid source metadata")
@@ -317,17 +409,22 @@ def _source_from_manifest(manifest: dict[str, object]) -> SnapshotSource:
         dataset_id=dataset_id,
         name=name,
         url=url,
-        period="2023-2024",
+        period=f"{years[0]}-{years[1]}",
         retrieved_at=retrieved_at.astimezone(timezone.utc),
     )
 
 
-def _query_enplaned_cells(parquet_path: Path) -> dict[tuple[str, str], int]:
+def _query_enplaned_cells(
+    parquet_path: Path, years: tuple[int, int] = _HISTORICAL_YEARS
+) -> dict[tuple[str, str], int]:
     rows = _query(
         parquet_path,
         "SELECT activity_period, geo_summary, sum(passenger_count) "
         "FROM read_parquet(?) WHERE activity_type_code = 'Enplaned' "
+        "AND geo_summary IN ('Domestic', 'International') "
+        "AND substr(activity_period, 1, 4) IN (?, ?) "
         "GROUP BY activity_period, geo_summary ORDER BY activity_period, geo_summary",
+        (str(years[0]), str(years[1])),
     )
     cells: dict[tuple[str, str], int] = {}
     for period, geography, passengers in rows:
@@ -339,25 +436,31 @@ def _query_enplaned_cells(parquet_path: Path) -> dict[tuple[str, str], int]:
     return cells
 
 
-def _query_annual_source_totals(parquet_path: Path) -> dict[int, int]:
+def _query_annual_source_totals(
+    parquet_path: Path, years: tuple[int, int] = _HISTORICAL_YEARS
+) -> dict[int, int]:
     rows = _query(
         parquet_path,
         "SELECT CAST(substr(activity_period, 1, 4) AS INTEGER), sum(passenger_count) "
         "FROM read_parquet(?) WHERE activity_type_code = 'Enplaned' "
-        "AND geo_summary IN ('Domestic', 'International') GROUP BY 1 ORDER BY 1",
+        "AND geo_summary IN ('Domestic', 'International') "
+        "AND substr(activity_period, 1, 4) IN (?, ?) GROUP BY 1 ORDER BY 1",
+        (str(years[0]), str(years[1])),
     )
     totals = {year: passengers for year, passengers in rows}
-    if set(totals) != {2023, 2024} or any(
+    if set(totals) != set(years) or any(
         not isinstance(passengers, int) or passengers < 0 for passengers in totals.values()
     ):
         raise SFOTrendError("accepted DataSF snapshot has invalid annual source totals")
     return totals
 
 
-def _query(parquet_path: Path, sql: str) -> list[tuple[object, ...]]:
+def _query(
+    parquet_path: Path, sql: str, parameters: tuple[object, ...] = ()
+) -> list[tuple[object, ...]]:
     connection = duckdb.connect()
     try:
-        return connection.execute(sql, [str(parquet_path)]).fetchall()
+        return connection.execute(sql, [str(parquet_path), *parameters]).fetchall()
     except duckdb.Error as exc:
         raise SFOTrendError("accepted DataSF snapshot could not be read") from exc
     finally:

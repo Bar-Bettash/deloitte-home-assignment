@@ -12,6 +12,7 @@ from app.calculations.operations import (
     OperationsResult,
     calculate_operations,
 )
+from app.sources.bundle import BundleContext
 
 INDICATORS = (
     "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes",
@@ -50,21 +51,42 @@ class ComparisonResult:
 
 
 def calculate_comparison(
-    airport_a: str, airport_b: str, data_root: Path = DEFAULT_DATA_ROOT, *, year: int = 2024
+    airport_a: str,
+    airport_b: str,
+    data_root: Path = DEFAULT_DATA_ROOT,
+    *,
+    year: int | None = None,
+    bundle: BundleContext | None = None,
 ) -> ComparisonResult:
     """Load each origin's accepted operational result and compare its raw values."""
+    selected_year = _selected_year(year, bundle)
+    if bundle is not None:
+        return compare_operations(
+            calculate_operations(airport_a, data_root, year=selected_year, bundle=bundle),
+            calculate_operations(airport_b, data_root, year=selected_year, bundle=bundle),
+        )
     return compare_operations(
-        calculate_operations(airport_a, data_root, year=year),
-        calculate_operations(airport_b, data_root, year=year),
+        calculate_operations(airport_a, data_root, year=selected_year),
+        calculate_operations(airport_b, data_root, year=selected_year),
     )
+
+
+def _selected_year(year: int | None, bundle: BundleContext | None) -> int:
+    selected = bundle.comparison_year if year is None and bundle is not None else (2024 if year is None else year)
+    if type(selected) is not int:
+        raise ValueError("comparison year must be an integer")
+    expected = 2024 if bundle is None else bundle.comparison_year
+    if selected != expected:
+        raise ValueError("comparison year does not match the selected source context")
+    return selected
 
 
 def compare_operations(a: OperationsResult, b: OperationsResult) -> ComparisonResult:
     """Compare raw values, retaining source results and rounding only display strings."""
     if a.airport == b.airport:
         raise ValueError("comparison requires two distinct airports")
-    if a.year != b.year or a.year != 2024 or a.source.snapshot_id != b.source.snapshot_id:
-        raise ValueError("comparison requires the same accepted CY2024 snapshot")
+    if a.year != b.year or a.source != b.source or a.source.period != str(a.year):
+        raise ValueError("comparison requires the same exact snapshot and period")
     if a.population != b.population:
         raise ValueError("comparison requires the same population definition")
     indicators = tuple(_compare_metric(key, a, b) for key in INDICATORS)

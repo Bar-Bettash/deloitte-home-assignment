@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import duckdb
@@ -14,6 +15,7 @@ from app.calculations.traffic import (
     calculate_traffic_batch,
 )
 from app.contracts import NEW_ENGLAND
+from app.sources.bundle import BundleContext, SnapshotRef, load_bundle
 
 
 def test_calculates_annual_levels_occupancy_and_growth_from_performed_departures(
@@ -126,18 +128,19 @@ def _complete_rows(
     scheduled: float = 999,
     performed_2023: float = 10,
     performed_2024: float = 12,
+    years: tuple[int, int] = (2023, 2024),
 ) -> list[tuple[object, ...]]:
     rows = []
-    for year in (2023, 2024):
+    for year in years:
         for month in range(1, 13):
             rows.append(
                 (
                     year,
                     month,
-                    passengers_2023 if year == 2023 else passengers_2024,
-                    seats_2023 if year == 2023 else seats_2024,
+                    passengers_2023 if year == years[0] else passengers_2024,
+                    seats_2023 if year == years[0] else seats_2024,
                     scheduled,
-                    performed_2023 if year == 2023 else performed_2024,
+                    performed_2023 if year == years[0] else performed_2024,
                     1_000.0,
                 )
             )
@@ -145,7 +148,11 @@ def _complete_rows(
 
 
 def _publish_snapshot(
-    data_root: Path, rows: list[tuple[object, ...]], *, airport_rows=None,
+    data_root: Path,
+    rows: list[tuple[object, ...]],
+    *,
+    airport_rows=None,
+    write_pointer: bool = True,
 ) -> None:
     airport_rows = airport_rows if airport_rows is not None else {"BOS": rows}
     snapshot_id = "t100-test-snapshot"
@@ -173,15 +180,158 @@ def _publish_snapshot(
         "source": {"name": "BTS T-100 Segment All Carriers", "table": "FMG", "url": "https://example.test"},
         "imported_at_utc": "2026-09-26T21:03:39Z",
         "population": {"origins": list(airport_rows)},
+        "eligible_rows": {
+            str(year): sum(1 for records in airport_rows.values() for row in records if row[0] == year)
+            for year in sorted({row[0] for records in airport_rows.values() for row in records})
+        },
         "parquet_file": "data.parquet",
         "parquet_sha256": hashlib.sha256(parquet_path.read_bytes()).hexdigest(),
         "validation_status": "accepted",
     }
     (snapshot_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    (data_root / "current.json").write_text(
-        json.dumps({"snapshot_id": snapshot_id, "manifest": f"snapshots/{snapshot_id}/manifest.json"}),
-        encoding="utf-8",
+    if write_pointer:
+        (data_root / "current.json").write_text(
+            json.dumps(
+                {"snapshot_id": snapshot_id, "manifest": f"snapshots/{snapshot_id}/manifest.json"}
+            ),
+            encoding="utf-8",
+        )
+
+
+def _bundle_for_snapshot(
+    data_root: Path,
+    *,
+    baseline_year: int = 2024,
+    comparison_year: int = 2025,
+) -> BundleContext:
+    snapshot_dir = data_root / "snapshots/t100-test-snapshot"
+    manifest_path = snapshot_dir / "manifest.json"
+    data_path = snapshot_dir / "data.parquet"
+    ref = SnapshotRef(
+        source="t100",
+        snapshot_id="t100-test-snapshot",
+        manifest_sha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        content_sha256=hashlib.sha256(data_path.read_bytes()).hexdigest(),
+        manifest_path=manifest_path,
+        data_path=data_path,
+        years=(baseline_year, comparison_year),
+        vintage_id="test-vintage",
+        publication_status="staged-candidate",
     )
+    return BundleContext(
+        bundle_id="test-bundle",
+        manifest_sha256="0" * 64,
+        baseline_year=baseline_year,
+        comparison_year=comparison_year,
+        cohort=("BOS",),
+        sources={"t100": ref},
+        evidence_path=data_root / "evidence.json",
+        evidence_sha256="0" * 64,
+    )
+
+
+def test_bundle_uses_exact_artifacts_period_and_source_population_without_legacy_pointer(
+    tmp_path: Path,
+) -> None:
+    rows = _complete_rows(years=(2024, 2025))
+    _publish_snapshot(tmp_path, [], airport_rows={"BOS": rows, "EWB": rows}, write_pointer=False)
+    bundle = _bundle_for_snapshot(tmp_path)
+    legacy_root = tmp_path / "legacy"
+    legacy_root.mkdir()
+    (legacy_root / "current.json").write_text("{corrupt", encoding="utf-8")
+
+    result = calculate_traffic("EWB", legacy_root, bundle=bundle)
+
+    assert [annual.year for annual in result.annual] == [2024, 2025]
+    assert (result.growth.baseline_year, result.growth.comparison_year) == (2024, 2025)
+    assert result.source.period == "2024-2025"
+    assert result.growth.percent == 20.0
+
+
+@pytest.mark.parametrize("artifact", ["manifest.json", "data.parquet"])
+def test_bundle_rejects_corrupt_referenced_artifact(tmp_path: Path, artifact: str) -> None:
+    _publish_snapshot(
+        tmp_path,
+        _complete_rows(years=(2024, 2025)),
+        write_pointer=False,
+    )
+    bundle = _bundle_for_snapshot(tmp_path)
+    target = tmp_path / "snapshots/t100-test-snapshot" / artifact
+    with target.open("ab") as handle:
+        handle.write(b"changed")
+
+    with pytest.raises(TrafficCalculationError, match="checksum"):
+        calculate_traffic("BOS", bundle=bundle)
+
+
+def test_bundle_rejects_t100_period_outside_bundle_pair(tmp_path: Path) -> None:
+    _publish_snapshot(tmp_path, _complete_rows(years=(2024, 2025)), write_pointer=False)
+    bundle = _bundle_for_snapshot(tmp_path)
+    mismatched = replace(bundle.sources["t100"], years=(2023, 2024))
+    bundle = replace(bundle, sources={"t100": mismatched})
+
+    with pytest.raises(TrafficCalculationError, match="period"):
+        calculate_traffic_batch(["BOS"], bundle=bundle)
+
+
+def test_bundle_batch_preserves_one_query_and_one_verification_pass(tmp_path: Path, monkeypatch) -> None:
+    from app.calculations import traffic
+
+    rows = _complete_rows(years=(2024, 2025))
+    _publish_snapshot(tmp_path, [], airport_rows={"BOS": rows, "EWB": rows}, write_pointer=False)
+    bundle = _bundle_for_snapshot(tmp_path)
+    calls = {"hash": 0, "query": 0}
+    digest, query = traffic.hashlib.file_digest, traffic._query_batch_rows
+
+    def count_digest(*args, **kwargs):
+        calls["hash"] += 1
+        return digest(*args, **kwargs)
+
+    def count_query(*args, **kwargs):
+        calls["query"] += 1
+        return query(*args, **kwargs)
+
+    monkeypatch.setattr(traffic.hashlib, "file_digest", count_digest)
+    monkeypatch.setattr(traffic, "_query_batch_rows", count_query)
+    result = calculate_traffic_batch(["BOS", "EWB"], bundle=bundle)
+
+    assert list(result) == ["BOS", "EWB"]
+    assert calls == {"hash": 2, "query": 1}
+
+
+def test_packaged_recent_candidate_counts_and_historical_parity() -> None:
+    data_root = DEFAULT_DATA_ROOT.parents[1]
+    if not (data_root / "bundles/annual-2025-r1/manifest.json").is_file():
+        pytest.skip("packaged recent bundle candidate is not installed")
+    bundle = load_bundle("annual-2025-r1", data_root=data_root)
+
+    recent = calculate_traffic_batch(["ANC", "BOS", "EWB", "PVC"], bundle=bundle)
+
+    assert _values(recent["ANC"].annual[1]) == (
+        2_636_007,
+        3_569_795,
+        36_040,
+        pytest.approx(73.841971, abs=1e-6),
+    )
+    assert _values(recent["BOS"].annual[1]) == (
+        21_128_285,
+        25_873_121,
+        188_313,
+        pytest.approx(81.661138, abs=1e-6),
+    )
+    assert _values(recent["EWB"].annual[1]) == (
+        3_017,
+        7_920,
+        880,
+        pytest.approx(38.093434, abs=1e-6),
+    )
+    assert recent["PVC"].annual[0].coverage.missing_months == (12,)
+    assert recent["PVC"].annual[1].coverage.missing_months == (1, 2, 3, 4, 12)
+
+    historical = calculate_traffic_batch(["ANC", "BOS", "PVC"])
+    assert _values(historical["ANC"].annual[1])[:3] == (2_660_772, 3_568_481, 40_017)
+    assert _values(historical["BOS"].annual[1])[:3] == (21_294_487, 25_618_825, 187_549)
+    assert historical["PVC"].annual[1].coverage.missing_months == (12,)
 
 
 def test_batch_equals_single_for_22_airports_with_one_checksum_and_query(tmp_path, monkeypatch):

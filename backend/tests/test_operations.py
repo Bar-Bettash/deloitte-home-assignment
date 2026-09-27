@@ -1,12 +1,15 @@
 import hashlib
 import json
+from pathlib import Path
 
 import duckdb
 import pytest
 from app.calculations.operations import OperationsCalculationError, calculate_operations
+from app.sources.bundle import BundleContext, SnapshotRef, load_bundle
 
 
-def publish(root, rows, *, accepted=True):
+def publish(root, rows, *, accepted=True, year=2024, origins=None):
+    origins = origins or ["LAX", "SNA", "SFO"]
     folder = root / "snapshots" / "ontime-test"
     folder.mkdir(parents=True)
     parquet = folder / "data.parquet"
@@ -26,7 +29,7 @@ def publish(root, rows, *, accepted=True):
         "parquet_sha256": hashlib.sha256(parquet.read_bytes()).hexdigest(),
         "source": {"table": "FGJ", "name": "BTS reporting carrier", "index_url": "https://example.test"},
         "imported_at_utc": "2026-09-27T00:00:00Z",
-        "request": {"year": 2024, "origin_airports": ["LAX", "SNA", "SFO"]},
+        "request": {"year": year, "origin_airports": origins},
         "coverage": {f"LAX-{m:02d}": 1 for m in range(1, 13)},
     }
     (folder / "manifest.json").write_text(json.dumps(manifest))
@@ -34,6 +37,34 @@ def publish(root, rows, *, accepted=True):
         "snapshot_id": "ontime-test", "manifest": "snapshots/ontime-test/manifest.json",
     }))
     return parquet
+
+
+def bundle_for(root, parquet, *, year=2025):
+    manifest_path = parquet.parent / "manifest.json"
+    manifest_bytes = manifest_path.read_bytes()
+    evidence = root / "evidence.json"
+    evidence.write_text("{}")
+    ref = SnapshotRef(
+        source="ontime",
+        snapshot_id="ontime-test",
+        manifest_sha256=hashlib.sha256(manifest_bytes).hexdigest(),
+        content_sha256=hashlib.sha256(parquet.read_bytes()).hexdigest(),
+        manifest_path=manifest_path,
+        data_path=parquet,
+        years=(year,),
+        vintage_id=f"FGJ-{year}-test",
+        publication_status="staged-candidate",
+    )
+    return BundleContext(
+        bundle_id=f"annual-{year}-test",
+        manifest_sha256="0" * 64,
+        baseline_year=year - 1,
+        comparison_year=year,
+        cohort=("LAX",),
+        sources={"ontime": ref},
+        evidence_path=evidence,
+        evidence_sha256=hashlib.sha256(evidence.read_bytes()).hexdigest(),
+    )
 
 
 def row(month=1, *, origin="LAX", year=2024, carrier="AA", cancel=0, divert=0,
@@ -136,3 +167,66 @@ def test_unaccepted_or_modified_snapshot_rejected(tmp_path):
 def test_unsupported_scope_rejected(tmp_path, airport, year):
     with pytest.raises(OperationsCalculationError):
         calculate_operations(airport, tmp_path, year=year)
+
+
+def test_bundle_uses_selected_year_and_exact_referenced_snapshot(tmp_path):
+    parquet = publish(tmp_path, complete(year=2025), year=2025, origins=["LAX"])
+    bundle = bundle_for(tmp_path, parquet)
+
+    result = calculate_operations("LAX", tmp_path / "missing-legacy", bundle=bundle)
+
+    assert result.year == 2025
+    assert result.source.period == "2025"
+    assert result.source.snapshot_id == bundle.sources["ontime"].snapshot_id
+    assert result.scheduled_count == 12
+
+
+@pytest.mark.parametrize("year", [2024, 2026, True])
+def test_bundle_rejects_year_outside_selected_comparison(tmp_path, year):
+    parquet = publish(tmp_path, complete(year=2025), year=2025, origins=["LAX"])
+    bundle = bundle_for(tmp_path, parquet)
+
+    with pytest.raises(OperationsCalculationError, match="year"):
+        calculate_operations("LAX", tmp_path, year=year, bundle=bundle)
+
+
+def test_bundle_never_falls_back_to_missing_or_corrupt_legacy_pointer(tmp_path):
+    parquet = publish(tmp_path, complete(year=2025), year=2025, origins=["LAX"])
+    bundle = bundle_for(tmp_path, parquet)
+    (tmp_path / "current.json").write_text("not json")
+
+    assert calculate_operations("LAX", tmp_path, bundle=bundle).year == 2025
+    (tmp_path / "current.json").unlink()
+    assert calculate_operations("LAX", tmp_path, bundle=bundle).scheduled_count == 12
+
+
+def test_bundle_rejects_corrupted_referenced_data(tmp_path):
+    parquet = publish(tmp_path, complete(year=2025), year=2025, origins=["LAX"])
+    bundle = bundle_for(tmp_path, parquet)
+    with parquet.open("ab") as handle:
+        handle.write(b"changed")
+
+    with pytest.raises(OperationsCalculationError, match="bundle on-time"):
+        calculate_operations("LAX", bundle=bundle)
+
+
+def test_historical_bundle_matches_legacy_result(tmp_path):
+    parquet = publish(tmp_path, complete() + [row(delay=24, taxi=22, carrier="UA")])
+    expected = calculate_operations("LAX", tmp_path)
+    historical = bundle_for(tmp_path, parquet, year=2024)
+
+    assert calculate_operations("LAX", tmp_path, bundle=historical) == expected
+
+
+def test_real_packaged_2025_candidate_uses_bundle_ref() -> None:
+    data_root = Path(__file__).resolve().parents[1] / "data"
+    bundle = load_bundle("annual-2025-r1", data_root=data_root)
+
+    result = calculate_operations("ANC", bundle=bundle)
+
+    assert result.year == 2025
+    assert result.source.snapshot_id == bundle.sources["ontime"].snapshot_id
+    assert result.observed_months == tuple(range(1, 13))
+    assert result.missing_months == ()
+    assert result.scheduled_count > 0
+    assert result.departure_delay_minutes.denominator <= result.departure_delay_minutes.eligible_count

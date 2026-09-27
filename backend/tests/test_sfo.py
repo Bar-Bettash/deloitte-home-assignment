@@ -14,6 +14,7 @@ from app.calculations.sfo import (
     SFOTrendResult,
     calculate_sfo_enplaned_trend,
 )
+from app.sources.bundle import BundleContext, SnapshotRef, load_bundle
 
 
 def test_combines_domestic_and_international_into_one_24_month_series(tmp_path: Path) -> None:
@@ -173,15 +174,117 @@ def test_growth_gap_is_unavailable_for_incomplete_or_zero_baselines() -> None:
     assert sfo_module._growth_gap(zero_seat_baseline).status == "unavailable"
 
 
+def test_bundle_uses_exact_recent_datasf_ref_without_legacy_pointer(tmp_path: Path) -> None:
+    rows = _complete_rows(years=(2024, 2025))
+    parquet = _publish_snapshot(tmp_path, rows, write_pointer=False)
+    bundle = _bundle_for_datasf(tmp_path, parquet)
+    (tmp_path / "current.json").write_text("corrupt")
+
+    result = calculate_sfo_enplaned_trend(tmp_path, bundle=bundle)
+
+    assert [(total.year, total.passengers) for total in result.annual_totals] == [
+        (2024, 1_800),
+        (2025, 2_160),
+    ]
+    assert len(result.series) == 24
+    assert result.source.period == "2024-2025"
+    assert (result.growth.baseline_year, result.growth.comparison_year) == (2024, 2025)
+
+
+def test_bundle_requires_all_48_selected_enplaned_cells(tmp_path: Path) -> None:
+    rows = _complete_rows(years=(2024, 2025))
+    rows.remove(("202512", "International", "Enplaned", 60))
+    parquet = _publish_snapshot(tmp_path, rows, write_pointer=False)
+    bundle = _bundle_for_datasf(tmp_path, parquet)
+
+    with pytest.raises(SFOTrendError, match="48.*month/geography"):
+        calculate_sfo_enplaned_trend(bundle=bundle)
+
+
+@pytest.mark.parametrize("artifact", ["manifest.json", "data.parquet"])
+def test_bundle_rejects_corrupt_datasf_ref(tmp_path: Path, artifact: str) -> None:
+    parquet = _publish_snapshot(
+        tmp_path, _complete_rows(years=(2024, 2025)), write_pointer=False
+    )
+    bundle = _bundle_for_datasf(tmp_path, parquet)
+    with (parquet.parent / artifact).open("ab") as handle:
+        handle.write(b"changed")
+
+    with pytest.raises(SFOTrendError, match="checksum"):
+        calculate_sfo_enplaned_trend(bundle=bundle)
+
+
+def test_historical_bundle_matches_legacy_enplaned_result(tmp_path: Path) -> None:
+    parquet = _publish_snapshot(tmp_path, _complete_rows())
+    expected = calculate_sfo_enplaned_trend(tmp_path)
+    bundle = _bundle_for_datasf(tmp_path, parquet, years=(2023, 2024))
+
+    assert calculate_sfo_enplaned_trend(tmp_path, bundle=bundle) == expected
+
+
+def test_pressure_forwards_supplied_bundle_to_all_components(monkeypatch, tmp_path: Path) -> None:
+    parquet = _publish_snapshot(
+        tmp_path, _complete_rows(years=(2024, 2025)), write_pointer=False
+    )
+    bundle = _bundle_for_datasf(tmp_path, parquet)
+    seen = []
+    trend = SimpleNamespace(source=SimpleNamespace(
+        snapshot_id="d", name="DataSF", url="https://example.test/d", period="2024-2025"
+    ))
+    traffic = _traffic_fixture(years=(2024, 2025))
+    operations = SimpleNamespace(source=SimpleNamespace(
+        snapshot_id="o", name="On-time", url="https://example.test/o", period="2025"
+    ))
+
+    def capture(result):
+        def call(*_args, **kwargs):
+            seen.append(kwargs["bundle"])
+            return result
+        return call
+
+    monkeypatch.setattr(sfo, "calculate_sfo_enplaned_trend", capture(trend))
+    monkeypatch.setattr(sfo, "calculate_traffic", capture(traffic))
+    monkeypatch.setattr(sfo, "calculate_operations", capture(operations))
+
+    result = sfo.calculate_sfo_pressure(bundle=bundle)
+
+    assert result.status == "ok"
+    assert seen == [bundle, bundle, bundle]
+
+
+def test_real_packaged_recent_pressure_controls_and_separate_populations() -> None:
+    data_root = Path(__file__).resolve().parents[1] / "data"
+    bundle = load_bundle("annual-2025-r1", data_root=data_root)
+
+    result = sfo.calculate_sfo_pressure(bundle=bundle)
+
+    assert result.status == "ok"
+    assert [(item.year, item.passengers) for item in result.enplaned_trend.result.annual_totals] == [
+        (2024, 26_054_586),
+        (2025, 27_250_806),
+    ]
+    traffic = result.t100_traffic.result
+    assert [(item.year, item.passengers.value, item.seats.value) for item in traffic.annual] == [
+        (2024, 25_288_609, 30_369_317),
+        (2025, 26_477_602, 32_169_113),
+    ]
+    assert result.growth_gap_pp.value == pytest.approx(-1.2246691594)
+    assert result.enplaned_trend.result.source.dataset_id == "rkru-6vcg"
+    assert traffic.source.table == "FMG"
+    assert "reporting-carrier scheduled departures" in result.operations.result.population
+    assert [item.period for item in result.lineage] == ["2024-2025", "2024-2025", "2025"]
+
+
 def _complete_rows(
     *,
     baseline_domestic: int = 100,
     baseline_international: int = 50,
+    years: tuple[int, int] = (2023, 2024),
 ) -> list[tuple[str, str, str, int]]:
     rows: list[tuple[str, str, str, int]] = []
-    for year in (2023, 2024):
-        domestic = baseline_domestic if year == 2023 else 120
-        international = baseline_international if year == 2023 else 60
+    for year in years:
+        domestic = baseline_domestic if year == years[0] else 120
+        international = baseline_international if year == years[0] else 60
         for month in range(1, 13):
             period = f"{year}{month:02d}"
             rows.append((period, "Domestic", "Enplaned", domestic))
@@ -190,7 +293,8 @@ def _complete_rows(
 
 
 def _traffic_fixture(
-    *, complete_2024: bool = True, passengers_2023: int = 100, seats_2023: int = 200
+    *, complete_2024: bool = True, passengers_2023: int = 100, seats_2023: int = 200,
+    years: tuple[int, int] = (2023, 2024),
 ):
     from app.calculations.traffic import (
         AnnualCoverage,
@@ -214,11 +318,11 @@ def _traffic_fixture(
         )
 
     source = T100SnapshotSource(
-        "t100-accepted-1", "FMG", "BTS T-100 All Carriers", "https://transtats.bts.gov/t100", "2023-2024",
+        "t100-accepted-1", "FMG", "BTS T-100 All Carriers", "https://transtats.bts.gov/t100", f"{years[0]}-{years[1]}",
         datetime(2026, 9, 26, tzinfo=timezone.utc),
     )
-    base = annual(2023, passengers_2023, seats_2023)
-    current = annual(2024, 110, 210, complete_2024)
+    base = annual(years[0], passengers_2023, seats_2023)
+    current = annual(years[1], 110, 210, complete_2024)
     return TrafficResult("SFO", source, (base, current), SimpleNamespace())
 
 
@@ -227,7 +331,8 @@ def _publish_snapshot(
     rows: list[tuple[str, str, str, int]],
     *,
     validation_status: str = "accepted",
-) -> None:
+    write_pointer: bool = True,
+) -> Path:
     snapshot_id = "datasf-test-snapshot"
     snapshot_dir = data_root / "snapshots" / snapshot_id
     snapshot_dir.mkdir(parents=True)
@@ -255,14 +360,50 @@ def _publish_snapshot(
         "content_sha256": hashlib.sha256(parquet_path.read_bytes()).hexdigest(),
         "validation_status": validation_status,
         "parquet_file": "data.parquet",
+        "scope": {
+            "activity_period_start": min(row[0] for row in rows),
+            "activity_period_end": max(row[0] for row in rows),
+        },
     }
     (snapshot_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-    (data_root / "current.json").write_text(
-        json.dumps(
-            {
-                "snapshot_id": snapshot_id,
-                "manifest": f"snapshots/{snapshot_id}/manifest.json",
-            }
-        ),
-        encoding="utf-8",
+    if write_pointer:
+        (data_root / "current.json").write_text(
+            json.dumps(
+                {
+                    "snapshot_id": snapshot_id,
+                    "manifest": f"snapshots/{snapshot_id}/manifest.json",
+                }
+            ),
+            encoding="utf-8",
+        )
+    return parquet_path
+
+
+def _bundle_for_datasf(
+    data_root: Path,
+    parquet_path: Path,
+    *,
+    years: tuple[int, int] = (2024, 2025),
+) -> BundleContext:
+    manifest_path = parquet_path.parent / "manifest.json"
+    ref = SnapshotRef(
+        source="datasf",
+        snapshot_id="datasf-test-snapshot",
+        manifest_sha256=hashlib.sha256(manifest_path.read_bytes()).hexdigest(),
+        content_sha256=hashlib.sha256(parquet_path.read_bytes()).hexdigest(),
+        manifest_path=manifest_path,
+        data_path=parquet_path,
+        years=years,
+        vintage_id="test-vintage",
+        publication_status="staged-candidate",
+    )
+    return BundleContext(
+        bundle_id="test-bundle",
+        manifest_sha256="0" * 64,
+        baseline_year=years[0],
+        comparison_year=years[1],
+        cohort=("SFO",),
+        sources={"datasf": ref},
+        evidence_path=data_root / "evidence.json",
+        evidence_sha256="0" * 64,
     )

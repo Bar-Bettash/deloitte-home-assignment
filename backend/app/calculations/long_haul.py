@@ -18,6 +18,7 @@ from app.calculations.traffic import (
     _validated_airport,
     load_t100_snapshot,
 )
+from app.sources.bundle import BundleContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,6 +33,9 @@ class LongHaulResult:
     share_percent: float | None
     status: Literal["ok", "insufficient_data", "unavailable"]
     reason: str | None
+    unknown_distance_departures: int | None = None
+    lower_percent: float | None = None
+    upper_percent: float | None = None
 
 
 def calculate_long_haul_share(
@@ -39,17 +43,24 @@ def calculate_long_haul_share(
     year: int,
     threshold_miles: float,
     data_root: Path = DEFAULT_DATA_ROOT,
+    *,
+    bundle: BundleContext | None = None,
 ) -> LongHaulResult:
-    """Return 100*long-haul performed departures/all performed departures."""
-    if year not in (2023, 2024):
-        raise TrafficCalculationError("long-haul year must be 2023 or 2024")
+    """Return an exact or bounded performed-departure long-haul share."""
+    supported_years = (
+        (bundle.baseline_year, bundle.comparison_year) if bundle is not None else (2023, 2024)
+    )
+    if year not in supported_years:
+        raise TrafficCalculationError(
+            f"long-haul year must be {supported_years[0]} or {supported_years[1]}"
+        )
     if not isinstance(threshold_miles, (int, float)) or isinstance(threshold_miles, bool):
         raise TrafficCalculationError("long-haul threshold must be a finite nonnegative number")
     threshold = float(threshold_miles)
     if not math.isfinite(threshold) or threshold < 0:
         raise TrafficCalculationError("long-haul threshold must be a finite nonnegative number")
 
-    manifest, parquet_path, source = load_t100_snapshot(Path(data_root))
+    manifest, parquet_path, source = load_t100_snapshot(Path(data_root), bundle=bundle)
     airport_id = _validated_airport(airport, manifest)
     rows = _query_rows(parquet_path, airport_id, year)
     observed = tuple(sorted({row[0] for row in rows if isinstance(row[0], int)}))
@@ -63,6 +74,7 @@ def calculate_long_haul_share(
 
     total = 0
     long_haul = 0
+    unknown_distance = 0
     for _, performed_raw, distance_raw in rows:
         performed = _nonnegative_integer(performed_raw)
         if performed is None:
@@ -70,17 +82,19 @@ def calculate_long_haul_share(
                 airport_id, year, threshold, source, coverage, "performed departures contain an invalid count"
             )
         distance = _distance(distance_raw)
-        if performed > 0 and distance is None:
+        if performed > 0 and distance_raw is not None and distance is None:
             return _insufficient(
                 airport_id,
                 year,
                 threshold,
                 source,
                 coverage,
-                "distance is missing or invalid for a row with positive performed departures",
+                "distance contains an invalid value for a row with positive performed departures",
             )
         total += performed
-        if performed > 0 and distance is not None and distance >= threshold:
+        if performed > 0 and distance_raw is None:
+            unknown_distance += performed
+        elif performed > 0 and distance is not None and distance >= threshold:
             long_haul += performed
 
     if total == 0:
@@ -95,7 +109,12 @@ def calculate_long_haul_share(
             None,
             "unavailable",
             "total performed departures are zero; long-haul share is undefined",
+            0,
+            None,
+            None,
         )
+    lower = 100.0 * long_haul / total
+    upper = 100.0 * (long_haul + unknown_distance) / total
     return LongHaulResult(
         airport_id,
         year,
@@ -104,9 +123,12 @@ def calculate_long_haul_share(
         coverage,
         long_haul,
         total,
-        100.0 * long_haul / total,
+        lower if unknown_distance == 0 else None,
         "ok",
         None,
+        unknown_distance,
+        lower,
+        upper,
     )
 
 

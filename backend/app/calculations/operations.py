@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Literal
 
 import duckdb
+from app.sources.bundle import BundleContext, SnapshotRef
 from app.sources.ontime import AIRPORTS, DEFAULT_DATA_ROOT
 
 
@@ -56,22 +57,30 @@ class OperationsResult:
 
 
 def calculate_operations(
-    airport: str, data_root: Path = DEFAULT_DATA_ROOT, *, year: int = 2024
+    airport: str,
+    data_root: Path = DEFAULT_DATA_ROOT,
+    *,
+    year: int | None = None,
+    bundle: BundleContext | None = None,
 ) -> OperationsResult:
     """Return percentages and independent non-null means; never impute missing data."""
     airport = airport.strip().upper()
-    if airport not in AIRPORTS or type(year) is not int or year != 2024:
-        raise OperationsCalculationError("operations support LAX/SNA/SFO in CY2024 only")
-    manifest, parquet, source = _load_snapshot(Path(data_root))
+    selected_year = _selected_year(year, bundle)
+    if bundle is None:
+        if airport not in AIRPORTS:
+            raise OperationsCalculationError("operations support LAX/SNA/SFO in CY2024 only")
+        manifest, parquet, source = _load_snapshot(Path(data_root))
+    else:
+        manifest, parquet, source = _load_bundle_snapshot(bundle, selected_year)
     request = manifest.get("request", {})
-    if request.get("year") != year or airport not in request.get("origin_airports", []):
+    if request.get("year") != selected_year or airport not in request.get("origin_airports", []):
         raise OperationsCalculationError("requested scope is outside the accepted snapshot")
     with duckdb.connect() as connection:
         try:
             rows = connection.execute(
                 "SELECT month, reporting_airline, cancelled, diverted, flights, "
                 "dep_delay_minutes, taxi_out FROM read_parquet(?) WHERE origin = ? AND year = ?",
-                [str(parquet), airport, year],
+                [str(parquet), airport, selected_year],
             ).fetchall()
         except duckdb.Error as exc:
             raise OperationsCalculationError("accepted on-time snapshot cannot be queried") from exc
@@ -86,10 +95,72 @@ def calculate_operations(
     reason = "insufficient data: incomplete annual origin coverage" if incomplete else None
     carriers = tuple(sorted({row[1] for row in valid if row[1]}))
     return OperationsResult(
-        airport, year, source, months, missing, carriers, len(valid), len(rows) - len(valid),
+        airport, selected_year, source, months, missing, carriers, len(valid), len(rows) - len(valid),
         _metric(sum(row[2] for row in valid), len(valid), len(valid), reason, percent=True),
         _metric(sum(row[3] for row in valid), len(valid), len(valid), reason, percent=True),
         _mean(eligible, 5, reason), _mean(eligible, 6, reason),
+    )
+
+
+def _selected_year(year: int | None, bundle: BundleContext | None) -> int:
+    selected = bundle.comparison_year if year is None and bundle is not None else (2024 if year is None else year)
+    if type(selected) is not int:
+        raise OperationsCalculationError("operations year must be an integer")
+    if bundle is None:
+        if selected != 2024:
+            raise OperationsCalculationError("operations support LAX/SNA/SFO in CY2024 only")
+        return selected
+    ref = bundle.sources.get("ontime")
+    if ref is None or selected != bundle.comparison_year or ref.years != (selected,):
+        raise OperationsCalculationError("requested year is outside the supplied bundle")
+    return selected
+
+
+def _load_bundle_snapshot(
+    bundle: BundleContext, year: int
+) -> tuple[dict, Path, OperationsSource]:
+    ref = bundle.sources["ontime"]
+    try:
+        manifest_bytes = ref.manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes)
+        if hashlib.sha256(manifest_bytes).hexdigest() != ref.manifest_sha256:
+            raise ValueError("manifest checksum mismatch")
+        _validate_bundle_manifest(manifest, ref, year)
+        with ref.data_path.open("rb") as handle:
+            if hashlib.file_digest(handle, "sha256").hexdigest() != ref.content_sha256:
+                raise ValueError("snapshot checksum mismatch")
+        return manifest, ref.data_path, _source(manifest, ref.snapshot_id, year)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError, json.JSONDecodeError) as exc:
+        raise OperationsCalculationError("bundle on-time snapshot is missing or invalid") from exc
+
+
+def _validate_bundle_manifest(manifest: dict, ref: SnapshotRef, year: int) -> None:
+    parquet_file = manifest.get("parquet_file")
+    expected_data = ref.manifest_path.parent / str(parquet_file)
+    if (
+        manifest.get("snapshot_id") != ref.snapshot_id
+        or manifest.get("validation_status") not in {"accepted", "staged"}
+        or manifest.get("parquet_sha256") != ref.content_sha256
+        or not isinstance(parquet_file, str)
+        or Path(parquet_file).name != parquet_file
+        or expected_data.resolve() != ref.data_path.resolve()
+        or manifest.get("source", {}).get("table") != "FGJ"
+        or manifest.get("request", {}).get("year") != year
+    ):
+        raise ValueError("bundle snapshot metadata mismatch")
+
+
+def _source(manifest: dict, snapshot_id: str, year: int) -> OperationsSource:
+    imported = datetime.fromisoformat(manifest["imported_at_utc"].replace("Z", "+00:00"))
+    if imported.tzinfo is None:
+        raise ValueError("import time requires timezone")
+    return OperationsSource(
+        snapshot_id,
+        manifest["source"]["name"],
+        "FGJ",
+        manifest["source"]["index_url"],
+        imported,
+        str(year),
     )
 
 
@@ -129,12 +200,7 @@ def _load_snapshot(data_root: Path):
         with parquet.open("rb") as handle:
             if hashlib.file_digest(handle, "sha256").hexdigest() != manifest["parquet_sha256"]:
                 raise ValueError("snapshot checksum mismatch")
-        imported = datetime.fromisoformat(manifest["imported_at_utc"].replace("Z", "+00:00"))
-        if imported.tzinfo is None:
-            raise ValueError("import time requires timezone")
-        source = OperationsSource(
-            snapshot_id, manifest["source"]["name"], "FGJ", manifest["source"]["index_url"], imported
-        )
+        source = _source(manifest, snapshot_id, manifest["request"]["year"])
         return manifest, parquet, source
     except (OSError, ValueError, KeyError, TypeError, AttributeError) as exc:
         raise OperationsCalculationError("on-time accepted snapshot is missing or invalid") from exc

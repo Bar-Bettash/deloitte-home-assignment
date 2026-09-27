@@ -1,7 +1,10 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
+import pytest
 from app.calculations.screen import NEW_ENGLAND_AIRPORTS, calculate_screen
 from app.calculations.traffic import (
+    DEFAULT_DATA_ROOT,
     AnnualCoverage,
     AnnualTraffic,
     MetricResult,
@@ -9,6 +12,7 @@ from app.calculations.traffic import (
     T100SnapshotSource,
     TrafficResult,
 )
+from app.sources.bundle import BundleContext, SnapshotRef, load_bundle
 
 
 def test_readme_fixture_produces_screen_scores_30_50_70():
@@ -135,10 +139,132 @@ def test_filtering_preserves_full_reference_cohort_scores():
 
 
 def test_selected_airport_must_belong_to_reference_cohort():
-    import pytest
-
     with pytest.raises(ValueError, match="frozen reference cohort"):
         calculate_screen(_readme_fixture(), selected_airports=["ANC"])
+
+
+def test_bundle_requires_exact_population_source_and_period_and_excludes_pvc() -> None:
+    bundle = _bundle(("BOS", "PVC", "EWB"))
+    results = [
+        _traffic("BOS", 100, 110, 100, 120, years=(2024, 2025), snapshot_id="recent"),
+        _traffic(
+            "PVC",
+            100,
+            110,
+            100,
+            120,
+            missing_2024=(12,),
+            years=(2024, 2025),
+            snapshot_id="recent",
+        ),
+        _traffic("EWB", 50, 75, 100, 125, years=(2024, 2025), snapshot_id="recent"),
+    ]
+
+    result = calculate_screen(results, bundle=bundle)
+
+    assert result.reference_cohort == ("BOS", "EWB")
+    assert result.exclusions[0].airport == "PVC"
+    assert all(row.passenger_year == 2025 for row in result.rows)
+    assert {row.airport: row.passengers for row in result.rows} == {"BOS": 110, "EWB": 75}
+
+    with pytest.raises(ValueError, match="exact reference cohort"):
+        calculate_screen(results[:-1], bundle=bundle)
+    mixed = [*results[:-1], _traffic("EWB", 50, 75, 100, 125, years=(2024, 2025))]
+    with pytest.raises(ValueError, match="mixed source or period"):
+        calculate_screen(mixed, bundle=bundle)
+
+
+def test_bundle_loader_batches_all_23_then_filters_display(monkeypatch, tmp_path: Path) -> None:
+    cohort = tuple(sorted((*NEW_ENGLAND_AIRPORTS, "EWB")))
+    bundle = _bundle(cohort)
+    fixture = {
+        airport: _traffic(
+            airport,
+            100,
+            110,
+            100,
+            120,
+            missing_2024=((12,) if airport == "PVC" else ()),
+            years=(2024, 2025),
+            snapshot_id="recent",
+        )
+        for airport in cohort
+    }
+    calls = []
+
+    def batch(airports, data_root, *, bundle):
+        calls.append((airports, data_root, bundle.bundle_id))
+        return fixture
+
+    monkeypatch.setattr("app.calculations.screen.calculate_traffic_batch", batch)
+    result = calculate_screen(data_root=tmp_path, selected_airports=["EWB"], bundle=bundle)
+
+    assert calls == [(sorted(cohort), tmp_path, "recent-bundle")]
+    assert len(result.reference_cohort) == 22
+    assert len(result.rows) == 1 and result.rows[0].airport == "EWB"
+    assert tuple(item.airport for item in result.exclusions) == ("PVC",)
+
+
+def _bundle(cohort: tuple[str, ...]) -> BundleContext:
+    return BundleContext(
+        bundle_id="recent-bundle",
+        manifest_sha256="0" * 64,
+        baseline_year=2024,
+        comparison_year=2025,
+        cohort=cohort,
+        sources={
+            "t100": SnapshotRef(
+                source="t100",
+                snapshot_id="recent",
+                manifest_sha256="1" * 64,
+                content_sha256="2" * 64,
+                manifest_path=Path("manifest.json"),
+                data_path=Path("data.parquet"),
+                years=(2024, 2025),
+                vintage_id="recent",
+                publication_status="staged-candidate",
+            )
+        },
+        evidence_path=Path("evidence.json"),
+        evidence_sha256="3" * 64,
+    )
+
+
+def test_packaged_recent_controls_competition_ties_and_historical_parity() -> None:
+    data_root = DEFAULT_DATA_ROOT.parents[1]
+    if not (data_root / "bundles/annual-2025-r1/manifest.json").is_file():
+        pytest.skip("packaged recent bundle candidate is not installed")
+    bundle = load_bundle("annual-2025-r1", data_root=data_root)
+
+    recent = calculate_screen(bundle=bundle)
+    historical = calculate_screen()
+    recent_rows = {row.airport: row for row in recent.rows}
+
+    assert len(bundle.cohort) == 23
+    assert len(recent.reference_cohort) == 22
+    assert tuple(item.airport for item in recent.exclusions) == ("PVC",)
+    assert (recent_rows["HVN"].screen_score, recent_rows["HVN"].rank) == (
+        pytest.approx(74.761904762, abs=1e-9),
+        1,
+    )
+    assert (recent_rows["BGR"].screen_score, recent_rows["BGR"].rank) == (
+        pytest.approx(72.857142857, abs=1e-9),
+        2,
+    )
+    assert (recent_rows["PWM"].screen_score, recent_rows["PWM"].rank) == (
+        pytest.approx(72.857142857, abs=1e-9),
+        2,
+    )
+    assert (recent_rows["BOS"].screen_score, recent_rows["BOS"].rank) == (
+        pytest.approx(71.904761905, abs=1e-9),
+        4,
+    )
+    assert [row.airport for row in recent.rows[:4]] == ["HVN", "BGR", "PWM", "BOS"]
+    assert [(row.airport, row.screen_score, row.rank) for row in historical.rows[:3]] == [
+        ("PVD", 87.0, 1),
+        ("PWM", 83.5, 2),
+        ("BOS", 80.5, 3),
+    ]
 
 
 def _readme_fixture() -> list[TrafficResult]:
@@ -159,6 +285,8 @@ def _traffic(
     seats_2024: float,
     *,
     missing_2024: tuple[int, ...] = (),
+    years: tuple[int, int] = (2023, 2024),
+    snapshot_id: str = "fixture",
 ) -> TrafficResult:
     def annual(year: int, passengers: float, seats: float, missing: tuple[int, ...] = ()) -> AnnualTraffic:
         months = tuple(month for month in range(1, 13) if month not in missing)
@@ -179,12 +307,12 @@ def _traffic(
     return TrafficResult(
         airport=airport,
         source=T100SnapshotSource(
-            snapshot_id="fixture", table="FMG", name="Fixture", url="https://fixture.invalid",
-            period="2023-2024", imported_at=datetime(2026, 9, 26, tzinfo=timezone.utc),
+            snapshot_id=snapshot_id, table="FMG", name="Fixture", url="https://fixture.invalid",
+            period=f"{years[0]}-{years[1]}", imported_at=datetime(2026, 9, 26, tzinfo=timezone.utc),
         ),
         annual=(
-            annual(2023, passengers_2023, seats_2023),
-            annual(2024, passengers_2024, seats_2024, missing_2024),
+            annual(years[0], passengers_2023, seats_2023),
+            annual(years[1], passengers_2024, seats_2024, missing_2024),
         ),
-        growth=PassengerGrowth(2023, 2024, 0.0, "ok", None),
+        growth=PassengerGrowth(years[0], years[1], 0.0, "ok", None),
     )
