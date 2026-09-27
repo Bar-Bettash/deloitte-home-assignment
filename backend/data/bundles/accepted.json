@@ -1,0 +1,10 @@
+{
+  "bundles": [
+    {
+      "bundle_id": "annual-2025-r1",
+      "manifest_sha256": "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548"
+    }
+  ],
+  "default_bundle_id": "annual-2025-r1",
+  "schema_version": 1
+}

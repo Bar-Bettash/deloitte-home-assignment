@@ -4,11 +4,14 @@ import threading
 import time
 from dataclasses import replace
 from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
 from app import dispatch, main
+from app.calculations.long_haul import calculate_long_haul_share
 from app.calculations.operations import calculate_operations
 from app.calculations.screen import ScreenExclusion, ScreenResult
 from app.calculations.sfo import SFOTrendError, calculate_sfo_enplaned_trend
@@ -18,6 +21,8 @@ from app.dispatch import DispatchFailure
 from app.model_adapter import ModelAdapterError, ModelInterpretation, ModelUsage
 from app.model_budget import BudgetLedger
 from app.settings import Settings
+from app.sources.bundle import DEFAULT_DATA_ROOT as BUNDLE_DATA_ROOT
+from app.sources.bundle import load_bundle
 from fastapi.testclient import TestClient
 
 client = TestClient(main.app)
@@ -50,6 +55,336 @@ def admitted_settings(**overrides):
     }
     values.update(overrides)
     return Settings.model_validate(values)
+
+
+def _write_accepted_registry(root: Path, payload: dict) -> None:
+    directory = root / "bundles"
+    directory.mkdir(parents=True)
+    (directory / "accepted.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
+def _registry_payload(*, checksum: str = "a" * 64) -> dict:
+    return {
+        "schema_version": 1,
+        "default_bundle_id": "annual-2025-r1",
+        "bundles": [
+            {"bundle_id": "annual-2025-r1", "manifest_sha256": checksum},
+        ],
+    }
+
+
+def _candidate_bundle():
+    return load_bundle("annual-2025-r1", data_root=BUNDLE_DATA_ROOT)
+
+
+def test_accepted_bundle_reader_missing_registry_preserves_historical_only(
+    tmp_path: Path, monkeypatch
+) -> None:
+    assert dispatch._read_accepted_bundle(data_root=tmp_path) is None
+    reader = dispatch._read_accepted_bundle
+    monkeypatch.setattr(
+        dispatch,
+        "_read_accepted_bundle",
+        lambda bundle_id=None: reader(bundle_id, data_root=tmp_path),
+    )
+    request = main.AnalysisRequest(
+        action="metric", airports=["BOS"], metric="passengers", year=2025
+    )
+    with pytest.raises(DispatchFailure, match="recent period is not accepted"):
+        dispatch._resolve_request(request)
+
+
+def test_missing_registry_defaults_omitted_period_to_historical_2024(monkeypatch) -> None:
+    monkeypatch.setattr(dispatch, "_read_accepted_bundle", lambda _bundle_id=None: None)
+    resolved, bundle = dispatch._resolve_request(
+        main.AnalysisRequest(action="metric", airports=["BOS"], metric="passengers")
+    )
+    assert (resolved.year, resolved.bundle_id, bundle) == (2024, None, None)
+
+
+def test_malformed_registry_fails_closed_without_historical_fallback(monkeypatch) -> None:
+    def malformed(_bundle_id=None):
+        raise dispatch.BundleRegistryError("bad registry")
+
+    monkeypatch.setattr(dispatch, "_read_accepted_bundle", malformed)
+    with pytest.raises(DispatchFailure, match="bundle state is invalid") as raised:
+        dispatch._resolve_request(
+            main.AnalysisRequest(action="metric", airports=["BOS"], metric="passengers")
+        )
+    assert (raised.value.code, raised.value.status_code) == ("data_unavailable", 503)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"schema_version": 1, "default_bundle_id": "annual-2025-r1"},
+        {**_registry_payload(), "schema_version": 2},
+        {**_registry_payload(), "schema_version": True},
+        {
+            **_registry_payload(),
+            "bundles": [
+                {"bundle_id": "annual-2025-r1", "manifest_sha256": "a" * 64},
+                {"bundle_id": "annual-2025-r1", "manifest_sha256": "b" * 64},
+            ],
+        },
+        {**_registry_payload(), "default_bundle_id": "unlisted"},
+    ],
+)
+def test_accepted_bundle_reader_rejects_malformed_duplicate_or_bad_default(
+    tmp_path: Path, payload: dict
+) -> None:
+    _write_accepted_registry(tmp_path, payload)
+    with pytest.raises(dispatch.BundleRegistryError):
+        dispatch._read_accepted_bundle(data_root=tmp_path)
+
+
+def test_accepted_bundle_reader_rejects_duplicate_raw_json_keys(tmp_path: Path) -> None:
+    directory = tmp_path / "bundles"
+    directory.mkdir()
+    (directory / "accepted.json").write_text(
+        '{"schema_version":1,"schema_version":1,"default_bundle_id":"x",'
+        '"bundles":[{"bundle_id":"x","manifest_sha256":"' + "a" * 64 + '"}]}',
+        encoding="utf-8",
+    )
+    with pytest.raises(dispatch.BundleRegistryError, match="invalid"):
+        dispatch._read_accepted_bundle(data_root=tmp_path)
+
+
+def test_accepted_bundle_reader_rejects_unlisted_and_hash_mismatch(tmp_path: Path, monkeypatch) -> None:
+    _write_accepted_registry(tmp_path, _registry_payload())
+    monkeypatch.setattr(
+        dispatch,
+        "load_bundle",
+        lambda _bundle_id, *, data_root: SimpleNamespace(manifest_sha256="b" * 64),
+    )
+    with pytest.raises(DispatchFailure, match="not accepted"):
+        dispatch._read_accepted_bundle("annual-2026-r1", data_root=tmp_path)
+    with pytest.raises(dispatch.BundleRegistryError, match="manifest hash"):
+        dispatch._read_accepted_bundle(data_root=tmp_path)
+
+
+def test_accepted_bundle_reader_returns_hash_bound_context(tmp_path: Path, monkeypatch) -> None:
+    _write_accepted_registry(tmp_path, _registry_payload())
+    context = SimpleNamespace(manifest_sha256="a" * 64)
+    monkeypatch.setattr(dispatch, "load_bundle", lambda _bundle_id, *, data_root: context)
+    assert dispatch._read_accepted_bundle(data_root=tmp_path) is context
+
+
+def test_request_resolution_preserves_explicit_historical_without_registry(monkeypatch) -> None:
+    monkeypatch.setattr(
+        dispatch,
+        "_read_accepted_bundle",
+        lambda *_args, **_kwargs: pytest.fail("historical request consulted bundle registry"),
+    )
+    for year in (2023, 2024):
+        request = main.AnalysisRequest(
+            action="metric", airports=["BOS"], metric="passengers", year=year
+        )
+        resolved, bundle = dispatch._resolve_request(request)
+        assert (resolved.year, resolved.bundle_id, bundle) == (year, None, None)
+
+
+def test_request_resolution_uses_newest_accepted_period_and_permits_level_baseline(monkeypatch) -> None:
+    bundle = _candidate_bundle()
+    monkeypatch.setattr(dispatch, "_read_accepted_bundle", lambda _bundle_id=None: bundle)
+    recent, recent_bundle = dispatch._resolve_request(
+        main.AnalysisRequest(action="metric", airports=["BOS"], metric="passengers")
+    )
+    baseline, baseline_bundle = dispatch._resolve_request(
+        main.AnalysisRequest(
+            action="metric", airports=["BOS"], metric="passengers", year=2024,
+            bundle_id=bundle.bundle_id,
+        )
+    )
+    assert (recent.year, recent.bundle_id, recent_bundle) == (2025, bundle.bundle_id, bundle)
+    assert (baseline.year, baseline.bundle_id, baseline_bundle) == (2024, bundle.bundle_id, bundle)
+    with pytest.raises(DispatchFailure, match="requires the bundle comparison year"):
+        dispatch._resolve_request(
+            main.AnalysisRequest(
+                action="rank", region="new_england", metric="screen_score", year=2024,
+                bundle_id=bundle.bundle_id,
+            )
+        )
+
+
+def test_real_recent_bundle_dispatch_binds_scope_cohort_and_anc_counts(monkeypatch) -> None:
+    bundle = _candidate_bundle()
+    monkeypatch.setattr(dispatch, "_read_accepted_bundle", lambda _bundle_id=None: bundle)
+
+    traffic = dispatch.dispatch_analysis(
+        main.AnalysisRequest(
+            action="metric", airports=["BOS"], metric="passengers", year=2025
+        ),
+        uuid4(),
+    )
+    screen = dispatch.dispatch_analysis(
+        main.AnalysisRequest(
+            action="rank", region="new_england", metric="screen_score", year=2025
+        ),
+        uuid4(),
+    )
+    anc = dispatch.dispatch_analysis(
+        main.AnalysisRequest(
+            action="metric", airports=["ANC"], metric="long_haul_share", year=2025,
+            threshold_miles=3000,
+        ),
+        uuid4(),
+    )
+
+    assert (
+        traffic.scope.year,
+        traffic.scope.bundle_id,
+        traffic.scope.baseline_year,
+        traffic.scope.comparison_year,
+    ) == (2025, bundle.bundle_id, 2024, 2025)
+    assert len(screen.rows) == 22
+    assert "EWB" in {row.airport for row in screen.rows}
+    assert "PVC" not in {row.airport for row in screen.rows}
+    metric = anc.rows[0].metrics[0]
+    assert (metric.numerator, metric.denominator, metric.unknown_distance_departures) == (999, 36_040, 0)
+    assert metric.value == pytest.approx(2.771920, abs=1e-6)
+    assert metric.lower_percent == metric.upper_percent == metric.value
+
+
+@pytest.mark.parametrize(
+    "metric, airports, expected_metric_count",
+    [
+        ("congestion", ["LAX"], 4),
+        ("sfo_enplaned_trend", ["SFO"], 2),
+        ("sfo_pressure", ["SFO"], 11),
+    ],
+)
+def test_real_recent_bundle_dispatches_operations_and_sfo_workflows(
+    monkeypatch, metric, airports, expected_metric_count
+) -> None:
+    bundle = _candidate_bundle()
+    monkeypatch.setattr(dispatch, "_read_accepted_bundle", lambda _bundle_id=None: bundle)
+    result = dispatch.dispatch_analysis(
+        main.AnalysisRequest(
+            action="metric", airports=airports, metric=metric, year=2025
+        ),
+        uuid4(),
+    )
+    assert result.scope.bundle_id == bundle.bundle_id
+    assert result.scope.year == bundle.comparison_year
+    assert len(result.rows[0].metrics) == expected_metric_count
+    assert result.sources
+
+
+def test_recent_bundle_evidence_integrity_failure_is_not_downgraded_to_partial(monkeypatch) -> None:
+    bundle = _candidate_bundle()
+
+    def corrupt(*_args, **_kwargs):
+        raise dispatch.EvidenceIntegrityError("corrupt evidence")
+
+    monkeypatch.setattr(dispatch, "load_evidence", corrupt)
+    with pytest.raises(DispatchFailure, match="evidence is unavailable") as raised:
+        dispatch._rank_evidence(["BOS"], bundle=bundle)
+    assert (raised.value.code, raised.value.status_code) == ("data_unavailable", 503)
+
+
+@pytest.mark.parametrize(
+    "updates, expected_status, expected_bounds",
+    [
+        (
+            {"long_haul_departures": 7, "total_departures": 10,
+             "unknown_distance_departures": 3, "share_percent": None,
+             "lower_percent": 70.0, "upper_percent": 100.0,
+             "status": "ok", "reason": None},
+            "ok", (70.0, 100.0),
+        ),
+        (
+            {"long_haul_departures": 0, "total_departures": 0,
+             "unknown_distance_departures": 0, "share_percent": None,
+             "lower_percent": None, "upper_percent": None,
+             "status": "unavailable", "reason": "total departures are zero"},
+            "unavailable", (None, None),
+        ),
+    ],
+)
+def test_long_haul_dispatch_serializes_bounds_and_zero_departures(
+    monkeypatch, updates, expected_status, expected_bounds
+) -> None:
+    base = calculate_long_haul_share("ANC", 2024, 3000)
+    monkeypatch.setattr(
+        dispatch, "calculate_long_haul_share", lambda *_args, **_kwargs: replace(base, **updates)
+    )
+    result = dispatch.dispatch_analysis(
+        main.AnalysisRequest(
+            action="metric", airports=["ANC"], metric="long_haul_share", year=2024,
+            threshold_miles=3000,
+        ),
+        uuid4(),
+    )
+    metric = result.rows[0].metrics[0]
+    assert metric.status == expected_status
+    assert (metric.lower_percent, metric.upper_percent) == expected_bounds
+    assert metric.value is None
+
+
+def test_long_haul_dispatch_rejects_inconsistent_calculator_counts(monkeypatch) -> None:
+    base = calculate_long_haul_share("ANC", 2024, 3000)
+    invalid = replace(
+        base, long_haul_departures=8, total_departures=10,
+        unknown_distance_departures=3, share_percent=None,
+        lower_percent=80.0, upper_percent=110.0,
+    )
+    monkeypatch.setattr(dispatch, "calculate_long_haul_share", lambda *_args, **_kwargs: invalid)
+    with pytest.raises(DispatchFailure, match="output is inconsistent") as raised:
+        dispatch.dispatch_analysis(
+            main.AnalysisRequest(
+                action="metric", airports=["ANC"], metric="long_haul_share", year=2024,
+                threshold_miles=3000,
+            ),
+            uuid4(),
+        )
+    assert (raised.value.code, raised.value.status_code) == ("data_unavailable", 503)
+
+
+def test_bounded_long_haul_explanation_uses_saved_bounds_without_reload(monkeypatch) -> None:
+    base = calculate_long_haul_share("ANC", 2024, 3000)
+    bounded = replace(
+        base, long_haul_departures=7, total_departures=10,
+        unknown_distance_departures=3, share_percent=None,
+        lower_percent=70.0, upper_percent=100.0,
+    )
+    monkeypatch.setattr(dispatch, "calculate_long_haul_share", lambda *_args: bounded)
+    previous = dispatch.dispatch_analysis(
+        main.AnalysisRequest(
+            action="metric", airports=["ANC"], metric="long_haul_share", year=2024,
+            threshold_miles=3000,
+        ),
+        uuid4(),
+    )
+    monkeypatch.setattr(
+        dispatch,
+        "_resolve_request",
+        lambda *_args: pytest.fail("explain resolved sources again"),
+    )
+    explained = dispatch.dispatch_analysis(
+        main.AnalysisRequest(action="explain"), uuid4(), previous=previous
+    )
+    assert "between 70 and 100 percent" in explained.summary
+    assert "3 departures have unknown distance" in explained.summary
+    assert "unavailable" not in explained.summary.split(".", 1)[0]
+
+
+@pytest.mark.parametrize(
+    "analysis",
+    [
+        {"action": "metric", "airports": ["EWB"], "metric": "passengers", "year": 2024},
+        {"action": "rank", "airports": ["BOS", "EWB"], "metric": "passengers", "year": 2024},
+    ],
+)
+def test_historical_ewb_scope_rejects_before_calculation(monkeypatch, analysis) -> None:
+    monkeypatch.setattr(
+        dispatch,
+        "calculate_traffic_batch",
+        lambda *_args, **_kwargs: pytest.fail("unsupported cohort reached calculator"),
+    )
+    response = client.post("/api/query", json={"analysis": analysis})
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "unsupported_scope"
 
 
 def test_sfo_query_returns_real_typed_snapshot_result_and_matching_request_id():
@@ -404,6 +739,38 @@ def test_cookie_is_opaque_and_explain_is_read_only():
     assert explained["scope"] == original["scope"]
     assert explained["rows"] == original["rows"]
     assert main.session_store.latest(token).summary == original["summary"]
+
+
+def test_saved_historical_explain_does_not_resolve_promoted_bundle_or_reload_sources(monkeypatch):
+    first = client.post(
+        "/api/query",
+        json={"analysis": {
+            "action": "metric", "airports": ["PVD"], "metric": "passengers", "year": 2024,
+        }},
+    )
+    assert first.status_code == 200, first.text
+    original = first.json()
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("saved-result explanation reopened resolution or a source")
+
+    monkeypatch.setattr(dispatch, "_resolve_request", forbidden)
+    monkeypatch.setattr(dispatch, "calculate_traffic_batch", forbidden)
+    monkeypatch.setattr(dispatch, "load_evidence", forbidden)
+    monkeypatch.setattr(main, "interpret_message", forbidden)
+    explained = client.post(
+        "/api/query",
+        json={
+            "analysis": {"action": "explain"},
+            "context_result_id": original["result_id"],
+        },
+    )
+    assert explained.status_code == 200, explained.text
+    payload = explained.json()
+    assert payload["scope"] == original["scope"]
+    assert payload["rows"] == original["rows"]
+    assert payload["sources"] == original["sources"]
+    assert payload["evidence"] == original["evidence"]
 
 
 def test_context_reference_is_session_bound_and_stale_ids_conflict():

@@ -61,7 +61,10 @@ def test_request_rejects_missing_or_both_modes_and_extra_fields():
         {"action": "rank", "airports": ["ANC"], "metric": "passengers", "year": 2024},
         {"action": "metric", "airports": ["ANC"], "metric": "long_haul_share", "year": 2024, "threshold_miles": 0},
         {"action": "metric", "airports": ["ANC"], "metric": "passengers", "year": 2024, "threshold_miles": 3000},
-        {"action": "metric", "airports": ["ANC"], "metric": "passengers", "year": 2025},
+        {"action": "metric", "airports": ["ANC"], "metric": "passengers", "year": 2022},
+        {"action": "metric", "airports": ["ANC"], "metric": "passengers", "year": 2026},
+        {"action": "metric", "airports": ["ANC"], "metric": "passengers", "bundle_id": "../bad"},
+        {"action": "explain", "bundle_id": "annual-2025-r1"},
         {"action": "explain", "metric": "passengers"},
     ],
 )
@@ -75,6 +78,35 @@ def test_screen_score_remains_valid_for_rank():
         "action": "rank", "region": "new_england", "metric": "screen_score", "year": 2024,
     }})
     assert request.analysis.metric == "screen_score"
+
+
+@pytest.mark.parametrize(
+    "analysis",
+    [
+        {"action": "metric", "airports": ["BOS"], "metric": "passengers"},
+        {"action": "metric", "airports": ["BOS"], "metric": "passengers", "year": 2025},
+        {
+            "action": "metric",
+            "airports": ["BOS"],
+            "metric": "passengers",
+            "year": 2024,
+            "bundle_id": "annual-2025-r1",
+        },
+        {"action": "rank", "region": "new_england", "metric": "screen_score"},
+        {
+            "action": "rank",
+            "airports": ["EWB"],
+            "metric": "passengers",
+            "year": 2025,
+        },
+    ],
+)
+def test_request_accepts_server_resolved_default_recent_and_explicit_bundle(analysis):
+    request = QueryRequest.model_validate({"analysis": analysis}).analysis
+    assert request is not None
+    assert request.metric == analysis["metric"]
+    assert request.year == analysis.get("year")
+    assert request.bundle_id == analysis.get("bundle_id")
 
 
 @pytest.mark.parametrize("key", ["seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"])
@@ -125,12 +157,156 @@ def test_canonical_synthetic_result_and_source_linkage():
     assert result.rows[0].metrics[0].unit == "percent"
 
 
+@pytest.mark.parametrize(
+    ("metric", "expected_value", "lower", "upper", "unknown"),
+    [
+        ({"value": 70.0, "numerator": 7, "denominator": 10}, 70.0, 70.0, 70.0, 0),
+        ({"value": None, "numerator": 7, "denominator": 10}, None, 70.0, 100.0, 3),
+    ],
+)
+def test_recent_long_haul_scope_accepts_exact_and_bounded_uncertainty(
+    metric, expected_value, lower, upper, unknown
+):
+    payload = _canonical_result()
+    payload["scope"].update(
+        {
+            "year": 2025,
+            "bundle_id": "annual-2025-r1",
+            "baseline_year": 2024,
+            "comparison_year": 2025,
+        }
+    )
+    payload["rows"][0]["metrics"][0].update(
+        {
+            **metric,
+            "unknown_distance_departures": unknown,
+            "lower_percent": lower,
+            "upper_percent": upper,
+        }
+    )
+
+    result = AnalysisResult.model_validate(payload)
+    value = result.rows[0].metrics[0]
+
+    assert result.scope.bundle_id == "annual-2025-r1"
+    assert (result.scope.baseline_year, result.scope.comparison_year) == (2024, 2025)
+    assert value.value == expected_value
+    assert (value.lower_percent, value.upper_percent) == (lower, upper)
+    assert value.unknown_distance_departures == unknown
+
+
+def test_long_haul_zero_departures_is_typed_unavailable() -> None:
+    metric = MetricValue.model_validate(
+        {
+            "key": "long_haul_share",
+            "value": None,
+            "unit": "percent",
+            "status": "unavailable",
+            "numerator": 0,
+            "denominator": 0,
+            "unknown_distance_departures": 0,
+            "source_ids": ["fixture-source"],
+            "reason": "Total performed departures are zero.",
+        }
+    )
+    assert metric.denominator == 0
+    assert metric.lower_percent is None and metric.upper_percent is None
+
+
+def test_exact_long_haul_requires_value_equal_to_collapsed_bounds() -> None:
+    exact = {
+        "key": "long_haul_share",
+        "value": None,
+        "unit": "percent",
+        "status": "ok",
+        "numerator": 7,
+        "denominator": 10,
+        "unknown_distance_departures": 0,
+        "lower_percent": 70.0,
+        "upper_percent": 70.0,
+        "source_ids": ["fixture-source"],
+    }
+    with pytest.raises(ValidationError):
+        MetricValue.model_validate(exact)
+    exact["value"] = 71.0
+    with pytest.raises(ValidationError):
+        MetricValue.model_validate(exact)
+
+
 def test_result_rejects_bad_units_unresolved_refs_extra_fields_and_bad_ids():
     with pytest.raises(ValidationError):
         AnalysisResult.model_validate({"success": True})
     with pytest.raises(ValidationError):
         payload = _canonical_result()
         payload["rows"][0]["metrics"][0]["unit"] = "count"
+        AnalysisResult.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"lower_percent": 69.0},
+        {"upper_percent": 99.0},
+        {"unknown_distance_departures": 4},
+        {"value": 70.0},
+        {"upper_percent": None},
+        {"numerator": 7.0},
+    ],
+)
+def test_bounded_long_haul_rejects_inconsistent_counts_bounds_and_exact_value(changes):
+    value = {
+        "key": "long_haul_share",
+        "value": None,
+        "unit": "percent",
+        "status": "ok",
+        "numerator": 7,
+        "denominator": 10,
+        "unknown_distance_departures": 3,
+        "lower_percent": 70.0,
+        "upper_percent": 100.0,
+        "source_ids": ["fixture-source"],
+    }
+    value.update(changes)
+    with pytest.raises(ValidationError):
+        MetricValue.model_validate(value)
+
+
+def test_uncertainty_fields_reject_non_long_haul_and_partial_resolved_scope():
+    with pytest.raises(ValidationError):
+        MetricValue.model_validate(
+            {
+                "key": "seat_occupancy",
+                "value": 50.0,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 5,
+                "denominator": 10,
+                "unknown_distance_departures": 0,
+                "lower_percent": 50.0,
+                "upper_percent": 50.0,
+                "source_ids": ["fixture-source"],
+            }
+        )
+    payload = _canonical_result()
+    payload["scope"].update({"year": 2025, "bundle_id": "annual-2025-r1"})
+    with pytest.raises(ValidationError):
+        AnalysisResult.model_validate(payload)
+
+
+def test_recent_result_rejects_unresolved_or_out_of_period_scope():
+    payload = _canonical_result()
+    payload["scope"]["year"] = 2025
+    with pytest.raises(ValidationError):
+        AnalysisResult.model_validate(payload)
+
+    payload["scope"].update(
+        {
+            "bundle_id": "annual-2025-r1",
+            "baseline_year": 2023,
+            "comparison_year": 2024,
+        }
+    )
+    with pytest.raises(ValidationError):
         AnalysisResult.model_validate(payload)
     with pytest.raises(ValidationError):
         payload = _canonical_result()

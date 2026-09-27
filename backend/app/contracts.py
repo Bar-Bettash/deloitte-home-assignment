@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
@@ -30,7 +31,8 @@ def validate_request_body_size(body: bytes) -> None:
 NEW_ENGLAND = frozenset(
     "BDL HVN PWM BGR PQI RKD BHB AUG BOS ACK ORH MVY HYA PVC MHT PSM LEB PVD WST BID BTV RUT".split()
 )
-AIRPORTS = NEW_ENGLAND | {"ANC", "LAX", "SNA", "SFO"}
+NEW_ENGLAND_RECENT = NEW_ENGLAND | {"EWB"}
+AIRPORTS = NEW_ENGLAND_RECENT | {"ANC", "LAX", "SNA", "SFO"}
 OPERATIONAL_AIRPORTS = frozenset({"LAX", "SNA", "SFO"})
 METRICS = frozenset(
     "passengers seats departures passenger_growth seat_occupancy long_haul_share "
@@ -52,7 +54,7 @@ WireNumber = StrictInt | Annotated[StrictFloat, Field(allow_inf_nan=False)]
 
 class AnalysisRequest(StrictModel):
     action: Literal["rank", "compare", "metric", "explain"]
-    airports: list[Annotated[StrictStr, Field(min_length=3, max_length=3)]] | None = Field(default=None, max_length=22)
+    airports: list[Annotated[StrictStr, Field(min_length=3, max_length=3)]] | None = Field(default=None, max_length=23)
     region: Literal["new_england"] | None = None
     metric: Literal[
         "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
@@ -61,6 +63,9 @@ class AnalysisRequest(StrictModel):
         "sfo_enplaned_trend", "sfo_pressure",
     ] | None = None
     year: StrictInt | None = None
+    bundle_id: Annotated[
+        StrictStr, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    ] | None = None
     threshold_miles: WireNumber | None = None
 
     @field_validator("airports")
@@ -85,18 +90,21 @@ class AnalysisRequest(StrictModel):
     @model_validator(mode="after")
     def valid_scope_combination(self):
         if self.action == "explain":
-            if any(v is not None for v in (self.metric, self.year, self.threshold_miles, self.region)):
-                raise ValueError("explain does not accept metric, year, threshold, or region")
+            if any(
+                v is not None
+                for v in (self.metric, self.year, self.bundle_id, self.threshold_miles, self.region)
+            ):
+                raise ValueError("explain does not accept metric, year, bundle, threshold, or region")
             if self.airports is not None and len(self.airports) > 2:
                 raise ValueError("explain accepts at most two airports")
             return self
 
-        if self.metric is None or self.year is None:
-            raise ValueError("metric and year are required")
-        if self.year not in (2023, 2024):
+        if self.metric is None:
+            raise ValueError("metric is required")
+        if self.year is not None and self.year not in (2023, 2024, 2025):
             raise ValueError("unsupported year")
-        if self.metric in {"passenger_growth", "screen_score"} and self.year != 2024:
-            raise ValueError("passenger growth and screen score are defined for 2024 only")
+        if self.metric in {"passenger_growth", "screen_score"} and self.year == 2023:
+            raise ValueError("passenger growth and screen score require a comparison period")
         if self.threshold_miles is not None and self.metric != "long_haul_share":
             raise ValueError("threshold is only valid for long_haul_share")
         if self.metric == "long_haul_share" and self.threshold_miles is None:
@@ -104,9 +112,11 @@ class AnalysisRequest(StrictModel):
             pass
 
         if self.action == "rank":
-            if self.metric not in RANK_METRICS or self.year not in (2023, 2024):
+            if self.metric not in RANK_METRICS:
                 raise ValueError("unsupported ranking metric/year")
-            if self.airports is not None and (not self.airports or not set(self.airports) <= NEW_ENGLAND):
+            if self.airports is not None and (
+                not self.airports or not set(self.airports) <= NEW_ENGLAND_RECENT
+            ):
                 raise ValueError("rank airports must be a nonempty New England subset")
             if self.region not in (None, "new_england"):
                 raise ValueError("unsupported ranking region")
@@ -118,8 +128,8 @@ class AnalysisRequest(StrictModel):
             if self.region is not None or self.airports is None or len(self.airports) != 2:
                 raise ValueError("compare requires exactly two airports")
             if self.metric in {"congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"}:
-                if self.year != 2024 or not set(self.airports) <= OPERATIONAL_AIRPORTS:
-                    raise ValueError("operational comparison supports LAX/SNA/SFO in 2024")
+                if self.year not in (None, 2024, 2025) or not set(self.airports) <= OPERATIONAL_AIRPORTS:
+                    raise ValueError("operational comparison supports LAX/SNA/SFO")
             elif self.metric not in T100_METRICS:
                 raise ValueError("unsupported comparison metric")
         elif self.action == "metric":
@@ -127,11 +137,11 @@ class AnalysisRequest(StrictModel):
                 raise ValueError("metric requires exactly one airport")
             airport = self.airports[0]
             if self.metric in {"congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"}:
-                if self.year != 2024 or airport not in OPERATIONAL_AIRPORTS:
-                    raise ValueError("operational metrics support LAX/SNA/SFO in 2024")
+                if self.year not in (None, 2024, 2025) or airport not in OPERATIONAL_AIRPORTS:
+                    raise ValueError("operational metrics support LAX/SNA/SFO")
             elif self.metric in {"sfo_enplaned_trend", "sfo_pressure"}:
-                if self.year != 2024 or airport != "SFO":
-                    raise ValueError("SFO metrics support SFO in 2024")
+                if self.year not in (None, 2024, 2025) or airport != "SFO":
+                    raise ValueError("SFO metrics support SFO")
             elif self.metric not in T100_METRICS:
                 raise ValueError("unsupported metric")
         return self
@@ -176,6 +186,9 @@ class MetricValue(StrictModel):
     status: Literal["ok", "unavailable"]
     numerator: WireNumber | None = None
     denominator: WireNumber | None = None
+    unknown_distance_departures: Annotated[StrictInt, Field(ge=0)] | None = None
+    lower_percent: Annotated[WireNumber, Field(ge=0, le=100)] | None = None
+    upper_percent: Annotated[WireNumber, Field(ge=0, le=100)] | None = None
     eligible_count: Annotated[StrictInt, Field(ge=0)] | None = None
     comparison_direction: Literal["higher", "lower", "tied", "unavailable"] | None = None
     source_ids: list[Annotated[StrictStr, Field(min_length=1, max_length=80)]] = Field(max_length=20)
@@ -185,7 +198,13 @@ class MetricValue(StrictModel):
     def consistent_availability_and_units(self):
         if self.status == "unavailable" and (self.value is not None or self.reason is None):
             raise ValueError("unavailable metric requires null value and reason")
-        if self.status == "ok" and self.value is None:
+        bounded_long_haul = (
+            self.key == "long_haul_share"
+            and self.status == "ok"
+            and self.lower_percent is not None
+            and self.upper_percent is not None
+        )
+        if self.status == "ok" and self.value is None and not bounded_long_haul:
             raise ValueError("available metric requires a value")
         if (self.numerator is None) != (self.denominator is None):
             raise ValueError("numerator and denominator must appear together")
@@ -203,13 +222,61 @@ class MetricValue(StrictModel):
             raise ValueError(f"{self.key} must use {expected_unit}")
         if self.status == "ok" and self.key in {"seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"} and self.numerator is None:
             raise ValueError("ratio metric requires numerator and denominator")
+        self._validate_long_haul_uncertainty()
         return self
+
+    def _validate_long_haul_uncertainty(self) -> None:
+        typed = any(
+            value is not None
+            for value in (
+                self.unknown_distance_departures,
+                self.lower_percent,
+                self.upper_percent,
+            )
+        )
+        if not typed:
+            return
+        if self.key != "long_haul_share":
+            raise ValueError("distance uncertainty fields are only valid for long_haul_share")
+        if not all(
+            isinstance(value, int) and not isinstance(value, bool)
+            for value in (self.numerator, self.denominator, self.unknown_distance_departures)
+        ):
+            raise ValueError("long-haul uncertainty requires integer departure counts")
+        long_haul = self.numerator
+        total = self.denominator
+        unknown = self.unknown_distance_departures
+        if long_haul < 0 or total < 0 or long_haul + unknown > total:
+            raise ValueError("long-haul departure counts are inconsistent")
+        if total == 0:
+            if (
+                self.status != "unavailable"
+                or long_haul != 0
+                or unknown != 0
+                or self.lower_percent is not None
+                or self.upper_percent is not None
+            ):
+                raise ValueError("zero departures require unavailable null bounds")
+            return
+        if self.status != "ok" or self.lower_percent is None or self.upper_percent is None:
+            raise ValueError("positive departures require available lower and upper bounds")
+        expected_lower = 100.0 * long_haul / total
+        expected_upper = 100.0 * (long_haul + unknown) / total
+        if not math.isclose(float(self.lower_percent), expected_lower, abs_tol=1e-9):
+            raise ValueError("lower_percent does not match departure counts")
+        if not math.isclose(float(self.upper_percent), expected_upper, abs_tol=1e-9):
+            raise ValueError("upper_percent does not match departure counts")
+        if unknown == 0:
+            if self.value is None or not math.isclose(float(self.value), expected_lower, abs_tol=1e-9):
+                raise ValueError("exact long-haul value does not match departure counts")
+        elif self.value is not None:
+            raise ValueError("bounded long-haul metric must not claim an exact value")
 
 
 class AirportRow(StrictModel):
     airport: Annotated[StrictStr, Field(min_length=3, max_length=3)]
     metrics: list[MetricValue] = Field(min_length=1, max_length=20)
-    rank: StrictInt | None = Field(default=None, ge=1, le=22)
+    rank: StrictInt | None = Field(default=None, ge=1, le=23)
 
     @field_validator("airport")
     @classmethod
@@ -220,8 +287,13 @@ class AirportRow(StrictModel):
 
 
 class ResultScope(StrictModel):
-    airports: list[Annotated[StrictStr, Field(min_length=3, max_length=3)]] = Field(min_length=1, max_length=22)
-    year: StrictInt = Field(ge=2023, le=2024)
+    airports: list[Annotated[StrictStr, Field(min_length=3, max_length=3)]] = Field(min_length=1, max_length=23)
+    year: StrictInt = Field(ge=2023, le=2025)
+    bundle_id: Annotated[
+        StrictStr, Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    ] | None = None
+    baseline_year: StrictInt | None = Field(default=None, ge=2023, le=2025)
+    comparison_year: StrictInt | None = Field(default=None, ge=2023, le=2025)
     metric: Literal[
         "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
         "long_haul_share", "screen_score", "congestion", "cancellation_rate",
@@ -237,6 +309,21 @@ class ResultScope(StrictModel):
         if any(airport not in AIRPORTS for airport in value) or len(value) != len(set(value)):
             raise ValueError("scope airports must be supported and unique")
         return value
+
+    @model_validator(mode="after")
+    def resolved_period_is_consistent(self):
+        fields = (self.bundle_id, self.baseline_year, self.comparison_year)
+        if any(value is not None for value in fields) != all(value is not None for value in fields):
+            raise ValueError("resolved bundle scope fields must appear together")
+        if self.bundle_id is None:
+            if self.year == 2025:
+                raise ValueError("recent result scope requires resolved bundle identity")
+            return self
+        if self.baseline_year >= self.comparison_year:
+            raise ValueError("resolved bundle years are invalid")
+        if self.year not in (self.baseline_year, self.comparison_year):
+            raise ValueError("result year is outside the resolved bundle period")
+        return self
 
 
 class SourceRef(StrictModel):
@@ -257,7 +344,7 @@ class EvidenceRef(StrictModel):
 
 
 class SeriesPoint(StrictModel):
-    period: Annotated[StrictStr, Field(pattern=r"^202[34](0[1-9]|1[0-2])$", min_length=6, max_length=6)]
+    period: Annotated[StrictStr, Field(pattern=r"^202[345](0[1-9]|1[0-2])$", min_length=6, max_length=6)]
     value: WireNumber | None
     unit: Literal["count", "percent", "percentage_points", "minutes", "score"]
     status: Literal["ok", "unavailable"]
@@ -268,12 +355,12 @@ class AnalysisResult(StrictModel):
     request_id: UUID
     status: Literal["ok", "partial"]
     scope: ResultScope
-    rows: list[AirportRow] = Field(max_length=22)
+    rows: list[AirportRow] = Field(max_length=23)
     summary: Annotated[StrictStr, Field(max_length=2000)] | None
     series: list[SeriesPoint] = Field(max_length=24)
     sources: list[SourceRef] = Field(max_length=40)
     evidence: list[EvidenceRef] = Field(max_length=40)
-    exclusions: list[Annotated[StrictStr, Field(min_length=1, max_length=300)]] = Field(max_length=22)
+    exclusions: list[Annotated[StrictStr, Field(min_length=1, max_length=300)]] = Field(max_length=23)
     limitations: list[Annotated[StrictStr, Field(min_length=1, max_length=500)]] = Field(max_length=30)
 
     @field_validator("result_id", "request_id", mode="before")

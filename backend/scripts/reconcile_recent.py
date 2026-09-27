@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 from collections.abc import Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
@@ -14,6 +15,25 @@ from app.sources.bundle import BundleContext, SnapshotRef, load_bundle
 
 DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
 DEFAULT_THRESHOLD = 3_000.0
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+REFERENCE_PATH = Path("docs/evidence/recent-arithmetic-reference.json")
+CODE_PATHS = (
+    "app/calculations/traffic.py",
+    "app/calculations/long_haul.py",
+    "app/calculations/screen.py",
+    "app/calculations/operations.py",
+    "app/calculations/sfo.py",
+    "app/calculations/comparison.py",
+    "app/dispatch.py",
+    "app/contracts.py",
+    "app/evidence.py",
+    "scripts/reconcile_recent.py",
+)
+FINAL_RECEIPT_KEYS = {
+    "schema_version", "receipt_type", "status", "bundle_id",
+    "bundle_manifest_sha256", "checked_at_utc", "period", "cohort",
+    "sources", "reference", "code_sha256", "workflows",
+}
 
 
 class ReconciliationError(RuntimeError):
@@ -116,6 +136,85 @@ def _json_file(path: Path) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ReconciliationError(f"JSON artifact must be an object: {path}")
     return value
+
+
+def _no_duplicate_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ReconciliationError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _strict_json_file(path: Path, label: str) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_bytes(), object_pairs_hook=_no_duplicate_pairs)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ReconciliationError(f"invalid {label}") from exc
+    if not isinstance(value, dict):
+        raise ReconciliationError(f"{label} must be an object")
+    return value
+
+
+def _reference_cohort(reference: Mapping[str, object]) -> set[str]:
+    try:
+        screen = reference["screen"]
+        included = screen["reference_cohort"]
+        excluded = screen["exclusions"]
+    except (KeyError, TypeError) as exc:
+        raise ReconciliationError("reference cohort is invalid") from exc
+    if (
+        not isinstance(included, list)
+        or not all(isinstance(item, str) for item in included)
+        or not isinstance(excluded, Mapping)
+        or not all(isinstance(item, str) for item in excluded)
+    ):
+        raise ReconciliationError("reference cohort is invalid")
+    cohort = set(included) | set(excluded)
+    if len(cohort) != len(included) + len(excluded):
+        raise ReconciliationError("reference cohort is invalid")
+    return cohort
+
+
+def validate_reference(bundle: BundleContext, reference: Mapping[str, object]) -> None:
+    """Validate the preserved numeric reference against the selected bundle scope."""
+    try:
+        identity = reference["identity"]
+        independence = reference["independence"]
+        reconciliation = reference["reconciliation"]
+        recent = reconciliation["recent"]
+        historical = reconciliation["historical"]
+        historical_controls = reconciliation["historical_controls"]
+    except (KeyError, TypeError) as exc:
+        raise ReconciliationError("reference reconciliation is incomplete") from exc
+    expected_period = {
+        "baseline_year": bundle.baseline_year,
+        "comparison_year": bundle.comparison_year,
+    }
+    valid = (
+        reference.get("schema_version") == 1
+        and isinstance(identity, Mapping)
+        and isinstance(independence, Mapping)
+        and identity.get("bundle_id") == bundle.bundle_id
+        and identity.get("sources") == _source_identity(bundle)
+        and isinstance(identity.get("raw_reference_sha256"), str)
+        and len(identity["raw_reference_sha256"]) == 64
+        and all(character in "0123456789abcdef"
+                for character in identity["raw_reference_sha256"])
+        and independence.get("raw_source_reference_checked") is True
+        and reference.get("period") == expected_period
+        and _reference_cohort(reference) == set(bundle.cohort)
+        and isinstance(reconciliation, Mapping)
+        and reconciliation.get("status") == "pass"
+        and isinstance(recent, Mapping)
+        and recent.get("status") == "pass"
+        and isinstance(historical, Mapping)
+        and historical.get("status") == "pass"
+        and isinstance(historical_controls, Mapping)
+    )
+    if not valid:
+        raise ReconciliationError("reference identity, scope, or parity is incompatible")
 
 
 def _traffic_expected(bundle: BundleContext) -> dict[str, object]:
@@ -691,42 +790,183 @@ def reconcile(
     }
 
 
+def _code_hashes(root: Path) -> dict[str, str]:
+    return {relative: _sha256(root / relative) for relative in CODE_PATHS}
+
+
+def _reference_binding(
+    reference: Mapping[str, object], reference_path: Path, root: Path
+) -> dict[str, object]:
+    identity = reference["identity"]
+    reconciliation = reference["reconciliation"]
+    return {
+        "path": REFERENCE_PATH.as_posix(),
+        "sha256": _sha256(reference_path),
+        "preliminary_bundle_manifest_sha256": identity["bundle_manifest_sha256"],
+        "generator_sha256": identity["generator_sha256"],
+        "raw_reference_sha256": identity["raw_reference_sha256"],
+        "historical_status": reconciliation["historical"]["status"],
+    }
+
+
+def build_final_receipt(
+    bundle: BundleContext,
+    reference: Mapping[str, object],
+    *,
+    reference_path: Path,
+    root: Path = BACKEND_ROOT,
+    checked_at: datetime | None = None,
+) -> dict[str, object]:
+    """Recompute every application workflow against a preserved numeric reference."""
+    from app.evidence import EvidenceIntegrityError, load_evidence
+    from pydantic import ValidationError
+
+    root = root.resolve()
+    canonical_reference = (root / REFERENCE_PATH).resolve()
+    if reference_path.resolve() != canonical_reference:
+        raise ReconciliationError("reference path is not the canonical preserved reference")
+    validate_reference(bundle, reference)
+    try:
+        load_evidence(bundle=bundle)
+    except (EvidenceIntegrityError, ValidationError) as exc:
+        raise ReconciliationError("bundle evidence is incompatible") from exc
+    recent = reconcile(bundle, reference)
+    historical_context = load_historical_context(root / "data")
+    historical = reconcile(
+        historical_context,
+        reference["reconciliation"]["historical_controls"],
+        bundled=False,
+    )
+    if recent["status"] != "pass" or historical["status"] != "pass":
+        mismatches = [*recent["mismatches"], *historical["mismatches"]]
+        raise ReconciliationError("application arithmetic mismatch: " + "; ".join(mismatches))
+    timestamp = checked_at or datetime.now(UTC)
+    if timestamp.tzinfo is None or timestamp.utcoffset() is None:
+        raise ReconciliationError("receipt timestamp must be timezone aware")
+    return {
+        "schema_version": 1,
+        "receipt_type": "application_reconciliation",
+        "status": "pass",
+        "bundle_id": bundle.bundle_id,
+        "bundle_manifest_sha256": bundle.manifest_sha256,
+        "checked_at_utc": timestamp.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        "period": {
+            "baseline_year": bundle.baseline_year,
+            "comparison_year": bundle.comparison_year,
+        },
+        "cohort": list(bundle.cohort),
+        "sources": _source_identity(bundle),
+        "reference": _reference_binding(reference, canonical_reference, root),
+        "code_sha256": _code_hashes(root),
+        "workflows": {
+            "screen": {"status": "pass"},
+            "operations": {"status": "pass", "comparison_status": "pass"},
+            "long_haul": {"status": "pass"},
+            "sfo": {"status": "pass"},
+        },
+    }
+
+
+def validate_reconciliation_payload(
+    bundle: BundleContext,
+    payload: Mapping[str, object],
+    reference: Mapping[str, object],
+    *,
+    root: Path = BACKEND_ROOT,
+) -> None:
+    """Fail closed unless a receipt exactly matches current bundle, code, and reference."""
+    if set(payload) != FINAL_RECEIPT_KEYS:
+        raise ReconciliationError("reconciliation receipt keys are invalid")
+    checked_at = payload.get("checked_at_utc")
+    if not isinstance(checked_at, str) or not checked_at.endswith("Z"):
+        raise ReconciliationError("reconciliation receipt timestamp is invalid")
+    try:
+        parsed = datetime.fromisoformat(checked_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ReconciliationError("reconciliation receipt timestamp is invalid") from exc
+    expected = build_final_receipt(
+        bundle,
+        reference,
+        reference_path=root.resolve() / REFERENCE_PATH,
+        root=root,
+        checked_at=parsed,
+    )
+    mismatches = compare_values(expected, payload)
+    if mismatches:
+        raise ReconciliationError("reconciliation receipt mismatch: " + "; ".join(mismatches))
+
+
+def validate_reconciliation_file(
+    bundle: BundleContext, receipt_path: Path, *, root: Path = BACKEND_ROOT
+) -> dict[str, object]:
+    """Validate a receipt and its confined canonical reference for promotion."""
+    payload = _strict_json_file(receipt_path, "reconciliation receipt")
+    binding = payload.get("reference")
+    if not isinstance(binding, Mapping) or binding.get("path") != REFERENCE_PATH.as_posix():
+        raise ReconciliationError("reconciliation reference path is invalid")
+    reference_path = (root.resolve() / REFERENCE_PATH).resolve()
+    if not reference_path.is_relative_to(root.resolve()):
+        raise ReconciliationError("reconciliation reference escapes backend root")
+    reference = _strict_json_file(reference_path, "arithmetic reference")
+    validate_reconciliation_payload(bundle, payload, reference, root=root)
+    return payload
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Reconcile recent bundle arithmetic")
     parser.add_argument("--bundle", "--bundle-id", dest="bundle_id", default="annual-2025-r1")
     parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
     parser.add_argument("--raw-reference", type=Path)
+    parser.add_argument("--reference", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--expected-only", action="store_true")
     parser.add_argument("--skip-historical-parity", action="store_true")
     args = parser.parse_args(argv)
     try:
-        if not args.expected_only and args.raw_reference is None:
-            raise ReconciliationError("full reconciliation requires --raw-reference")
-        bundle = load_bundle(args.bundle_id, data_root=args.data_root)
-        expected = build_expected(bundle, raw_reference_path=args.raw_reference)
-        if args.expected_only:
-            result: Mapping[str, object] = expected
+        if args.reference is not None:
+            if args.expected_only or args.raw_reference is not None or args.skip_historical_parity:
+                raise ReconciliationError("final receipt mode cannot use generation options")
+            if args.output is not None and args.output.resolve() == args.reference.resolve():
+                raise ReconciliationError("final receipt must not overwrite its reference")
+            bundle = load_bundle(args.bundle_id, data_root=args.data_root)
+            reference = _strict_json_file(args.reference, "arithmetic reference")
+            result = build_final_receipt(
+                bundle,
+                reference,
+                reference_path=args.reference,
+                root=BACKEND_ROOT,
+            )
             status = "pass"
+        elif not args.expected_only and args.raw_reference is None:
+            raise ReconciliationError("full reconciliation requires --raw-reference")
         else:
-            recent = reconcile(bundle, expected)
-            if args.skip_historical_parity:
-                result = {**expected, "reconciliation": recent}
-                status = recent["status"]
+            bundle = load_bundle(args.bundle_id, data_root=args.data_root)
+            expected = build_expected(bundle, raw_reference_path=args.raw_reference)
+            if args.expected_only:
+                result = expected
+                status = "pass"
             else:
-                historical_context = load_historical_context(args.data_root)
-                historical_expected = build_expected(historical_context)
-                historical = reconcile(
-                    historical_context, historical_expected, bundled=False
-                )
-                status = "pass" if recent["status"] == historical["status"] == "pass" else "fail"
-                result = {
-                    **expected,
-                    "reconciliation": {
-                        "status": status, "recent": recent, "historical": historical,
-                        "historical_controls": historical_expected,
-                    },
-                }
+                recent = reconcile(bundle, expected)
+                if args.skip_historical_parity:
+                    result = {**expected, "reconciliation": recent}
+                    status = recent["status"]
+                else:
+                    historical_context = load_historical_context(args.data_root)
+                    historical_expected = build_expected(historical_context)
+                    historical = reconcile(
+                        historical_context, historical_expected, bundled=False
+                    )
+                    status = (
+                        "pass" if recent["status"] == historical["status"] == "pass"
+                        else "fail"
+                    )
+                    result = {
+                        **expected,
+                        "reconciliation": {
+                            "status": status, "recent": recent, "historical": historical,
+                            "historical_controls": historical_expected,
+                        },
+                    }
     except (ReconciliationError, KeyError, TypeError, ValueError) as exc:
         parser.exit(1, f"recent reconciliation failed: {exc}\n")
     serialized = json.dumps(result, indent=2, sort_keys=True) + "\n"

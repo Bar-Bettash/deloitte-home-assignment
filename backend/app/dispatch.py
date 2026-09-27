@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import re
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -24,7 +27,9 @@ from app.calculations.traffic import (
     calculate_traffic_batch,
 )
 from app.contracts import AnalysisRequest, AnalysisResult, MetricValue
-from app.evidence import load_evidence
+from app.evidence import EvidenceIntegrityError, load_evidence
+from app.sources.bundle import DEFAULT_DATA_ROOT as BUNDLE_DATA_ROOT
+from app.sources.bundle import BundleContext, BundleError, load_bundle
 
 
 class DispatchFailure(RuntimeError):
@@ -51,6 +56,132 @@ T100_KEYS = {
     "passenger_growth": "growth",
     "seat_occupancy": "occupancy_percent",
 }
+_NON_COHORT_ANALYSIS_AIRPORTS = {"ANC", "LAX", "SNA", "SFO"}
+_REGISTRY_KEYS = {"schema_version", "default_bundle_id", "bundles"}
+_REGISTRY_ENTRY_KEYS = {"bundle_id", "manifest_sha256"}
+_BUNDLE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+
+
+class BundleRegistryError(RuntimeError):
+    """The server-owned accepted-bundle registry is malformed or inconsistent."""
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    value: dict[str, object] = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError("duplicate JSON object key")
+        value[key] = item
+    return value
+
+
+def _read_accepted_bundle(
+    bundle_id: str | None = None,
+    *,
+    data_root: Path = BUNDLE_DATA_ROOT,
+) -> BundleContext | None:
+    """Resolve only a hash-bound bundle listed by the server-owned registry."""
+    registry_path = Path(data_root) / "bundles" / "accepted.json"
+    try:
+        raw = registry_path.read_bytes()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise BundleRegistryError("accepted bundle registry is unavailable") from exc
+    try:
+        payload = json.loads(raw, object_pairs_hook=_unique_json_object)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as exc:
+        raise BundleRegistryError("accepted bundle registry is invalid") from exc
+    if not isinstance(payload, dict) or set(payload) != _REGISTRY_KEYS:
+        raise BundleRegistryError("accepted bundle registry has invalid keys")
+    entries = payload["bundles"]
+    default_id = payload["default_bundle_id"]
+    if (
+        type(payload["schema_version"]) is not int
+        or payload["schema_version"] != 1
+        or not isinstance(entries, list)
+        or not entries
+    ):
+        raise BundleRegistryError("accepted bundle registry is incompatible")
+    accepted: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or set(entry) != _REGISTRY_ENTRY_KEYS:
+            raise BundleRegistryError("accepted bundle entry has invalid keys")
+        entry_id, checksum = entry["bundle_id"], entry["manifest_sha256"]
+        if (
+            not isinstance(entry_id, str)
+            or not _BUNDLE_ID.fullmatch(entry_id)
+            or not isinstance(checksum, str)
+            or not _SHA256.fullmatch(checksum)
+            or entry_id in accepted
+        ):
+            raise BundleRegistryError("accepted bundle entry is invalid")
+        accepted[entry_id] = checksum
+    if not isinstance(default_id, str) or default_id not in accepted:
+        raise BundleRegistryError("accepted default bundle is invalid")
+    selected_id = default_id if bundle_id is None else bundle_id
+    if selected_id not in accepted:
+        raise DispatchFailure("unsupported_scope", 422, "The requested bundle is not accepted.")
+    try:
+        context = load_bundle(selected_id, data_root=Path(data_root))
+    except BundleError as exc:
+        raise BundleRegistryError("accepted bundle cannot be loaded") from exc
+    if context.manifest_sha256 != accepted[selected_id]:
+        raise BundleRegistryError("accepted bundle manifest hash does not match the registry")
+    return context
+
+
+def _resolve_request(request: AnalysisRequest) -> tuple[AnalysisRequest, BundleContext | None]:
+    if request.bundle_id is None and request.year in (2023, 2024):
+        return request, None
+    try:
+        bundle = _read_accepted_bundle(request.bundle_id)
+    except BundleRegistryError as exc:
+        raise DispatchFailure("data_unavailable", 503, "Accepted bundle state is invalid.") from exc
+    if bundle is None:
+        if request.bundle_id is not None or request.year == 2025:
+            raise DispatchFailure("unsupported_scope", 422, "The requested recent period is not accepted.")
+        return request.model_copy(update={"year": 2024}), None
+    selected_year = bundle.comparison_year if request.year is None else request.year
+    if selected_year not in (bundle.baseline_year, bundle.comparison_year):
+        raise DispatchFailure("unsupported_scope", 422, "The requested year is outside the bundle period.")
+    comparison_only = request.metric in {
+        "passenger_growth",
+        "screen_score",
+        "congestion",
+        "cancellation_rate",
+        "diversion_rate",
+        "departure_delay_minutes",
+        "taxi_out_minutes",
+        "sfo_enplaned_trend",
+        "sfo_pressure",
+    }
+    if comparison_only and selected_year != bundle.comparison_year:
+        raise DispatchFailure("unsupported_scope", 422, "This workflow requires the bundle comparison year.")
+    return request.model_copy(
+        update={"year": selected_year, "bundle_id": bundle.bundle_id}
+    ), bundle
+
+
+def _validate_resolved_airports(
+    request: AnalysisRequest, bundle: BundleContext | None
+) -> None:
+    if not request.airports:
+        return
+    cohort = set(bundle.cohort) if bundle is not None else set(NEW_ENGLAND_AIRPORTS)
+    if request.action == "rank":
+        allowed = cohort
+    elif request.metric in OPERATIONAL_KEYS or request.metric == "congestion":
+        allowed = {"LAX", "SNA", "SFO"}
+    elif request.metric in {"sfo_enplaned_trend", "sfo_pressure"}:
+        allowed = {"SFO"}
+    else:
+        allowed = cohort | _NON_COHORT_ANALYSIS_AIRPORTS
+    if not set(request.airports) <= allowed:
+        raise DispatchFailure(
+            "unsupported_scope", 422, "One or more airports are outside the resolved data scope."
+        )
 
 
 def dispatch_analysis(
@@ -65,25 +196,33 @@ def dispatch_analysis(
             raise DispatchFailure("session_expired", 409, "Start a new analysis before asking for an explanation.")
         return _explain(request, previous, request_id)
 
+    request, bundle = _resolve_request(request)
+    _validate_resolved_airports(request, bundle)
     if request.action == "rank":
-        return _rank(request, request_id)
+        return _rank(request, request_id, bundle=bundle)
     if request.metric == "sfo_enplaned_trend":
-        return _sfo_trend(request, request_id)
+        return _sfo_trend(request, request_id, bundle=bundle)
     if request.metric == "sfo_pressure":
-        return _sfo_pressure(request, request_id)
+        return _sfo_pressure(request, request_id, bundle=bundle)
     if request.metric in OPERATIONAL_KEYS or request.metric == "congestion":
-        return _operations(request, request_id)
+        return _operations(request, request_id, bundle=bundle)
     if request.metric == "long_haul_share":
-        return _long_haul(request, request_id)
+        return _long_haul(request, request_id, bundle=bundle)
     if request.action == "compare":
-        return _traffic_compare(request, request_id)
-    return _traffic_metric(request, request_id)
+        return _traffic_compare(request, request_id, bundle=bundle)
+    return _traffic_metric(request, request_id, bundle=bundle)
 
 
-def _traffic_metric(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
+def _traffic_metric(
+    request: AnalysisRequest, request_id: UUID, *, bundle: BundleContext | None = None
+) -> AnalysisResult:
     assert request.airports and request.metric and request.year
     try:
-        traffic = calculate_traffic_batch(request.airports)
+        traffic = (
+            calculate_traffic_batch(request.airports)
+            if bundle is None
+            else calculate_traffic_batch(request.airports, bundle=bundle)
+        )
     except TrafficCalculationError as exc:
         raise DispatchFailure("data_unavailable", 503, "Qualified T-100 traffic data is unavailable.") from exc
     source = next(iter(traffic.values())).source
@@ -101,13 +240,20 @@ def _traffic_metric(request: AnalysisRequest, request_id: UUID) -> AnalysisResul
         _availability_status(rows),
         _traffic_summary(request, rows),
         limitations=["T-100 measures reported transported traffic and supplied seats; it does not identify unmet demand."],
+        bundle=bundle,
     )
 
 
-def _traffic_compare(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
+def _traffic_compare(
+    request: AnalysisRequest, request_id: UUID, *, bundle: BundleContext | None = None
+) -> AnalysisResult:
     assert request.airports and request.metric and request.year
     try:
-        traffic = calculate_traffic_batch(request.airports)
+        traffic = (
+            calculate_traffic_batch(request.airports)
+            if bundle is None
+            else calculate_traffic_batch(request.airports, bundle=bundle)
+        )
     except TrafficCalculationError as exc:
         raise DispatchFailure("data_unavailable", 503, "Qualified T-100 traffic data is unavailable.") from exc
     sources = [_t100_source(next(iter(traffic.values())).source)]
@@ -119,6 +265,7 @@ def _traffic_compare(request: AnalysisRequest, request_id: UUID) -> AnalysisResu
         raise DispatchFailure("insufficient_data", 422, "Neither airport has the requested T-100 metric available.")
     summary = _comparison_summary(request.metric, rows)
     return _result(request, request_id, rows, sources, _availability_status(rows), summary,
+                   bundle=bundle,
                    limitations=["These descriptive T-100 comparisons are not evidence of terminal capacity or profitability."])
 
 
@@ -146,13 +293,22 @@ def _traffic_metric_value(metric: str, year: int, result: TrafficResult, source_
                        numerator=numerator, denominator=denominator, source_ids=[source_id])
 
 
-def _long_haul(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
+def _long_haul(
+    request: AnalysisRequest, request_id: UUID, *, bundle: BundleContext | None = None
+) -> AnalysisResult:
     assert request.airports and request.metric and request.year
     threshold = float(request.threshold_miles or 3000)
     results: list[LongHaulResult] = []
     try:
         for airport in request.airports:
-            results.append(calculate_long_haul_share(airport, request.year, threshold))
+            result = (
+                calculate_long_haul_share(airport, request.year, threshold)
+                if bundle is None
+                else calculate_long_haul_share(
+                    airport, request.year, threshold, bundle=bundle
+                )
+            )
+            results.append(result)
     except TrafficCalculationError as exc:
         raise DispatchFailure("data_unavailable", 503, "Qualified T-100 distance data is unavailable.") from exc
     if len({item.source.snapshot_id for item in results}) != 1:
@@ -160,30 +316,69 @@ def _long_haul(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
     source = _t100_source(results[0].source)
     rows = []
     for item in results:
-        metric = (
-            MetricValue(key="long_haul_share", value=item.share_percent, unit="percent", status="ok",
-                        numerator=item.long_haul_departures, denominator=item.total_departures,
-                        source_ids=[source["id"]])
-            if item.status == "ok" else
-            _unavailable("long_haul_share", "percent", item.reason or "Long-haul share is unavailable.", source["id"])
+        typed_counts = (
+            item.long_haul_departures is not None
+            and item.total_departures is not None
+            and item.unknown_distance_departures is not None
         )
+        if typed_counts:
+            try:
+                metric = MetricValue(
+                    key="long_haul_share",
+                    value=item.share_percent,
+                    unit="percent",
+                    status="ok" if item.status == "ok" else "unavailable",
+                    numerator=item.long_haul_departures,
+                    denominator=item.total_departures,
+                    unknown_distance_departures=item.unknown_distance_departures,
+                    lower_percent=item.lower_percent,
+                    upper_percent=item.upper_percent,
+                    reason=item.reason if item.status != "ok" else None,
+                    source_ids=[source["id"]],
+                )
+            except ValueError as exc:
+                raise DispatchFailure(
+                    "data_unavailable", 503, "Long-haul calculation output is inconsistent."
+                ) from exc
+        else:
+            metric = _unavailable(
+                "long_haul_share",
+                "percent",
+                item.reason or "Long-haul share is unavailable.",
+                source["id"],
+            )
         rows.append({"airport": item.airport, "metrics": [metric.model_dump()]})
-    if not any(row["metrics"][0]["status"] == "ok" for row in rows):
+    if not any(
+        item.status == "ok" or item.unknown_distance_departures is not None
+        for item in results
+    ):
         raise DispatchFailure("insufficient_data", 422, "Long-haul share is unavailable for this scope.")
     return _result(request, request_id, rows, [source], _availability_status(rows),
                    f"Long-haul share uses performed departures at or above {threshold:g} miles.",
                    threshold_miles=threshold,
+                   bundle=bundle,
                    limitations=["The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."])
 
 
-def _operations(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
+def _operations(
+    request: AnalysisRequest, request_id: UUID, *, bundle: BundleContext | None = None
+) -> AnalysisResult:
     assert request.airports and request.metric
     outputs: list[OperationsResult] = []
     try:
         for airport in request.airports:
-            outputs.append(calculate_operations(airport))
+            result = (
+                calculate_operations(airport)
+                if bundle is None
+                else calculate_operations(airport, year=request.year, bundle=bundle)
+            )
+            outputs.append(result)
     except OperationsCalculationError as exc:
-        raise DispatchFailure("data_unavailable", 503, "Qualified 2024 on-time data is unavailable for this scope.") from exc
+        raise DispatchFailure(
+            "data_unavailable",
+            503,
+            f"Qualified {request.year} on-time data is unavailable for this scope.",
+        ) from exc
     if len({item.source.snapshot_id for item in outputs}) != 1:
         raise DispatchFailure("data_unavailable", 503, "The on-time snapshot changed during this request. Retry once.")
     source = _operations_source(outputs[0])
@@ -195,9 +390,14 @@ def _operations(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
     if request.action == "compare":
         _annotate_comparison_direction(rows)
     if not any(metric["status"] == "ok" for row in rows for metric in row["metrics"]):
-        raise DispatchFailure("insufficient_data", 422, "No requested 2024 operational indicator is available.")
+        raise DispatchFailure(
+            "insufficient_data",
+            422,
+            f"No requested {request.year} operational indicator is available.",
+        )
     return _result(request, request_id, rows, [source], _availability_status(rows),
-                   _comparison_summary(request.metric, rows) if request.action == "compare" else _operation_summary(rows),
+                   _comparison_summary(request.metric, rows) if request.action == "compare" else _operation_summary(rows, request.year),
+                   bundle=bundle,
                    limitations=[outputs[0].population,
                                 "Delay and taxi means exclude cancelled/diverted flights; operational indicators do not prove terminal causation.",
                                 *[_operations_coverage(item) for item in outputs]])
@@ -238,30 +438,40 @@ def _operations_coverage(result: OperationsResult) -> str:
     carriers = ", ".join(result.carriers) or "none"
     if len(carriers) > 250:
         carriers = carriers[:247].rsplit(",", 1)[0] + ",..."
-    text = (f"{result.airport} 2024 on-time coverage: observed months {observed}; missing months {missing}; "
+    text = (f"{result.airport} {result.year} on-time coverage: observed months {observed}; missing months {missing}; "
             f"reporting carriers {carriers}; valid scheduled records {result.scheduled_count}; "
             f"invalid rows {result.invalid_row_count}.")
     return text[:500]
 
 
-def _rank(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
+def _rank(
+    request: AnalysisRequest, request_id: UUID, *, bundle: BundleContext | None = None
+) -> AnalysisResult:
     assert request.metric and request.year
-    selected = sorted(NEW_ENGLAND_AIRPORTS) if request.region == "new_england" else request.airports
+    reference_cohort = set(bundle.cohort) if bundle is not None else set(NEW_ENGLAND_AIRPORTS)
+    selected = sorted(reference_cohort) if request.region == "new_england" else request.airports
     assert selected
     try:
-        traffic = calculate_traffic_batch(sorted(NEW_ENGLAND_AIRPORTS))
+        traffic = (
+            calculate_traffic_batch(sorted(reference_cohort))
+            if bundle is None
+            else calculate_traffic_batch(sorted(reference_cohort), bundle=bundle)
+        )
     except TrafficCalculationError as exc:
         raise DispatchFailure("data_unavailable", 503, "Qualified New England T-100 data is unavailable.") from exc
     screen = calculate_screen(
         traffic.values(),
         sort_by="passenger_growth" if request.metric == "passenger_growth" else "screen_score",
+        bundle=bundle,
     )
     if request.metric == "screen_score" and (screen.status != "ok" or not screen.rows):
         raise DispatchFailure("insufficient_data", 422, screen.reason or "Fewer than two airports are assessable.")
     selected_set = set(selected)
     screen_by_airport = {row.airport: row for row in screen.rows}
-    year_index = request.year - 2023
-    annual_by_airport = {airport: result.annual[year_index] for airport, result in traffic.items()}
+    annual_by_airport = {
+        airport: {annual.year: annual for annual in result.annual}[request.year]
+        for airport, result in traffic.items()
+    }
     rank_values = {
         airport: (
             int(annual.passengers.value)
@@ -322,13 +532,15 @@ def _rank(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
                                           reason=None if occupancy_value is not None else annual.occupancy_percent.reason,
                                           source_ids=[source_id]),
         }
-        if request.year == 2023:
+        baseline_year = bundle.baseline_year if bundle is not None else 2023
+        comparison_year = bundle.comparison_year if bundle is not None else 2024
+        if request.year == baseline_year:
             metrics = [level_metrics[request.metric]]
         else:
             metrics = [
                 MetricValue(key="screen_score", value=item.screen_score if item else None, unit="score",
                             status="ok" if item else "unavailable",
-                            reason=None if item else "Incomplete 2024 screen inputs; no frozen-cohort score is available.",
+                            reason=None if item else f"Incomplete {comparison_year} screen inputs; no frozen-cohort score is available.",
                             source_ids=[source_id]),
                 level_metrics["passengers"],
                 MetricValue(key="passenger_growth", value=growth_value, unit="percent",
@@ -339,7 +551,9 @@ def _rank(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
             ]
         rows.append({"airport": airport, "rank": ranks[airport], "metrics": [metric.model_dump() for metric in metrics]})
     source = _t100_source(next(iter(traffic.values())).source)
-    evidence, evidence_sources, evidence_limitations = _rank_evidence([row["airport"] for row in rows[:3]])
+    evidence, evidence_sources, evidence_limitations = _rank_evidence(
+        [row["airport"] for row in rows[:3]], bundle=bundle
+    )
     if request.metric == "screen_score":
         exclusions = [f"{item.airport}: {item.reason}" for item in screen.exclusions
                       if item.airport in selected_set]
@@ -365,17 +579,24 @@ def _rank(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
     has_unavailable_values = any(metric["status"] != "ok" for row in rows for metric in row["metrics"])
     return _result(request, request_id, rows, [source, *evidence_sources],
                    "partial" if exclusions or has_unavailable_values or any("not_reviewed" in item for item in evidence_limitations) else "ok", summary,
+                   bundle=bundle,
                    evidence=evidence, exclusions=exclusions,
                    limitations=["Screen scores are heuristic traffic pressure, not terminal capacity or investment success.", *evidence_limitations])
 
 
-def _rank_evidence(top_airports: list[str]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+def _rank_evidence(
+    top_airports: list[str], *, bundle: BundleContext | None = None
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     try:
-        bundle = load_evidence()
-    except (OSError, ValueError):
+        evidence_bundle = load_evidence() if bundle is None else load_evidence(bundle=bundle)
+    except (EvidenceIntegrityError, OSError, ValueError) as exc:
+        if bundle is not None:
+            raise DispatchFailure(
+                "data_unavailable", 503, "Accepted bundle evidence is unavailable or inconsistent."
+            ) from exc
         return [], [], ["Curated terminal evidence is unavailable; no terminal disposition is inferred."]
-    source_by_id = {item.source_id: item for item in bundle.sources}
-    reviewed = {item.airport: item for item in bundle.airports}
+    source_by_id = {item.source_id: item for item in evidence_bundle.sources}
+    reviewed = {item.airport: item for item in evidence_bundle.airports}
     evidence, sources, limitations = [], [], []
     used: set[str] = set()
     for airport in top_airports:
@@ -399,69 +620,86 @@ def _rank_evidence(top_airports: list[str]) -> tuple[list[dict[str, Any]], list[
     return evidence, sources, list(dict.fromkeys(limitations))
 
 
-def _sfo_trend(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
+def _sfo_trend(
+    request: AnalysisRequest, request_id: UUID, *, bundle: BundleContext | None = None
+) -> AnalysisResult:
     try:
-        trend = calculate_sfo_enplaned_trend()
+        trend = (
+            calculate_sfo_enplaned_trend()
+            if bundle is None
+            else calculate_sfo_enplaned_trend(bundle=bundle)
+        )
     except SFOTrendError as exc:
         raise DispatchFailure("data_unavailable", 503, "SFO passenger data is unavailable or incomplete. Refresh the accepted snapshot and try again.") from exc
     source_id = f"datasf-{trend.source.dataset_id}"
     annual = {item.year: item.passengers for item in trend.annual_totals}
+    baseline_year = bundle.baseline_year if bundle is not None else 2023
+    comparison_year = bundle.comparison_year if bundle is not None else 2024
     metrics = [
-        MetricValue(key="passengers", value=annual[2024], unit="count", status="ok", source_ids=[source_id]),
+        MetricValue(key="passengers", value=annual[comparison_year], unit="count", status="ok", source_ids=[source_id]),
         MetricValue(key="passenger_growth", value=trend.growth.percent, unit="percent", status=trend.growth.status,
-                    numerator=annual[2024] - annual[2023], denominator=annual[2023], source_ids=[source_id],
+                    numerator=annual[comparison_year] - annual[baseline_year], denominator=annual[baseline_year], source_ids=[source_id],
                     reason=trend.growth.reason),
     ]
     return _result(request, request_id, [{"airport": "SFO", "metrics": [item.model_dump() for item in metrics]}],
                    [_datasf_source(trend.source, source_id)],
                    "partial" if trend.growth.status == "unavailable" else "ok",
-                   f"SFO recorded {annual[2023]:,} enplaned passengers in 2023 and {annual[2024]:,} in 2024. " +
+                   f"SFO recorded {annual[baseline_year]:,} enplaned passengers in {baseline_year} and {annual[comparison_year]:,} in {comparison_year}. " +
                    (f"That is {trend.growth.percent:.2f}% growth." if trend.growth.percent is not None else trend.growth.reason or "Growth is unavailable."),
+                   bundle=bundle,
                    series=[{"period": item.period, "value": item.passengers, "unit": "count", "status": "ok"} for item in trend.series],
                    limitations=["Passenger trends do not identify unmet demand or its cause."])
 
 
-def _sfo_pressure(request: AnalysisRequest, request_id: UUID) -> AnalysisResult:
-    bundle = calculate_sfo_pressure()
-    if not bundle.lineage:
+def _sfo_pressure(
+    request: AnalysisRequest, request_id: UUID, *, bundle: BundleContext | None = None
+) -> AnalysisResult:
+    pressure = (
+        calculate_sfo_pressure()
+        if bundle is None
+        else calculate_sfo_pressure(bundle=bundle)
+    )
+    if not pressure.lineage:
         raise DispatchFailure("data_unavailable", 503, "No accepted SFO source snapshot is available.")
-    source_by_key = {item.source_id: _lineage_source(item) for item in bundle.lineage}
+    source_by_key = {item.source_id: _lineage_source(item) for item in pressure.lineage}
     sources = list(source_by_key.values())
     metrics: list[MetricValue] = []
     series = []
-    if bundle.enplaned_trend.result is not None:
-        trend = bundle.enplaned_trend.result
+    comparison_year = bundle.comparison_year if bundle is not None else 2024
+    if pressure.enplaned_trend.result is not None:
+        trend = pressure.enplaned_trend.result
         enplaned_id = source_by_key["datasf"]["id"]
         annual = {item.year: item.passengers for item in trend.annual_totals}
-        metrics.append(MetricValue(key="sfo_enplaned_trend", value=annual[2024], unit="count", status="ok", source_ids=[enplaned_id]))
+        metrics.append(MetricValue(key="sfo_enplaned_trend", value=annual[comparison_year], unit="count", status="ok", source_ids=[enplaned_id]))
         series = [{"period": item.period, "value": item.passengers, "unit": "count", "status": "ok"} for item in trend.series]
-    if bundle.t100_traffic.result is not None:
-        traffic = bundle.t100_traffic.result
+    if pressure.t100_traffic.result is not None:
+        traffic = pressure.t100_traffic.result
         source_id = source_by_key["t100"]["id"]
         for key in ("passengers", "seats", "departures"):
-            metrics.append(_traffic_metric_value(key, 2024, traffic, source_id))
-        metrics.append(_traffic_metric_value("passenger_growth", 2024, traffic, source_id))
-        metrics.append(_traffic_metric_value("seat_occupancy", 2024, traffic, source_id))
-    if bundle.operations.result is not None:
-        operation = bundle.operations.result
+            metrics.append(_traffic_metric_value(key, comparison_year, traffic, source_id))
+        metrics.append(_traffic_metric_value("passenger_growth", comparison_year, traffic, source_id))
+        metrics.append(_traffic_metric_value("seat_occupancy", comparison_year, traffic, source_id))
+    if pressure.operations.result is not None:
+        operation = pressure.operations.result
         source_id = source_by_key["bts_ontime"]["id"]
         metrics.extend(_operation_metric(operation, key, source_id) for key in CONGESTION_KEYS)
     gap_source = source_by_key.get("t100", {}).get("id")
-    metrics.append(MetricValue(key="sfo_pressure", value=bundle.growth_gap_pp.value, unit="percentage_points",
-                              status=bundle.growth_gap_pp.status, source_ids=[gap_source] if gap_source else [],
-                              reason=bundle.growth_gap_pp.reason or (None if gap_source else "Matched T-100 data is unavailable.")))
+    metrics.append(MetricValue(key="sfo_pressure", value=pressure.growth_gap_pp.value, unit="percentage_points",
+                              status=pressure.growth_gap_pp.status, source_ids=[gap_source] if gap_source else [],
+                              reason=pressure.growth_gap_pp.reason or (None if gap_source else "Matched T-100 data is unavailable.")))
     available = sum(item.status == "ok" for item in metrics)
     if available == 0:
         raise DispatchFailure("insufficient_data", 422, "No requested SFO pressure indicator is available.")
-    evidence, evidence_sources, evidence_limits = _rank_evidence(["SFO"])
+    evidence, evidence_sources, evidence_limits = _rank_evidence(["SFO"], bundle=bundle)
     for source in evidence_sources:
         if source["id"] not in {item["id"] for item in sources}:
             sources.append(source)
     return _result(request, request_id, [{"airport": "SFO", "metrics": [item.model_dump() for item in metrics]}],
-                   sources, "partial" if bundle.status != "ok" or any(item.status != "ok" for item in metrics) else "ok",
+                   sources, "partial" if pressure.status != "ok" or any(item.status != "ok" for item in metrics) else "ok",
                    "SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable.",
+                   bundle=bundle,
                    series=series, evidence=evidence,
-                   limitations=[bundle.limitation, "Profitability and quantitative unmet demand are not_identifiable.", *evidence_limits])
+                   limitations=[pressure.limitation, "Profitability and quantitative unmet demand are not_identifiable.", *evidence_limits])
 
 
 def _explain(request: AnalysisRequest, previous: AnalysisResult, request_id: UUID) -> AnalysisResult:
@@ -472,10 +710,7 @@ def _explain(request: AnalysisRequest, previous: AnalysisResult, request_id: UUI
     for row in previous.rows:
         if row.airport not in selected:
             continue
-        rendered = ", ".join(
-            f"{metric.key} {metric.value:g} {metric.unit}" if metric.value is not None
-            else f"{metric.key} unavailable" for metric in row.metrics
-        )
+        rendered = ", ".join(_explain_metric(metric) for metric in row.metrics)
         lines.append(f"{row.airport}: {rendered}.")
     evidence_notes = " ".join(item.claim for item in previous.evidence)
     limitations = " ".join(previous.limitations)
@@ -487,33 +722,68 @@ def _explain(request: AnalysisRequest, previous: AnalysisResult, request_id: UUI
     return previous.model_copy(update={"request_id": request_id, "summary": summary[:2000]}, deep=True)
 
 
+def _explain_metric(metric: MetricValue) -> str:
+    if metric.value is not None:
+        return f"{metric.key} {metric.value:g} {metric.unit}"
+    if (
+        metric.key == "long_haul_share"
+        and metric.status == "ok"
+        and metric.lower_percent is not None
+        and metric.upper_percent is not None
+    ):
+        unknown = metric.unknown_distance_departures or 0
+        return (
+            f"long_haul_share between {metric.lower_percent:g} and "
+            f"{metric.upper_percent:g} percent ({unknown} departures have unknown distance)"
+        )
+    return f"{metric.key} unavailable"
+
+
 def _result(request, request_id, rows, sources, status, summary, *, series=None, evidence=None,
-            exclusions=None, limitations=None, threshold_miles=None) -> AnalysisResult:
-    airports = request.airports or sorted(NEW_ENGLAND_AIRPORTS)
+            exclusions=None, limitations=None, threshold_miles=None,
+            bundle: BundleContext | None = None) -> AnalysisResult:
+    airports = request.airports or sorted(bundle.cohort if bundle is not None else NEW_ENGLAND_AIRPORTS)
+    scope = {
+        "airports": airports,
+        "year": request.year,
+        "metric": request.metric,
+        "threshold_miles": threshold_miles if threshold_miles is not None else request.threshold_miles,
+        "population": _population(request, bundle=bundle),
+    }
+    if bundle is not None:
+        scope.update({
+            "bundle_id": bundle.bundle_id,
+            "baseline_year": bundle.baseline_year,
+            "comparison_year": bundle.comparison_year,
+        })
     return AnalysisResult.model_validate({
         "result_id": uuid4(), "request_id": request_id, "status": status,
-        "scope": {"airports": airports, "year": request.year, "metric": request.metric,
-                  "threshold_miles": threshold_miles if threshold_miles is not None else request.threshold_miles,
-                  "population": _population(request)},
+        "scope": scope,
         "rows": rows, "summary": summary, "series": series or [], "sources": sources,
         "evidence": evidence or [], "exclusions": exclusions or [], "limitations": limitations or [],
     })
 
 
-def _population(request: AnalysisRequest) -> str:
+def _population(
+    request: AnalysisRequest, *, bundle: BundleContext | None = None
+) -> str:
+    baseline_year = bundle.baseline_year if bundle is not None else 2023
+    comparison_year = bundle.comparison_year if bundle is not None else 2024
     if request.metric in OPERATIONAL_KEYS or request.metric == "congestion":
-        return "Domestic reporting-carrier scheduled departures at origin; 2024 only"
+        return f"Domestic reporting-carrier scheduled departures at origin; {comparison_year} only"
     if request.metric in {"sfo_enplaned_trend", "sfo_pressure"}:
         return "SFO Enplaned passengers combined Domestic and International; T-100 and on-time populations separately identified"
     if request.action == "rank":
         if request.metric == "screen_score":
-            return "New England airports normalized against the frozen eligible 2024 cohort"
+            return f"New England airports normalized against the frozen eligible {comparison_year} cohort"
         if request.metric == "passenger_growth":
-            return "Raw 2024 versus 2023 passenger growth; rank positions against the full growth-eligible New England cohort"
+            return (f"Raw {comparison_year} versus {baseline_year} passenger growth; rank positions "
+                    "against the full growth-eligible New England cohort")
         label = "passengers" if request.metric == "passengers" else "seat occupancy"
         return (f"Raw BTS T-100 {label} for CY{request.year}; rank positions against the full eligible "
                 "New England cohort with valid requested-year values")
-    return "BTS T-100 scheduled passenger origin traffic; 2023 and 2024 where applicable"
+    return (f"BTS T-100 scheduled passenger origin traffic; {baseline_year} and "
+            f"{comparison_year} where applicable")
 
 
 def _availability_status(rows) -> str:
@@ -557,8 +827,8 @@ def _comparison_summary(metric, rows) -> str:
     return f"{higher['airport']} is higher than {lower['airport']} on {metric}."
 
 
-def _operation_summary(rows) -> str:
-    return f"2024 operational indicators for {', '.join(row['airport'] for row in rows)}; delay and taxi means use eligible completed departures."
+def _operation_summary(rows, year: int) -> str:
+    return f"{year} operational indicators for {', '.join(row['airport'] for row in rows)}; delay and taxi means use eligible completed departures."
 
 
 def _t100_source(source) -> dict[str, Any]:

@@ -1,0 +1,77 @@
+{
+  "admission_status": "admitted",
+  "bundle_id": "annual-2025-r1",
+  "checked_at_utc": "2026-09-27T17:17:02.017315Z",
+  "manifest_sha256": "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548",
+  "receipt_type": "application_source_check",
+  "schema_version": 1,
+  "sources": [
+    {
+      "content_sha256": "73bc342560dc5b555fa957e95dc8f454bddca680ed04e8e8ff99c1287b2de659",
+      "manifest_sha256": "e9a0ac23b1994124b64f5e7997f6c0b656c56f041462a1d9289b7e0330a86087",
+      "newer_complete_available": false,
+      "newer_partial_year": 2026,
+      "outcome": "current_for_scope",
+      "selected_period_revised": false,
+      "snapshot_id": "datasf-eb1c8fd94a9664f9e6856b84d46ec755c4e3383f0ebe0a351946658cd0415e5b",
+      "source": "datasf",
+      "years": [
+        2024,
+        2025
+      ]
+    },
+    {
+      "content_sha256": "fdcbdedcf73cb9792a1c6892cd1c7c368a61af59190cad8fbd317735ad8e6ca7",
+      "manifest_sha256": "3c248a0c106e18f223b94e043876e097d629321127537138c08b7fb7b2997fdb",
+      "newer_complete_available": false,
+      "newer_partial_year": 2026,
+      "outcome": "current_for_scope",
+      "selected_period_revised": false,
+      "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e",
+      "source": "t100",
+      "years": [
+        2024,
+        2025
+      ]
+    },
+    {
+      "content_sha256": "29a013865c8d2d2b77052430592525b9f9233d3ed003b8a18cc11dbf76806e98",
+      "manifest_sha256": "069c07bb307fc6bf1ef8a053174457919541ce9e2a726348d9866b98e833c9dd",
+      "newer_complete_available": false,
+      "newer_partial_year": 2026,
+      "outcome": "current_for_scope",
+      "selected_period_revised": false,
+      "snapshot_id": "ontime-04fee95d838f70541e6cb219b230101f67524a4021309e9b9d2246cb0a3514ba",
+      "source": "ontime",
+      "years": [
+        2025
+      ]
+    },
+    {
+      "content_sha256": "e88218c048d512e3e702922768df8c82961d8b81faaa4e359c0360f20cc1f583",
+      "manifest_sha256": "5d650f6c068ca07fedca45260109142a95c7aaf070442f62c3706cd003100dfc",
+      "newer_complete_available": false,
+      "newer_partial_year": null,
+      "outcome": "current_for_scope",
+      "selected_period_revised": false,
+      "snapshot_id": "faa-834930a0ccb14b84c2d401533b091ca4af04ae2a8367494a925af98c47079179",
+      "source": "faa",
+      "years": [
+        2025
+      ]
+    },
+    {
+      "content_sha256": "1c16930f818879bc144d5d531c85f4dc1c3e992b08ceb937dadddc4a7484adcb",
+      "manifest_sha256": "b977344183ebf38e9ff8fe79039148f09cf322724887947a27feaef4c0be7670",
+      "newer_complete_available": false,
+      "newer_partial_year": 2026,
+      "outcome": "current_for_scope",
+      "selected_period_revised": false,
+      "snapshot_id": "aip-bd7aa3c7883882987eb79250d86e226053211ff2cd72bc311ad2f02c584623b5",
+      "source": "aip",
+      "years": [
+        2025
+      ]
+    }
+  ]
+}

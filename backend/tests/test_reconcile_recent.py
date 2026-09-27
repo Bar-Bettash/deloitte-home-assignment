@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 from copy import deepcopy
 from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -11,6 +13,8 @@ from app.sources.bundle import load_bundle
 from scripts import reconcile_recent
 
 DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
+BACKEND_ROOT = Path(__file__).resolve().parents[1]
+REFERENCE_PATH = BACKEND_ROOT / "docs/evidence/recent-arithmetic-reference.json"
 
 
 @pytest.fixture(scope="module")
@@ -21,6 +25,21 @@ def bundle():
 @pytest.fixture(scope="module")
 def expected(bundle):
     return reconcile_recent.build_expected(bundle)
+
+
+@pytest.fixture(scope="module")
+def preserved_reference():
+    return json.loads(REFERENCE_PATH.read_text(encoding="utf-8"))
+
+
+@pytest.fixture(scope="module")
+def final_receipt(bundle, preserved_reference):
+    return reconcile_recent.build_final_receipt(
+        bundle,
+        preserved_reference,
+        reference_path=REFERENCE_PATH,
+        checked_at=datetime(2026, 9, 27, 12, 0, tzinfo=UTC),
+    )
 
 
 def test_expected_generator_has_no_application_calculator_imports() -> None:
@@ -41,7 +60,7 @@ def test_expected_generator_has_no_application_calculator_imports() -> None:
 
 def test_real_bundle_controls_cover_every_workflow_and_full_grain(expected) -> None:
     assert expected["identity"]["bundle_manifest_sha256"] == (
-        "f951dd50d254c3376c6b2f739fa79d711dbaa14e1fc6d21834d836012aad1b4d"
+        "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548"
     )
     assert expected["independence"]["expected_values_import_application_calculators"] is False
     assert len(expected["traffic"]["airports"]) == 27
@@ -206,6 +225,182 @@ def test_numeric_comparison_uses_tolerance_and_reports_paths() -> None:
     assert reconcile_recent.compare_values({"value": 1.0}, {"value": 1.1}) == [
         "$.value: 1.0 != 1.1"
     ]
+
+
+def test_final_receipt_binds_scope_code_reference_and_workflows(
+    bundle, final_receipt
+) -> None:
+    assert set(final_receipt) == reconcile_recent.FINAL_RECEIPT_KEYS
+    assert final_receipt["status"] == "pass"
+    assert final_receipt["bundle_manifest_sha256"] == bundle.manifest_sha256
+    assert final_receipt["period"] == {"baseline_year": 2024, "comparison_year": 2025}
+    assert final_receipt["cohort"] == list(bundle.cohort)
+    assert final_receipt["sources"] == reconcile_recent._source_identity(bundle)
+    assert final_receipt["reference"]["path"] == (
+        "docs/evidence/recent-arithmetic-reference.json"
+    )
+    assert final_receipt["reference"]["sha256"] == reconcile_recent._sha256(REFERENCE_PATH)
+    assert set(final_receipt["code_sha256"]) == set(reconcile_recent.CODE_PATHS)
+    assert final_receipt["workflows"] == {
+        "screen": {"status": "pass"},
+        "operations": {"status": "pass", "comparison_status": "pass"},
+        "long_haul": {"status": "pass"},
+        "sfo": {"status": "pass"},
+    }
+
+
+def test_final_receipt_validator_recomputes_bound_artifacts(
+    tmp_path, bundle, final_receipt
+) -> None:
+    receipt_path = tmp_path / "recent-reconciliation.json"
+    receipt_path.write_text(json.dumps(final_receipt), encoding="utf-8")
+
+    validated = reconcile_recent.validate_reconciliation_file(bundle, receipt_path)
+
+    assert validated == final_receipt
+
+
+def test_final_cli_uses_preserved_reference_without_raw_input(tmp_path) -> None:
+    output_path = tmp_path / "recent-reconciliation.json"
+
+    exit_code = reconcile_recent.main([
+        "--bundle", "annual-2025-r1",
+        "--data-root", str(DATA_ROOT),
+        "--reference", str(REFERENCE_PATH),
+        "--output", str(output_path),
+    ])
+    result = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert exit_code == 0
+    assert result["receipt_type"] == "application_reconciliation"
+    assert result["status"] == "pass"
+
+
+def test_evidence_only_manifest_revision_is_allowed(bundle, preserved_reference) -> None:
+    revised = replace(bundle, manifest_sha256="a" * 64)
+
+    receipt = reconcile_recent.build_final_receipt(
+        revised,
+        preserved_reference,
+        reference_path=REFERENCE_PATH,
+        checked_at=datetime(2026, 9, 27, 12, 0, tzinfo=UTC),
+    )
+
+    assert receipt["bundle_manifest_sha256"] == "a" * 64
+
+
+@pytest.mark.parametrize("changed", ["source", "period", "cohort"])
+def test_final_reference_rejects_changed_bundle_scope(
+    bundle, preserved_reference, changed
+) -> None:
+    if changed == "source":
+        t100 = replace(bundle.sources["t100"], content_sha256="b" * 64)
+        revised = replace(bundle, sources={**bundle.sources, "t100": t100})
+    elif changed == "period":
+        revised = replace(bundle, baseline_year=2023)
+    else:
+        revised = replace(bundle, cohort=(*bundle.cohort[:-1], "ZZZ"))
+
+    with pytest.raises(reconcile_recent.ReconciliationError, match="incompatible"):
+        reconcile_recent.validate_reference(revised, preserved_reference)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("raw_reference_sha256", None),
+        ("raw_reference_sha256", "not-a-sha256"),
+        ("raw_source_reference_checked", False),
+    ],
+)
+def test_final_reference_requires_preliminary_raw_source_proof(
+    bundle, preserved_reference, field, value
+) -> None:
+    changed = deepcopy(preserved_reference)
+    if field == "raw_source_reference_checked":
+        changed["independence"][field] = value
+    else:
+        changed["identity"][field] = value
+
+    with pytest.raises(reconcile_recent.ReconciliationError, match="incompatible"):
+        reconcile_recent.validate_reference(bundle, changed)
+
+
+def test_final_validator_rejects_reference_or_code_hash_drift(
+    monkeypatch, bundle, preserved_reference, final_receipt
+) -> None:
+    changed_reference = deepcopy(final_receipt)
+    changed_reference["reference"]["sha256"] = "c" * 64
+    with pytest.raises(reconcile_recent.ReconciliationError, match="receipt mismatch"):
+        reconcile_recent.validate_reconciliation_payload(
+            bundle, changed_reference, preserved_reference
+        )
+
+    original = reconcile_recent._code_hashes
+
+    def changed_hashes(root):
+        hashes = original(root)
+        hashes["app/dispatch.py"] = "d" * 64
+        return hashes
+
+    monkeypatch.setattr(reconcile_recent, "_code_hashes", changed_hashes)
+    with pytest.raises(reconcile_recent.ReconciliationError, match="receipt mismatch"):
+        reconcile_recent.validate_reconciliation_payload(
+            bundle, final_receipt, preserved_reference
+        )
+
+
+def test_final_file_validator_rejects_duplicate_keys(tmp_path, bundle) -> None:
+    receipt_path = tmp_path / "duplicate.json"
+    receipt_path.write_text('{"status":"pass","status":"pass"}', encoding="utf-8")
+
+    with pytest.raises(reconcile_recent.ReconciliationError, match="duplicate JSON key"):
+        reconcile_recent.validate_reconciliation_file(bundle, receipt_path)
+
+
+def test_final_cli_never_overwrites_preliminary_reference(bundle, capsys) -> None:
+    original_hash = reconcile_recent._sha256(REFERENCE_PATH)
+
+    with pytest.raises(SystemExit) as raised:
+        reconcile_recent.main([
+            "--bundle", bundle.bundle_id,
+            "--data-root", str(DATA_ROOT),
+            "--reference", str(REFERENCE_PATH),
+            "--output", str(REFERENCE_PATH),
+        ])
+
+    assert raised.value.code == 1
+    assert "must not overwrite" in capsys.readouterr().err
+    assert reconcile_recent._sha256(REFERENCE_PATH) == original_hash
+
+
+@pytest.mark.parametrize("defect", ["malformed", "wrong_scope", "aip_context"])
+def test_final_receipt_rejects_invalid_bundled_evidence(
+    tmp_path, bundle, preserved_reference, defect
+) -> None:
+    evidence_path = tmp_path / "evidence.json"
+    payload = json.loads(bundle.evidence_path.read_text(encoding="utf-8"))
+    if defect == "malformed":
+        evidence_path.write_text("{", encoding="utf-8")
+    else:
+        if defect == "wrong_scope":
+            payload["scope"]["bundle_id"] = "other-bundle"
+        else:
+            payload["aip_funding_context"]["new_england_award_count"] -= 1
+        evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+    invalid_bundle = replace(
+        bundle,
+        evidence_path=evidence_path,
+        evidence_sha256=hashlib.sha256(evidence_path.read_bytes()).hexdigest(),
+    )
+
+    with pytest.raises(reconcile_recent.ReconciliationError, match="evidence"):
+        reconcile_recent.build_final_receipt(
+            invalid_bundle,
+            preserved_reference,
+            reference_path=REFERENCE_PATH,
+            checked_at=datetime(2026, 9, 27, 12, 0, tzinfo=UTC),
+        )
 
 
 def _raw_reference_from(expected: dict) -> dict:

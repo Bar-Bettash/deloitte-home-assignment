@@ -49,7 +49,7 @@ def test_corpus_validator_rejects_bad_inventory_or_invalid_wire_scope(tmp_path, 
     elif mutation == "bad_count":
         corpus["cases"].pop()
     elif mutation == "invalid_expected":
-        corpus["cases"][0]["expected"]["analysis"]["year"] = 2025
+        corpus["cases"][0]["expected"]["analysis"]["year"] = 2026
     else:
         corpus["cases"][10]["input"]["context"] = {"action": "compare", "airports": ["BOS"],
                                                       "metric": "passenger_growth", "year": 2024}
