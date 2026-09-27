@@ -1,0 +1,210 @@
+{
+  "checked_at": "2026-09-27",
+  "traffic_snapshot": "Accepted BTS T-100 2024 frozen cohort; 2024 screen; 21 of 22 airports numerically eligible; PVC omitted because December 2024 is missing.",
+  "sources": [
+    {
+      "source_id": "pvd_master_plan_2021_s5",
+      "publisher": "Rhode Island Airport Corporation",
+      "title": "T.F. Green Airport Master Plan — Section 5: Aviation Demand/Capacity Analysis and Facility Requirements",
+      "url": "https://flyri.com/wp-content/uploads/2022/01/pvd-mp-report-sect-5-fac-requirements.pdf",
+      "source_date": "2021-05-01",
+      "checked_at": "2026-09-27",
+      "historical": true,
+      "date_note": "Final master-plan document dated May 2021; PAL forecast inputs cite June and July 2018. Treat the forecasts as historical, not current measurements."
+    },
+    {
+      "source_id": "pwm_samp_2018",
+      "publisher": "City of Portland / Portland International Jetport",
+      "title": "Sustainable Airport Master Plan and associated Environmental Assessment",
+      "url": "https://portlandjetport.org/sustainable-airport-master-plan",
+      "source_date": "2018-11-16",
+      "checked_at": "2026-09-27",
+      "historical": true,
+      "date_note": "Airport page dates the Draft Environmental Assessment notice to November 16, 2018 and says implementation timing depends on approval, design, and funding."
+    },
+    {
+      "source_id": "pwm_bond_statement_2019",
+      "publisher": "City of Portland, Maine",
+      "title": "Preliminary Official Statement for General Airport Revenue Bonds, Series 2019",
+      "url": "https://portlandjetport.org/file/preliminary-official-statement-for-the-garb-series-2019",
+      "source_date": "2019-11-14",
+      "checked_at": "2026-09-27",
+      "historical": true,
+      "date_note": "Official statement describes the terminal expansion completed in 2012; this is historical project context, not present utilization."
+    },
+    {
+      "source_id": "bos_edr_2023_2024",
+      "publisher": "Massachusetts Port Authority",
+      "title": "Boston Logan International Airport 2023/2024 Environmental Data Report — Project Mitigation, Terminal E Modernization",
+      "url": "https://www.massport.com/sites/default/files/2025-10/2023-2024_EDR_Web-Version_v4.pdf",
+      "source_date": "2025-10-01",
+      "checked_at": "2026-09-27",
+      "historical": true,
+      "date_note": "The report's Terminal E project status map is as of December 2024; it describes construction/phasing, not measured terminal capacity or a current passenger bottleneck."
+    },
+    {
+      "source_id": "sfo_cip_statement_2023",
+      "publisher": "San Francisco International Airport / Airport Commission",
+      "title": "Preliminary Official Statement — Series 2023AB, capital program and Airport Development Plan",
+      "url": "https://www.flysfo.com/sites/default/files/2023-02/Preliminary%20Official%20Statement%20-%20Series%202023AB.pdf",
+      "source_date": "2023-02-01",
+      "checked_at": "2026-09-27",
+      "historical": true,
+      "date_note": "Statement says the recommended ADP was completed in 2016 and was not included in the Ascent Phase 1 or then-current CIP; funding and scope reflect the statement's 2023 basis only."
+    },
+    {
+      "source_id": "sfo_t3_project_page",
+      "publisher": "San Francisco International Airport",
+      "title": "Terminal 3 Construction — Terminal 3 West Modernization Project",
+      "url": "https://www.flysfo.com/it/node/15471",
+      "source_date": null,
+      "checked_at": "2026-09-27",
+      "historical": false,
+      "date_note": "Live airport project page observed on the checked date; it describes current construction impacts and directs passengers around active works. Page does not provide a publication date."
+    }
+  ],
+  "airports": [
+    {
+      "airport": "PVD",
+      "status": "unknown",
+      "traffic_signal": "Frozen 2024 screen score 87.0 (rank 1 among eligible reviewed candidates); a traffic-pressure signal only.",
+      "unresolved_constraint": "No current, directly observed terminal capacity or passenger-processing constraint was established by the reviewed material.",
+      "proposed_intervention": null,
+      "observations": [
+        {
+          "source_id": "pvd_master_plan_2021_s5",
+          "locator": "Section 5, printed pp. 5-2 and 5-6 (PDF pp. 1 and 5), Tables 5.1–5.2 and annual service volume discussion",
+          "fact": "The plan's 2017-based PAL forecast lists 1.9 million annual enplanements at the 2017 baseline and 2.6, 3.0, and 3.7 million at PAL 1–3. It says forecast aircraft operations were not projected to exceed 60% of annual service volume during its planning period and therefore major airfield capacity improvements were not recommended.",
+          "bearing": "counterevidence"
+        }
+      ],
+      "counterevidence": [
+        "The master-plan capacity conclusion concerns forecast airfield operations, not current terminal queues, gate occupancy, or holdroom crowding.",
+        "Its demand forecast inputs date to 2018 and cannot establish current operations or the status of later projects.",
+        "No contemporaneous PVD peak-period terminal utilization, denied boarding, or passenger-processing measure was found in this bounded review."
+      ],
+      "next_diligence": [
+        "Obtain current peak-hour gate and holdroom utilization, queue and processing observations, and passenger-flow data.",
+        "Check the current airport capital plan and completed or superseding terminal projects before making any expansion case.",
+        "Determine whether any observed delay or crowding is attributable to terminal space rather than airline schedules, staffing, security processing, or curb access."
+      ],
+      "limitations": [
+        "The screen score is a relative traffic heuristic, not a capacity measure, causal finding, investment-success probability, or profitability estimate.",
+        "Reviewed PVD plan evidence is historical and airfield-focused; no current terminal bottleneck is verified."
+      ]
+    },
+    {
+      "airport": "PWM",
+      "status": "unknown",
+      "traffic_signal": "Frozen 2024 screen score 83.5 (rank 2 among eligible reviewed candidates); a traffic-pressure signal only.",
+      "unresolved_constraint": "No current, directly observed terminal capacity or passenger-processing constraint was established by the reviewed material.",
+      "proposed_intervention": null,
+      "observations": [
+        {
+          "source_id": "pwm_samp_2018",
+          "locator": "SAMP airport page, paragraphs on plan purpose, Environmental Assessment and implementation timing",
+          "fact": "The airport says its SAMP sets direction for future capital improvements, lists safety and sustainability projects, and says timing can vary with approval, design, and funding availability.",
+          "bearing": "context"
+        },
+        {
+          "source_id": "pwm_bond_statement_2019",
+          "locator": "Preliminary Official Statement, section titled Terminal",
+          "fact": "The City reports that the terminal expansion and renovation was completed in 2012; the statement describes approximately 300,000 square feet and 14 passenger gates at that time.",
+          "bearing": "counterevidence"
+        }
+      ],
+      "counterevidence": [
+        "The known passenger-terminal expansion was completed in 2012; its completion is not evidence either for or against present congestion.",
+        "The SAMP's listed projects and environmental approvals do not report present terminal occupancy, peak-period queues, or gate constraints.",
+        "No current PWM operational measurement tied to a terminal constraint was found in this bounded review."
+      ],
+      "next_diligence": [
+        "Check current Jetport capital-project status and any completed or superseding terminal work.",
+        "Collect peak-period gate, holdroom, security-queue and passenger-processing measures before considering an intervention.",
+        "Test airline scheduling, staffing, curb access, and other non-terminal explanations for any observed pressure."
+      ],
+      "limitations": [
+        "The 2018 planning material is a development framework and its project timing is conditional.",
+        "The 2019 terminal description is historical; gate count and floor area do not measure current throughput or utilization.",
+        "The screen score is not a terminal capacity, latent-demand, or profitability measure."
+      ]
+    },
+    {
+      "airport": "BOS",
+      "status": "unknown",
+      "traffic_signal": "Frozen 2024 screen score 80.5 (rank 3 among eligible reviewed candidates); a traffic-pressure signal only.",
+      "unresolved_constraint": "No current, directly observed terminal capacity or passenger-processing constraint was established by the reviewed material.",
+      "proposed_intervention": null,
+      "observations": [
+        {
+          "source_id": "bos_edr_2023_2024",
+          "locator": "Section 10.2, Terminal E Modernization, including project status and Figure 10-1 (status as of December 2024)",
+          "fact": "Massport describes a seven-gate Terminal E modernization phased as four Phase I gates and three Phase II gates; the report labels Phase I completed and Phase II deferred as of December 2024.",
+          "bearing": "current_project"
+        }
+      ],
+      "counterevidence": [
+        "The report documents a specific Terminal E capital project, including completed Phase I work and deferred Phase II; a deferred planned phase alone does not demonstrate a present terminal bottleneck.",
+        "The EDR is an environmental/project-status source, not a measurement of current terminal utilization, queues, gate conflicts, or throughput.",
+        "No airport-wide current peak-period operational evidence was found in this bounded review."
+      ],
+      "next_diligence": [
+        "Confirm the latest Terminal E project schedule, approvals, scope and operational status because the EDR snapshot is as of December 2024.",
+        "Measure current peak-period terminal and gate use and identify whether constraints are localized to Terminal E or elsewhere.",
+        "Compare terminal observations with airline scheduling, staffing, security, roadway and other project changes before proposing additional capacity."
+      ],
+      "limitations": [
+        "Project status is dated to December 2024 and may have changed since the report.",
+        "A high traffic-pressure screen score does not identify a terminal constraint or establish that additional gates would solve one."
+      ]
+    },
+    {
+      "airport": "SFO",
+      "status": "unknown",
+      "traffic_signal": "The 2024 passenger and seat measures describe transported traffic and supplied seats; they do not identify unconstrained demand.",
+      "unresolved_constraint": "No reviewed source establishes that a current terminal constraint causes a quantifiable amount of unmet demand or supports a profitability estimate.",
+      "proposed_intervention": null,
+      "observations": [
+        {
+          "source_id": "sfo_cip_statement_2023",
+          "locator": "Preliminary Official Statement, Airport Development Plan and Capital Improvement Plan discussion (statement basis: January 2023)",
+          "fact": "SFO's 2023 financing statement says its recommended Airport Development Plan was completed in 2016, framed potential long-term development for up to approximately 71 million annual passengers, and was not included in Ascent Phase 1 or the then-current CIP.",
+          "bearing": "counterevidence"
+        },
+        {
+          "source_id": "sfo_t3_project_page",
+          "locator": "Terminal 3 Construction page, Terminal 3 West Modernization Project and Travel Alerts",
+          "fact": "SFO currently describes active Terminal 3 West modernization, construction-related passenger routing and curbside impacts, and a Terminal 3 AirTrain station closed pending the new facility expected in 2027.",
+          "bearing": "current_project"
+        }
+      ],
+      "counterevidence": [
+        "The ADP's 71 million passenger figure is a long-range planning envelope, not observed unconstrained demand; the 2023 statement says that ADP was not in the then-current CIP.",
+        "SFO's current Terminal 3 work changes passenger routing and curb access, providing a competing explanation for observed local friction and a project status that must be considered.",
+        "Passenger totals, seat counts, occupancy and growth cannot reveal rejected bookings, missing flights, willingness to pay, or causal terminal saturation."
+      ],
+      "next_diligence": [
+        "Check the current CIP, Airport Commission approvals and latest Terminal 3 West schedule before interpreting traffic or construction-related friction.",
+        "Obtain unconstrained booking or denied-demand evidence, fare and revenue data, project costs and a defensible causal design before quantifying unmet demand or profitability.",
+        "Separate temporary construction impacts, airline scheduling and processing constraints from any enduring terminal capacity issue."
+      ],
+      "limitations": [
+        "The 2023 financing statement is historical and is not proof of the current CIP or project status.",
+        "The live Terminal 3 project page is undated; its observed status is checked as of 2026-09-27 and should be refreshed before future decisions.",
+        "Precise quantitative unmet demand and profitability remain not_identifiable from the qualified data and reviewed evidence."
+      ]
+    }
+  ],
+  "sfo_business_outcomes": [
+    {
+      "outcome": "profitability",
+      "status": "not_identifiable",
+      "reason": "Qualified passenger and seat series do not supply capital cost, operating cost, fares, revenue, unconstrained demand, or causal attribution needed to estimate project profitability."
+    },
+    {
+      "outcome": "quantitative_unmet_demand",
+      "status": "not_identifiable",
+      "reason": "Transported passenger counts and supplied seats cannot identify rejected bookings or passengers who would travel absent a constraint; an unconstrained-demand source and causal evidence are missing."
+    }
+  ]
+}

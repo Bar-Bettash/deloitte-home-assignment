@@ -1,6 +1,6 @@
 # Airport Investment Analyst — Bounded Demo Plan
 
-**Plan revision 4. DESIGN ONLY.** This is a small home-assignment prototype, not an aviation platform. The written plan has been simplified around the owner's direction: keep sensible limits and show a clear UI error outside them. Application execution and real agent reviews remain [TODO](TODO.md); no independent approval or implemented capability is claimed.
+**Plan revision 4; deterministic prototype implemented, model interpretation gated.** This is a small home-assignment prototype, not an aviation platform. New England screening, LAX/SNA/SFO operations, ANC long-haul, SFO trend/pressure, session handling, the query API, and the results UI are implemented. The current clean-environment suite passes 212 backend tests (one Starlette deprecation warning); UI tests pass 8/8. See the [execution ledger](TODO.md) and [architecture/setup/verification note](backend/docs/ARCHITECTURE.md). Free-text model interpretation remains disabled pending its separately gated admission/demo; independent and native review runners remain open.
 
 This README is the master plan. The [API ↔ UI contract](docs/API_UI_MAP.md) defines the concrete request/result/error fields used by the connections below. [PLAN_GRAPH.json](docs/PLAN_GRAPH.json) mirrors the step goals, dependencies and file scopes. Earlier review records are historical and apply only to their recorded versions. No upstream Agentic OS or Claude configuration is changed by this plan.
 
@@ -17,20 +17,20 @@ Build a **screening assistant**, not a profitability or latent-demand forecastin
 | Anchorage long-haul percentage | Exact departure-weighted share on qualified data, with year, distance threshold, numerator, denominator and scope. Insufficient distance coverage produces an error, not a fabricated percentage. |
 | SFO unmet-demand question | Real passenger trends, matched passenger-growth versus seat-growth proxy, operational indicators and a sourced constraint note. Explain why these do not identify the quantity or cause of true unmet demand. |
 | Nearby questions and follow-ups | Compare BOS/PVD passenger growth; rank New England by raw growth; change a supported metric/year/threshold without losing scope. |
-| API and AI | An actual DataSF API refresh feeds the SFO result. Real natural-language interpretation is demonstrated, not just quick-prompt buttons. |
+| API and AI | DataSF refresh and structured API-to-result flow are implemented and verified. Live natural-language interpretation remains an unfulfilled, separately gated requirement. |
 | Handoff | One usable browser screen, runnable local source and a short architecture/design note. |
 
-**Errors are valid product behavior, but not a substitute for the required successful demonstrations.** Test both a supported result and a bounded failure. If no reviewed airport has a supported terminal thesis, say so after showing the real ranking and evidence review; never manufacture a positive recommendation.
+**Errors are valid product behavior, but not a substitute for the required successful demonstrations.** Deterministic structured demonstrations are implemented; live model interpretation remains open. If no reviewed airport has a supported terminal thesis, say so after showing the real ranking and evidence review; never manufacture a positive recommendation.
 
 ## 2. Small architecture
 
-One local FastAPI process (Python 3.11+) serves a static HTML/JavaScript UI. DuckDB reads local Parquet snapshots. An in-memory dictionary holds the latest successful result per session. One manually curated JSON file holds evidence notes. One constrained model call interprets free text; deterministic handlers calculate and explain the results.
+One local FastAPI process (Python 3.11) serves a static HTML/JavaScript UI. DuckDB reads local Parquet snapshots. An in-memory dictionary holds the latest successful result per session. One manually curated JSON file holds evidence notes. Deterministic handlers calculate and explain supported structured requests. The planned model interpretation path is currently disabled and makes no provider calls.
 
 ```mermaid
 flowchart LR
     Chat["Chat / quick prompts / scope changes"] -->|"POST /api/query"| Query["Backend: main.py"]
-    Query -->|"Free text only"| Model["intent.py: one bounded call"]
-    Model --> Validate["contracts.py: validated request"]
+    Query -.->|"disabled; gated before admission"| Model["Planned model interpretation"]
+    Model -.->|"not active"| Validate["contracts.py: validated request"]
     Query -->|"Structured preset"| Validate
     Validate --> Dispatch["dispatch.py: rank / compare / metric / explain"]
     Data["Accepted snapshots + evidence"] --> Dispatch
@@ -46,7 +46,7 @@ Private keys stay server-side and outside Git/logs. Do not search for or print c
 
 ### Backend endpoints → frontend connections
 
-**All routes below are planned, not already running.** The browser uses same-origin relative URLs; the backend owns calculations, source access, validation and model credentials.
+**These routes are implemented and locally verified.** The browser uses same-origin relative URLs; the backend owns calculations, source access, validation and any future model credentials.
 
 | Frontend action | Backend endpoint | Backend file / destination | Frontend consumer | Build step |
 |---|---|---|---|---|
@@ -66,9 +66,9 @@ The four assignment questions all use the **same `POST /api/query`**:
 | ANC long haul | `metric / long_haul_share` | `calculations/long_haul.py` → percentage, counts, threshold |
 | SFO demand pressure | `metric / sfo_pressure` | `calculations/sfo.py` + evidence → trends, proxy and limitations |
 
-First slice: the SFO preset uses `metric / sfo_enplaned_trend` and the route calls the SFO calculation directly. Later, 5.5 replaces that implementation with the shared dispatcher; it does not add another `/api/query` route. Source refresh remains a setup command with the server stopped, not a browser endpoint.
+The SFO trend, SFO pressure bundle, screening, operations, long-haul, comparisons and explanation paths all use the shared dispatcher behind the same `/api/query` route. Source refresh remains a setup command with the server stopped, not a browser endpoint.
 
-Before implementing the API, UI or their tests, read [API_UI_MAP.md](docs/API_UI_MAP.md): typed request examples, bare success responses, error status codes, session/result binding, field-to-UI mapping and planned contract checks. It records the researched config sources and explicit local-demo adaptations. No WebSocket/SSE, separate evidence/history API, extra service or preemptive `/v1` route is added.
+For the implemented API/UI wire contract, see [API_UI_MAP.md](docs/API_UI_MAP.md): typed request examples, bare success responses, error status codes, session/result binding, field-to-UI mapping and acceptance checks. It records the researched config sources and explicit local-demo adaptations. No WebSocket/SSE, separate evidence/history API, extra service or preemptive `/v1` route is added.
 
 ## 3. Supported scope and simple limits
 
@@ -81,9 +81,9 @@ These are deliberate prototype limits, not aviation standards. Enforce them in r
 | Actions | One of `rank`, `compare`, `metric`, `explain` per request. `metric` has one airport; `compare` has exactly two. Rank only the New England cohort or a subset. At most 22 ranked rows. |
 | Question length | At most 4,000 user-input characters. Reject larger input; do not silently truncate it. |
 | Work in flight | One active analytical request in the local process. Return `busy` for another; no queue. Disable the send control while waiting. Data refresh/import is a separate setup action and is not run during an analysis. |
-| Model | At most one call per free-text request, no SDK retries or model switching; 20-second model timeout, 512 output tokens, complete serialized prompt at most 8,000 tokens. Presets use zero calls. |
-| Query deadline | 30 seconds for the query path. Cancel/interrupt the active model/database work on timeout; do not release the busy slot or accept a late result while abandoned work remains active. No generic worker pool is needed. |
-| Cost | Proposed maximum $0.02 per model request and $2 per local process. Record the selected model and dated rate card before enabling calls. Check/reserve worst-case cost before dispatch; timed-out calls retain their reservation until usage is known. Restart resets this demo counter; it is not an account-wide billing control. |
+| Model | Currently disabled; no provider call is made. If separately admitted, the planned limits are at most one call per free-text request, no SDK retries or model switching, a 20-second timeout, 512 output tokens and an 8,000-token serialized prompt cap. Presets use zero calls. |
+| Query deadline | 30 seconds for the query path. On timeout or request cancellation, the HTTP handler returns/ends but shielded thread work is not forcibly interrupted. Keep the busy slot until that worker finishes and discard its late result. This does not promise immediate database cancellation. No generic worker pool is needed. |
+| Cost | Model cost controls are not active because calls are disabled. Before admission, set the proposed maximum $0.02 per request and $2 per local process, record the selected model and dated rate card, and check/reserve worst-case cost. Restarting a demo counter would not be an account-wide billing control. |
 | Sessions | At most 100, latest successful request/result only, expire after 60 idle minutes. Unknown/expired sessions ask for a fresh analysis. No persistent conversation history. |
 | Long-haul threshold | Default 3,000 statute miles; accept an explicit finite value `0 < threshold <= 12000`. Distance/count/period gaps return `insufficient_data`. |
 | Source refresh | DataSF only, separate explicit refresh: 60 seconds total, at most four pages of 5,000 rows, 10 MiB cumulative response bytes, no automatic retries. Count/schema/coverage validation still applies. Hitting a cap is an error, never permission to accept a partial dataset. |
@@ -108,16 +108,18 @@ Use the [existing source-qualification record](backend/docs/evidence/source-qual
 | Source | Use |
 |---|---|
 | DataSF Socrata dataset `rkru-6vcg` | Actual public API, SFO enplaned passenger trends for 2023/24. |
-| FAA CY2024 commercial-service list | Defines the New England airport cohort. |
+| [FAA CY2024 commercial-service enplanements by rank](https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger/arp-cy2024-commercial-service-enplanements.pdf) | Defines the New England airport cohort. |
 | BTS T-100 All Carriers (`FMG`) | 2023/24 seats, passengers, performed departures and distance. |
-| BTS Reporting Carrier On-Time (`FGJ`) | Twelve CY2024 months for LAX/SNA/SFO operational comparisons. Only January was inspected in the earlier qualification record. |
+| BTS Reporting Carrier On-Time (`FGJ`) | Twelve CY2024 months for LAX/SNA/SFO operational comparisons are validated in the accepted local snapshot. February–December were newly acquired for it; January was retained/reused from a previously qualified archive, whose manifest has no recovered acquisition timestamp. |
 | Official FAA/airport documents | Four small evidence notes: top-three traffic candidates plus SFO. No automated document retrieval system. |
+
+The latest real-source/API qualification, including the fresh DataSF/FAA calls, local BTS snapshot identity checks, supported API responses and independent numerical reconciliation, is summarized in [the 2026-09-27 source check](backend/docs/evidence/real-source-check-20260927.md); its machine-readable receipt retains exact response bodies and hashes. That receipt does not claim a fresh T-100 or on-time acquisition.
 
 New England: `BDL, HVN, PWM, BGR, PQI, RKD, BHB, AUG, BOS, ACK, ORH, MVY, HYA, PVC, MHT, PSM, LEB, PVD, WST, BID, BTV, RUT`. Add `ANC, LAX, SNA, SFO` for the 26 T-100 origins. This is a bounded US-origin scope; qualified international segments involving those origins can be included. It is not worldwide airport analytics.
 
-DataSF uses `https://data.sf.gov/resource/rkru-6vcg.csv`, the recorded 15 selected columns and CY2023/24 predicate. Fetch in a stable complete dimension-key order; reconcile scoped counts before/after retrieval, duplicates, required months and activity/geography coverage. An unstable or incomplete retrieval fails without replacing the last accepted snapshot. The earlier response was 3,721 rows, so the proposed 20,000-row cap has headroom; it is still a bound, not a completeness assertion.
+DataSF uses `https://data.sf.gov/resource/rkru-6vcg.csv`, the recorded 15 selected columns and fixed predicate `activity_period >= '202301' AND activity_period <= '202412'`. Before paging, request `count(*)` with that exact predicate. Fetch sequential pages with `$limit=5000`, `$offset=0,5000,10000,15000` and `$order=:id`; Socrata documents `:id` as the stable unique paging tie-breaker. Every non-final page must contain 5,000 rows, the final page must end exactly at the pre-count, and the same count query after retrieval must equal both the pre-count and retrieved-row count. Reject a pre-count above 20,000, an early empty or short page, an extra row, a changed count, duplicate declared raw keys, or any timeout/byte cap breach. Never publish partial retrieval. The earlier response was 3,721 rows, so the cap has headroom; it is still a bound, not a completeness assertion.
 
-For passenger trends select `activity_type_code='Enplaned'`, summing `passenger_count` by `activity_period` and `geo_summary`. Do not mix enplaned, deplaned and transit traffic. The real refresh must feed a displayed SFO calculation; subsequent questions reuse the accepted snapshot.
+For passenger trends select `activity_type_code='Enplaned'`, summing `passenger_count` by `activity_period` and `geo_summary`. Acceptance requires every one of the 24 months and both expected geography values (`Domestic`, `International`): 48 nonempty month/geography cells after the Enplaned filter. A missing cell, unexpected geography value or invalid passenger count fails refresh safely; it is not zero. Do not mix enplaned, deplaned and transit traffic. The real refresh must feed a displayed SFO calculation; subsequent questions reuse the accepted snapshot.
 
 FAA/BTS official bulk downloads are a deliberate historical-data choice, not APIs disguised as APIs. Import supplied official archives sequentially; validate expected CSV members without extracting arbitrary archive paths. Read large files incrementally with explicit per-file limits set during qualification; reject an oversized or invalid input rather than implement resumable ingestion. No browser-driven bulk refresh, scheduler or fallback provider.
 
@@ -127,7 +129,7 @@ FGJ identity is `(FlightDate, Reporting_Airline, Flight_Number_Reporting_Airline
 
 Annual calculations require all twelve source months and verified selected-airport coverage. An unexplained no-row month is unknown, not zero. In particular, the earlier record found no eligible PVC row for December 2024. Exclude that airport-year unless the gap is resolved; do not create a special data-repair project for it.
 
-Each accepted snapshot stores its source/request, period/population, retrieval UTC, row count, checksum and validation status. Stage, validate, then publish atomically. Failure keeps the prior accepted snapshot and its original label; first acquisition failure returns unavailable. No lineage service or automatic reconciliation framework.
+Each accepted snapshot stores a locally unique `snapshot_id`, its source and exact request, period/population, known source retrieval time (nullable), row count, full SHA-256 checksum and validation status. A local import timestamp is not a source retrieval time; keep it in the manifest and leave `retrieved_at` null when the source acquisition timestamp is unknown. Derive the ID from the full content checksum plus source name so the result can cite the retained Parquet and metadata together. Stage, validate, then publish atomically. Failure keeps the prior accepted snapshot and its original label; first acquisition failure returns unavailable. The 2026-09-25 qualification record supplies reproducibility evidence only: its temporary CSV is not an ingestion snapshot and cannot be used as application data. No lineage service or automatic reconciliation framework.
 
 ## 5. Calculation contracts
 
@@ -205,7 +207,7 @@ Review/fix/re-review targets material contradictions and plausible bugs. Unsuppo
 
 ## 8. Implementation steps
 
-All following steps are planned. The check descriptions are acceptance targets, not claims that commands have run. `COMMIT` below flags existing human-gated live/model work; it does not authorize spending by itself. Non-runtime note checks can be performed while planning. Runtime-dependent checks stay in TODO until their prerequisites exist.
+The steps below define the implementation sequence and acceptance targets. `TODO.md` is the execution ledger: a completed checkmark there is limited to its named step and recorded evidence; later steps remain planned until their prerequisites and checks are complete. `COMMIT` below flags existing human-gated live/model work; it does not authorize spending by itself. Non-runtime note checks can be performed while planning. Runtime-dependent checks stay open until their prerequisites exist.
 
 ### Step 0.1 — stack-decision
 
@@ -293,7 +295,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/sources/datasf.py`, `backend/tests/test_datasf.py`. **Depends on:** 1.2, 1.5, 1.6. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** Implement the DataSF request and full coverage checks within the fixed refresh bounds. Test complete input, mismatched counts, missing pages, invalid records and limit/timeout errors; no retry loop.
+**How / acceptance:** Implement the fixed 2023/24 request: exact-scope pre-count, sequential 5,000-row offsets ordered by unique `:id`, exact termination, and the same-scope post-count. Accept only when both counts equal the retrieved total, declared raw keys are unique, all 15 required columns validate, and all 48 Enplaned month/geography cells exist. Reject changed counts, early short/empty pages, over-cap or extra rows, duplicate keys, missing cells, unexpected geography, invalid records and limit/timeout errors. Preserve the previous accepted snapshot on every failure; do not retry automatically and do not treat the historical qualification response as input.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_datasf.py -q`.
 
@@ -313,7 +315,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/calculations/sfo.py`, `backend/tests/test_sfo.py`. **Depends on:** 2.2. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** `test_sfo.py`: exclude other activities, reconcile a source aggregate, handle zero baseline.
+**How / acceptance:** `test_sfo.py`: require all 48 Enplaned source cells (24 months × Domestic/International), then sum both geography values by month into one combined 24-point passenger series. Exclude other activities, reconcile the combined source aggregate and handle a zero baseline.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_sfo.py -q`.
 
@@ -343,7 +345,7 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Files:** `backend/app/sources/faa.py`, `backend/tests/test_faa.py`. **Depends on:** 1.0, 1.2, 1.6. **Execution tier:** RECOMMEND.
 
-**How / acceptance:** `test_faa.py`: exact 22 IDs; record acquisition URL/date.
+**How / acceptance:** `test_faa.py`: exact 22 IDs; record the exact acquisition URL `https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger/arp-cy2024-commercial-service-enplanements.pdf`, retrieval date and full checksum. The local setup requires Poppler's `pdftotext` executable for layout-preserving extraction; fail clearly if it is unavailable.
 
 **Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_faa.py -q`.
 
@@ -491,11 +493,11 @@ All following steps are planned. The check descriptions are acceptance targets, 
 
 **Single outcome:** Render evidence-led explanations from deterministic results.
 
-**Files:** `backend/app/responses.py`, `backend/tests/test_responses.py`. **Depends on:** 3.10, 3.11, 4.4, 2.4. **Execution tier:** RECOMMEND.
+**Files:** `backend/app/dispatch.py`, `backend/app/contracts.py`, `backend/tests/test_api.py`. **Depends on:** 3.10, 3.11, 4.4, 2.4. **Execution tier:** RECOMMEND.
 
 **How / acceptance:** Read the AnalysisResult field map in docs/API_UI_MAP.md. Test that each returned number/source resolves and summary/evidence/limitations come from deterministic results and reviewed notes. Produce backend-scaled percentages; the frontend must not recalculate them. Terminal and SFO explanations include counterevidence; the proxy never becomes unmet flights.
 
-**Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_responses.py -q`.
+**Check:** `PYTHONPATH=backend python -m pytest backend/tests/test_api.py -q`.
 
 ### Step 5.0 — freeze-eval
 

@@ -1,6 +1,6 @@
 # Backend ↔ frontend connection contract
 
-**Design, not implemented endpoints.** Companion to [README plan revision 4](../README.md). Read this before implementing contracts (1.5), the first API/UI slice (2.4–2.5), or conversational wiring (5.1–5.6). The README owns scope, calculations and limits; this file owns the HTTP field names and their UI consumers. No additional service, client SDK, queue or general-purpose rendering framework is required.
+**Implemented structured API contract; model interpretation remains planned and disabled.** Companion to [README plan revision 4](../README.md). The README owns scope, calculations and limits; this file records HTTP field names and their UI consumers. The structured `/api/query` flows, sessions and result UI are implemented. No additional service, client SDK, queue or general-purpose rendering framework is used.
 
 ## 1. Source-derived decisions and explicit project choices
 
@@ -15,11 +15,11 @@ Researched `Bar-Bettash/claude-code-config` at `97e5e8e4dc5f2de5a3120b7dfde47b7c
 | [capability-without-a-consumer](https://github.com/Bar-Bettash/claude-code-config/blob/97e5e8e4dc5f2de5a3120b7dfde47b7c52d29458/knowledge/capability-without-a-consumer.md) | Name and demonstrate the actual producer/consumer path; code existing is not code being invoked. | Route/UI/file/step crosswalk below, followed by actual API and browser acceptance when implemented. |
 | [design-qa-routing](https://github.com/Bar-Bettash/claude-code-config/blob/97e5e8e4dc5f2de5a3120b7dfde47b7c52d29458/knowledge/design-qa-routing.md) | Use accessibility and data-state audits for data-bearing UI; visual audit for a new page. | Review the one results screen and its error states. No canvas/motion tooling for absent features. |
 
-The config's API canon describes `/api/v1/` mechanics, while the protocol-selection owner explicitly decides **when** a version is needed. Its stated non-preemptive default governs this first consumer contract. We are not silently renaming an existing versioned API. Likewise, the protocol owner requires jobs for work that must outlive requests: this prototype instead abandons a query at its deadline. It makes no durable-job promise; bulk acquisition runs separately during setup.
+The config's API canon describes `/api/v1/` mechanics, while the protocol-selection owner explicitly decides **when** a version is needed. Its stated non-preemptive default governs this consumer contract. We are not silently renaming an existing versioned API. This request-scoped prototype returns a timeout response at its deadline, but the shielded worker may continue; the busy slot remains held until it finishes and its late result is discarded. It makes no durable-job promise; bulk acquisition runs separately during setup.
 
 ## 2. Endpoint inventory — what the browser actually calls
 
-| Method / path | Frontend caller | Backend owner (planned) | Returned/displayed content | Steps |
+| Method / path | Frontend caller | Backend owner | Returned/displayed content | Plan step |
 |---|---|---|---|---|
 | `GET /` | Open the application URL | `backend/app/main.py` serves `backend/app/static/index.html` | The single analyst screen | 1.3–1.4 |
 | `GET /static/app.js` | Script tag in `index.html` | `main.py` mounts **only** the static directory | Browser behavior; no provider credentials | 1.4 |
@@ -28,7 +28,7 @@ The config's API canon describes `/api/v1/` mechanics, while the protocol-select
 
 Opening Sources/Methodology or a row's already-returned evidence is **local rendering**, not another API request. Source links open the cited official page; there is no URL-fetch proxy. `GET /health` does not call a model or source provider and is not polled. A failed health probe does not schedule retries.
 
-No browser endpoint for data import/refresh, model configuration, history, credentials, individual airport CRUD or error reporting. A planned setup command, `PYTHONPATH=backend python -m app.sources.datasf --refresh`, produces the accepted snapshot read by the query handler. Stop the local server before refreshing/importing; start it again afterward. The UI never calls DataSF/BTS/FAA or the model provider directly.
+No browser endpoint for data import/refresh, model configuration, history, credentials, individual airport CRUD or error reporting. The setup command `PYTHONPATH=backend python -m app.sources.datasf --refresh` produces the accepted snapshot read by the query handler. Stop the local server before refreshing/importing; start it again afterward. The UI never calls DataSF/BTS/FAA or the model provider directly. Free-text requests currently return safe `503 ai_unavailable`; the provider path is disabled and has not been invoked.
 
 ```mermaid
 flowchart LR
@@ -41,34 +41,34 @@ flowchart LR
     Input -->|"POST /api/query"| API["main.py: query route"]
     Explain -->|"POST /api/query: explain"| API
     API --> Contract["contracts.py: validate input"]
-    Contract -->|"message only"| Intent["intent.py: one model call"]
-    Intent --> Contract2["Validate parsed AnalysisRequest"]
+    Contract -.->|"disabled; gated before admission"| Intent["Planned model interpretation"]
+    Intent -.->|"not active"| Contract2["Validate parsed AnalysisRequest"]
     Contract -->|"structured analysis"| Dispatch["dispatch.py: allowed operation"]
-    Contract2 --> Dispatch
+    Contract2 -.->|"inactive until admission"| Dispatch
     Session["session.py: latest result"] <--> API
     Dispatch --> Calc["calculations/* + evidence.py"]
-    Calc --> Response["responses.py + typed output"]
+    Calc --> Response["dispatch.py assembles AnalysisResult using contracts.py"]
     Response -->|"HTTP 200: AnalysisResult"| View
     API -->|"HTTP 4xx/5xx: ErrorResponse"| Error
     View -->|"Expand details: no request"| View
 ```
 
-The diagram is the **final target**. Step 2.4 initially calls the SFO calculation directly; 5.5 replaces that route body with the shared dispatcher. It does not register a second handler for the same path. Explanation templates arrive at 4.5; the first slice can show metrics with `summary=null`.
+The diagram shows the implemented structured path. The dashed model edge is a disabled future path; free text currently receives `503 ai_unavailable`. All structured operations use the shared dispatcher and its typed `AnalysisResult` assembly; there is one handler for `/api/query`. Explanations read the stored result without recalculation or a model call.
 
 ## 3. Request contract
 
 `POST /api/query` requires `Content-Type: application/json`. The root contains **exactly one** of `message` or `analysis`, plus optional `context_result_id`. Reject both/neither, null substitutes, unknown keys and invalid nested combinations. Use the README's character, airport, period, cost and deadline limits; also cap the serialized request body at **32 KiB** before processing it. This is an explicit prototype byte limit, so an otherwise valid unusually large escaped request may be rejected rather than silently shortened.
 
-- `message`: nonblank string, at most 4,000 characters. The model proposes an `AnalysisRequest` or a declared safe-outcome code (`clarification_required` or `unsupported_scope`); the backend owns the HTTP status and safe-message mapping. It never supplies session identity, citations or authoritative values.
+- `message`: nonblank string, at most 4,000 characters. The wire shape is reserved for future model interpretation; currently the route returns safe `503 ai_unavailable` and makes no model call. If enabled after admission, the model may propose only an `AnalysisRequest` or a declared safe-outcome code; the backend owns status and safe-message mapping and does not accept session identity, citations or authoritative values from a model.
 - `analysis`: typed structured request. `action` is `rank|compare|metric|explain`. `metric` is one allowed metric/bundle. `year` is a supported integer year; growth at 2024 uses the fixed 2023 baseline. Explicit requests supply their year; the interpreter can propose a disclosed 2024 default for free text.
 - Airport selection: `metric` requires one airport; `compare` exactly two distinct airports; `rank` requires `region:"new_england"` **or** a nonempty unique subset of its 22 IDs, not both. The result still uses full-cohort score normalization. Reject other regions. No arbitrary identifier, SQL, provider URL or client-selected population.
 - `threshold_miles`: accepted only with `long_haul_share`, with the README's bounds and visible default. Do not accept it on another metric and ignore it silently.
-- `context_result_id`: UUID of the browser's last displayed successful result, optional for an unrelated new analysis, required for structured `explain`. It must equal that session's latest stored result. A new preset omits it. Free-text follow-ups send it; a resolved independent question does not inherit old scope.
+- `context_result_id`: UUID of the browser's last displayed successful result, optional for an unrelated new analysis, required for structured `explain`. It must equal that session's latest stored result. A new preset omits it. The future admitted free-text flow would send it on follow-ups; currently message requests receive `503 ai_unavailable`. A resolved independent question does not inherit old scope.
 - Structured `explain` omits metric/year/threshold and may select at most two airports from the referenced result. It explains stored values/sources without recalculation, renormalization, source refresh or another model call.
 
 Canonical wire metrics (aliases are interpreted before validation): `passengers`, `seats`, `departures`, `passenger_growth`, `seat_occupancy`, `long_haul_share`, `screen_score`, `congestion`, `cancellation_rate`, `diversion_rate`, `departure_delay_minutes`, `taxi_out_minutes`, `sfo_enplaned_trend`, `sfo_pressure`. They do not widen the README's query matrix: rank supports screen score/passengers/growth/occupancy; operations are LAX/SNA/SFO in 2024; SFO-specific metrics are single-airport only. The `congestion` and `sfo_pressure` names are bundles of the existing indicators, not new formulas.
 
-Free text:
+Free-text request shape (currently disabled; returns `503 ai_unavailable`):
 
 ```json
 {"message":"Compare LAX and Santa Ana congestion."}
@@ -94,7 +94,7 @@ Explain button:
 
 ### Sessions without an authentication product
 
-Use a server-generated opaque `airport_session` cookie (`HttpOnly`, `SameSite=Strict`, `Path=/`, one-hour maximum age) from 5.5 onward. Keep its lookup and the latest successful result in `session.py`; enforce the README's idle timeout/cap there. Browser JavaScript does not read the cookie or send a `session_id` field to the model. `fetch` uses the same origin; do not enable wildcard CORS. Enforce the configured loopback Host and reject a supplied foreign Origin on POST; keep JSON-only requests. This is local-demo protection, **not authenticated multi-user access control**. The cookie is non-Secure only on the declared loopback HTTP demo; a hosted deployment is a separate design task.
+The running API uses a server-generated opaque `airport_session` cookie (`HttpOnly`, `SameSite=Strict`, `Path=/`, one-hour maximum age). `session.py` holds its lookup and latest successful result with the documented idle timeout/cap. Browser JavaScript does not read the cookie or send a `session_id` field. `fetch` uses the same origin; wildcard CORS is disabled. The API enforces the configured loopback Host and rejects a supplied foreign Origin on POST; requests are JSON-only. This is local-demo protection, **not authenticated multi-user access control**. The cookie is non-Secure only on the declared loopback HTTP demo; a hosted deployment is a separate design task.
 
 A missing cookie on a fresh independent request can create a session. An unknown/expired cookie or mismatched result on a follow-up produces 409 and a “Start a new analysis” action; clear the invalid cookie where applicable. Starting fresh clears the browser's result reference and sends a complete independent request, never automatically resubmitting paid work. Public airport snapshots are not user-owned; session context is isolated by the server-issued opaque token. Never enumerate someone else's result or store raw chat history.
 
@@ -108,9 +108,9 @@ Successful requests return the **bare typed `AnalysisResult`**, not `{success:tr
 | `status` (`ok` or `partial`) | Active-result heading or **Partial result** label; never encodes a top-level failure. |
 | `scope` | Airport(s), year/baseline, selected metric, population description, optional threshold; displayed above the table. |
 | `rows` | Airport metrics table, at most 22 rows. Backend supplies scores, ordering and rank; the browser only formats values. |
-| `summary` | Deterministic explanation text; can be null during the first SFO slice. |
+| `summary` | Deterministic explanation text from the dispatcher; null is permitted by the typed contract where no summary is available. |
 | `series` | Optional SFO monthly table/plot, at most 24 monthly points per returned series; do not load a charting system just for this. |
-| `sources` | Expandable source/coverage details: ID, name, official URL, snapshot ID, observation period and retrieval time. |
+| `sources` | Expandable source/coverage details: ID, name, official URL, snapshot ID, observation period and source retrieval time when known. `retrieved_at` is null when unknown; local import time is not substituted. |
 | `evidence` | Already-returned reviewed notes with source locators, dates and limitations. No evidence-fetch endpoint. |
 | `exclusions`, `limitations` | Unassessable airport reasons and business boundaries. Empty lists are allowed; no numeric zero stands for missing evidence. |
 
@@ -153,7 +153,7 @@ Use the config's **errors-only** envelope and non-2xx status. A small handler in
 | 422 | `invalid_request`, `unsupported_scope`, `clarification_required`, `insufficient_data` | Show the specific safe explanation/allowed choice. A clarification is not a successful analysis and does not replace context. |
 | 409 | `busy`, `session_expired`, `result_mismatch` | Wait, or start a new analysis as appropriate. No queue or automatic replay. |
 | 503 | `ai_unavailable`, `budget_exhausted`, `data_unavailable` | Presets/other supported analyses remain available where their prerequisites exist. Provider quota is mapped to `ai_unavailable`; no automatic provider switch. |
-| 504 | `query_timeout` | Show timeout; preserve the labeled previous result. Backend cancels/interrupts remaining work under the existing busy-slot rule. |
+| 504 | `query_timeout` | Show timeout; preserve the labeled previous result. The HTTP handler returns, but shielded thread work is not forcibly interrupted; the busy slot remains occupied until it finishes, and its late result is discarded. |
 | 500 | `internal_error` | Generic failure plus request ID; never display the exception. |
 
 `app.js` checks the HTTP status, then the corresponding typed body. A network failure or unparseable response has no trustworthy server envelope: render a local connection error without inventing a request ID. Clear loading controls; preserve the last displayed result labeled **Previous result**. Keep a local request-generation counter so a late response cannot replace a newer display. A lost response can leave the server's latest result newer than the browser's: a later mismatch returns 409, not an exactly-once/replay subsystem.
@@ -162,25 +162,25 @@ A failed query does not overwrite the server's latest successful analysis. Succe
 
 ## 6. Assignment paths — one endpoint, different validated operations
 
-All rows below use **`POST /api/query`** in `main.py`. Paths are planned files, not claims that symbols already exist.
+All rows below use the implemented **`POST /api/query`** handler in `main.py`; internal paths name current dispatch/calculation/result assembly code.
 
 | UI request | Structured operation | Internal calculation path | Visible result |
 |---|---|---|---|
-| New England expansion | rank / screen_score / new_england / 2024 | `dispatch.py` → `calculations/screen.py` + `evidence.py` → `responses.py` | Ranked metrics, exclusions, conditional terminal notes |
-| LAX versus SNA | compare / congestion / LAX,SNA / 2024 | `dispatch.py` → `calculations/operations.py` + `calculations/comparison.py` → `responses.py` | Four indicators, denominators, qualified comparison |
+| New England expansion | rank / screen_score / new_england / 2024 | `dispatch.py` → `calculations/screen.py` + `evidence.py` → `AnalysisResult` (`contracts.py`) | Ranked metrics, exclusions, conditional terminal notes |
+| LAX versus SNA | compare / congestion / LAX,SNA / 2024 | `dispatch.py` → `calculations/operations.py` + `calculations/comparison.py` → `AnalysisResult` (`contracts.py`) | Four indicators, denominators, qualified comparison |
 | Anchorage long haul | metric / long_haul_share / ANC / 2024 | `dispatch.py` → `calculations/long_haul.py` | Percentage, counts, threshold and coverage |
-| SFO unmet demand | metric / sfo_pressure / SFO / 2024 | `dispatch.py` → `calculations/sfo.py` + evidence → `responses.py` | Trends, pressure proxy, constraints, unidentified-demand limitation |
-| First SFO slice | metric / sfo_enplaned_trend / SFO / 2024 | Initially `main.py` → `calculations/sfo.py`; later dispatcher | Real enplaned levels/growth, no claim that the whole SFO bundle already exists |
+| SFO unmet demand | metric / sfo_pressure / SFO / 2024 | `dispatch.py` → `calculations/sfo.py` + evidence → `AnalysisResult` (`contracts.py`) | Trends, pressure proxy, constraints, unidentified-demand limitation |
+| SFO enplaned trend | metric / sfo_enplaned_trend / SFO / 2024 | `dispatch.py` → `calculations/sfo.py` → `AnalysisResult` (`contracts.py`) | One 24-point monthly series of combined Domestic + International Enplaned passenger totals, with levels/growth; all 48 source month/geography cells remain required |
 | BOS/PVD growth | compare / passenger_growth / BOS,PVD / 2024 | `dispatch.py` → `calculations/traffic.py` | Common-baseline comparison |
 | Fastest growth | rank / passenger_growth / new_england / 2024 | `dispatch.py` → traffic/ranking logic | Raw-growth ordering, not composite-score ordering |
 | Explain / change scope | explain the stored result, or a new validated metric/compare request | `session.py` + dispatcher | Stored explanation, or a recomputed result with disclosed scope |
 
-## 7. Integration checks — TODO when code exists
+## 7. Verification status
 
-Use the existing test files and browser acceptance; this contract does not introduce another test framework.
+Use the existing test files and browser acceptance; this contract does not introduce another test framework. The structured API/UI implementation has passed the recorded suite. Clean-environment setup and test evidence is in [ARCHITECTURE.md](../backend/docs/ARCHITECTURE.md); step-level outcomes and remaining model/review gates are in [TODO.md](../TODO.md).
 
 - **1.4 / 2.5:** serve only the static assets; verify `/`, `/static/app.js`, one health call and the first SFO query in the browser's network trace. A green health check is not source readiness.
 - **1.5 / 2.4:** contract/API tests cover request XOR, exact field types, valid real calculation output, unknown fields, insufficient data and normalized 422 errors. Assert non-2xx errors and bare 200 success.
-- **5.1 / 5.5:** real cookie/result binding, zero provider calls on structured input, at most one on free text, read-only explain, busy/deadline handling, no state overwrite on errors and refusal of foreign/stale references.
+- **5.1 / 5.5:** cookie/result binding, zero provider calls on structured input, read-only explain, busy/deadline handling, no state overwrite on errors and refusal of foreign/stale references are implemented and covered by the backend suite. At-most-one model call on free text is not yet implemented or verified; free text remains disabled.
 - **5.6 / 6.1:** a partial result, an error after success and an unavailable backend display differently. Source expansion makes no request; metric/year changes make exactly one. Verify percentages are not multiplied again and no stale response wins.
-- **6.3:** real DataSF snapshot → calculation → same API values/IDs → visible result; then all supported examples and a safe failure. Writing this map or parsing these JSON examples is not that runtime proof.
+- **6.3:** structured DataSF snapshot → calculation → API values/IDs → visible result and supported structured examples were exercised; clean-environment verification is recorded in ARCHITECTURE.md. The separately gated live model demonstration/admission remains open; writing this map or parsing these JSON examples is not that proof.

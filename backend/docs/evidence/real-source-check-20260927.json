@@ -1,0 +1,4030 @@
+{
+  "verified_at_utc": "2026-09-27T07:51:10.372493+00:00",
+  "http_calls": [
+    {
+      "url": "https://data.sf.gov/resource/rkru-6vcg.csv?%24select=count%28%2A%29+AS+count&%24where=activity_period+%3E%3D+%27202301%27+AND+activity_period+%3C%3D+%27202412%27",
+      "status": 200
+    },
+    {
+      "url": "https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger/arp-cy2024-commercial-service-enplanements.pdf",
+      "status": 200
+    },
+    {
+      "url": "https://data.sf.gov/resource/rkru-6vcg.csv?%24select=activity_period%2Cactivity_period_start_date%2Coperating_airline%2Coperating_airline_iata_code%2Cpublished_airline%2Cpublished_airline_iata_code%2Cgeo_summary%2Cgeo_region%2Cactivity_type_code%2Cprice_category_code%2Cterminal%2Cboarding_area%2Cpassenger_count%2Cdata_as_of%2Cdata_loaded_at&%24where=activity_period+%3E%3D+%27202301%27+AND+activity_period+%3C%3D+%27202412%27&%24order=%3Aid&%24limit=5000&%24offset=0",
+      "status": 200
+    },
+    {
+      "url": "https://data.sf.gov/resource/rkru-6vcg.csv?%24select=count%28%2A%29+AS+count&%24where=activity_period+%3E%3D+%27202301%27+AND+activity_period+%3C%3D+%27202412%27",
+      "status": 200
+    }
+  ],
+  "snapshots": {
+    "datasf": {
+      "snapshot_id": "datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf",
+      "sha256": "cc472e67b5dd529d513ff7b4482797450acaf98ce17b64c8d78076cfa2fc8ee1"
+    },
+    "faa": {
+      "snapshot_id": "faa-3aed36dd6b33ba6e6c0a272926de2a9dda05630f4ee64450959e0e6443e4c3d4",
+      "sha256": "458273de65b91eb0e7c26cc372616f812320b2dad163909edefd89c13cdff251"
+    },
+    "t100": {
+      "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+      "sha256": "1c023467175d599cbbb642e5ca5d22e711134178dc07cb77d8c9e3a3f7f6f8d5"
+    },
+    "ontime": {
+      "snapshot_id": "ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b",
+      "sha256": "1fe2d4bddfaa5f744a7bb09df80f0c5d0e893a8ee7e4a507575eaa375aac1231"
+    }
+  },
+  "faa": {
+    "live_bytes": 369732,
+    "sha256": "458273de65b91eb0e7c26cc372616f812320b2dad163909edefd89c13cdff251",
+    "table_rows_validated": 513,
+    "matching_cohort": 22
+  },
+  "datasf": {
+    "live_rows": 3721,
+    "enplaned_cells": 48,
+    "monthly_values_matched": 24,
+    "annual_enplaned": {
+      "2023": 24992086,
+      "2024": 26054586
+    },
+    "growth_percent": 4.251345806028357
+  },
+  "t100": {
+    "rows": 60467,
+    "archive_count": 16,
+    "missing_months": {
+      "PVC-2024": [
+        12
+      ]
+    }
+  },
+  "ontime": {
+    "rows": 372550,
+    "airport_month_cells": 36,
+    "archive_count": 12,
+    "missing_retrieval_metadata_months": [
+      1
+    ]
+  },
+  "api_cases": [
+    {
+      "name": "sfo_trend",
+      "request": {
+        "action": "metric",
+        "airports": [
+          "SFO"
+        ],
+        "metric": "sfo_enplaned_trend",
+        "year": 2024
+      },
+      "http_status": 200,
+      "response": {
+        "result_id": "0b2b4a6e-4cca-44c7-85ea-bba5d550509f",
+        "request_id": "80c7e3b5-0fc2-4ab9-95ed-a711a761d2db",
+        "status": "ok",
+        "scope": {
+          "airports": [
+            "SFO"
+          ],
+          "year": 2024,
+          "metric": "sfo_enplaned_trend",
+          "threshold_miles": null,
+          "population": "SFO Enplaned passengers combined Domestic and International; T-100 and on-time populations separately identified"
+        },
+        "rows": [
+          {
+            "airport": "SFO",
+            "metrics": [
+              {
+                "key": "passengers",
+                "value": 26054586,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "datasf-rkru-6vcg"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 4.251345806028357,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 1062500,
+                "denominator": 24992086,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "datasf-rkru-6vcg"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": null
+          }
+        ],
+        "summary": "SFO recorded 24,992,086 enplaned passengers in 2023 and 26,054,586 in 2024. That is 4.25% growth.",
+        "series": [
+          {
+            "period": "202301",
+            "value": 1607927,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202302",
+            "value": 1570749,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202303",
+            "value": 1952141,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202304",
+            "value": 1962171,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202305",
+            "value": 2194151,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202306",
+            "value": 2399561,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202307",
+            "value": 2419322,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202308",
+            "value": 2317631,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202309",
+            "value": 2167533,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202310",
+            "value": 2217499,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202311",
+            "value": 2071308,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202312",
+            "value": 2112093,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202401",
+            "value": 1746648,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202402",
+            "value": 1718709,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202403",
+            "value": 2084687,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202404",
+            "value": 2019052,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202405",
+            "value": 2261423,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202406",
+            "value": 2379631,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202407",
+            "value": 2451730,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202408",
+            "value": 2385664,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202409",
+            "value": 2192489,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202410",
+            "value": 2345080,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202411",
+            "value": 2147267,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202412",
+            "value": 2322206,
+            "unit": "count",
+            "status": "ok"
+          }
+        ],
+        "sources": [
+          {
+            "id": "datasf-rkru-6vcg",
+            "name": "DataSF SFO passenger statistics",
+            "url": "https://data.sf.gov/resource/rkru-6vcg.csv",
+            "snapshot_id": "datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf",
+            "period": "2023-2024",
+            "retrieved_at": "2026-09-26T20:10:43.951377Z"
+          }
+        ],
+        "evidence": [],
+        "exclusions": [],
+        "limitations": [
+          "Passenger trends do not identify unmet demand or its cause."
+        ]
+      }
+    },
+    {
+      "name": "screen",
+      "request": {
+        "action": "rank",
+        "region": "new_england",
+        "metric": "screen_score",
+        "year": 2024
+      },
+      "http_status": 200,
+      "response": {
+        "result_id": "f2090a1d-b68a-478d-9a1e-725ae1d7cb9f",
+        "request_id": "abdeebee-f557-4878-9bc7-8e55130a4041",
+        "status": "partial",
+        "scope": {
+          "airports": [
+            "ACK",
+            "AUG",
+            "BDL",
+            "BGR",
+            "BHB",
+            "BID",
+            "BOS",
+            "BTV",
+            "HVN",
+            "HYA",
+            "LEB",
+            "MHT",
+            "MVY",
+            "ORH",
+            "PQI",
+            "PSM",
+            "PVC",
+            "PVD",
+            "PWM",
+            "RKD",
+            "RUT",
+            "WST"
+          ],
+          "year": 2024,
+          "metric": "screen_score",
+          "threshold_miles": null,
+          "population": "New England airports normalized against the frozen eligible 2024 cohort"
+        },
+        "rows": [
+          {
+            "airport": "PVD",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 87.00000000000001,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 1983074,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 14.553002903865139,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 80.22179710346607,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 1983074,
+                "denominator": 2471989,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 1
+          },
+          {
+            "airport": "PWM",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 83.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 1221636,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 9.683681082726316,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 83.33772203295482,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 1221636,
+                "denominator": 1465886,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 2
+          },
+          {
+            "airport": "BOS",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 80.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 21294487,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 6.577803145079383,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 83.12046707840817,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 21294487,
+                "denominator": 25618825,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 3
+          },
+          {
+            "airport": "HVN",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 78.49999999999999,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 588441,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 20.145414007276827,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 78.8747327574074,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 588441,
+                "denominator": 746045,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 4
+          },
+          {
+            "airport": "BDL",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 71.50000000000001,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 3294371,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 5.4143398554443865,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 82.76548801517849,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 3294371,
+                "denominator": 3980368,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 5
+          },
+          {
+            "airport": "PSM",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 68.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 56378,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 13.256594146125876,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 79.57487049923076,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 56378,
+                "denominator": 70849,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 6
+          },
+          {
+            "airport": "BGR",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 65.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 373114,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 6.339063818144509,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 81.4967225611421,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 373114,
+                "denominator": 457827,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 7
+          },
+          {
+            "airport": "ACK",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 63.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 147798,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 12.23005193937369,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 65.79502657656454,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 147798,
+                "denominator": 224634,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 8
+          },
+          {
+            "airport": "BTV",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 60.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 670297,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 3.1614993343644913,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 79.84269620093339,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 670297,
+                "denominator": 839522,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 9
+          },
+          {
+            "airport": "ORH",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 57.50000000000001,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 112744,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 7.833272758574516,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 68.50864986722894,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 112744,
+                "denominator": 164569,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 10
+          },
+          {
+            "airport": "PQI",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 52.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 21608,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 12.226030954606834,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 65.67781155015197,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 21608,
+                "denominator": 32900,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 11
+          },
+          {
+            "airport": "HYA",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 52.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 25122,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 48.11626672955604,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 42.52344358305968,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 25122,
+                "denominator": 59078,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 12
+          },
+          {
+            "airport": "MHT",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 46.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 633010,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -1.807458792359407,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 78.6124195725688,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 633010,
+                "denominator": 805229,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 13
+          },
+          {
+            "airport": "BHB",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 44.99999999999999,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 10528,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 7.769474869485106,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 69.34071000461041,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 10528,
+                "denominator": 15183,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 14
+          },
+          {
+            "airport": "MVY",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 33.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 80485,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -0.38368710935082617,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 63.3555578296087,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 80485,
+                "denominator": 127037,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 15
+          },
+          {
+            "airport": "RKD",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 30.000000000000004,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 7197,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 5.869373345101501,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 59.41059930658742,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 7197,
+                "denominator": 12114,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 16
+          },
+          {
+            "airport": "WST",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 24.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 12283,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 1.6299851067350655,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 48.223469828432336,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 12283,
+                "denominator": 25471,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 17
+          },
+          {
+            "airport": "LEB",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 23.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 10588,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 0.5126257831782799,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 56.1013087479468,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 10588,
+                "denominator": 18873,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 18
+          },
+          {
+            "airport": "AUG",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 10.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 5184,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -2.003780718336484,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 48.5256950294861,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 5184,
+                "denominator": 10683,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 19
+          },
+          {
+            "airport": "BID",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 9.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 12066,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -17.744904219783216,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 47.89425634104712,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 12066,
+                "denominator": 25193,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 20
+          },
+          {
+            "airport": "RUT",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 8.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 4458,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -12.878639828024234,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 55.40641312453393,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 4458,
+                "denominator": 8046,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 21
+          }
+        ],
+        "summary": "Ranked 21 assessable airports by screen_score; scores are normalized against the frozen full eligible cohort.",
+        "series": [],
+        "sources": [
+          {
+            "id": "t100-e046736d0936743c3f6d",
+            "name": "BTS T-100 Segment All Carriers",
+            "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG",
+            "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+            "period": "2023-2024",
+            "retrieved_at": null
+          },
+          {
+            "id": "pvd_master_plan_2021_s5",
+            "name": "Rhode Island Airport Corporation: T.F. Green Airport Master Plan \u2014 Section 5: Aviation Demand/Capacity Analysis and Facility Requirements",
+            "url": "https://flyri.com/wp-content/uploads/2022/01/pvd-mp-report-sect-5-fac-requirements.pdf",
+            "snapshot_id": "curated-pvd_master_plan_2021_s5",
+            "period": "2021-05-01",
+            "retrieved_at": null
+          },
+          {
+            "id": "pwm_samp_2018",
+            "name": "City of Portland / Portland International Jetport: Sustainable Airport Master Plan and associated Environmental Assessment",
+            "url": "https://portlandjetport.org/sustainable-airport-master-plan",
+            "snapshot_id": "curated-pwm_samp_2018",
+            "period": "2018-11-16",
+            "retrieved_at": null
+          },
+          {
+            "id": "pwm_bond_statement_2019",
+            "name": "City of Portland, Maine: Preliminary Official Statement for General Airport Revenue Bonds, Series 2019",
+            "url": "https://portlandjetport.org/file/preliminary-official-statement-for-the-garb-series-2019",
+            "snapshot_id": "curated-pwm_bond_statement_2019",
+            "period": "2019-11-14",
+            "retrieved_at": null
+          },
+          {
+            "id": "bos_edr_2023_2024",
+            "name": "Massachusetts Port Authority: Boston Logan International Airport 2023/2024 Environmental Data Report \u2014 Project Mitigation, Terminal E Modernization",
+            "url": "https://www.massport.com/sites/default/files/2025-10/2023-2024_EDR_Web-Version_v4.pdf",
+            "snapshot_id": "curated-bos_edr_2023_2024",
+            "period": "2025-10-01",
+            "retrieved_at": null
+          }
+        ],
+        "evidence": [
+          {
+            "source_id": "pvd_master_plan_2021_s5",
+            "locator": "Section 5, printed pp. 5-2 and 5-6 (PDF pp. 1 and 5), Tables 5.1\u20135.2 and annual service volume discussion",
+            "date": "2021-05-01",
+            "claim": "Status unknown; The plan's 2017-based PAL forecast lists 1.9 million annual enplanements at the 2017 baseline and 2.6, 3.0, and 3.7 million at PAL 1\u20133. It says forecast aircraft operations were not projected to exceed 60% of annual service volume during its planning period and therefore major airfield capacity improvements were not recommended.",
+            "limitation": "The screen score is a relative traffic heuristic, not a capacity measure, causal finding, investment-success probability, or profitability estimate."
+          },
+          {
+            "source_id": "pwm_samp_2018",
+            "locator": "SAMP airport page, paragraphs on plan purpose, Environmental Assessment and implementation timing",
+            "date": "2018-11-16",
+            "claim": "Status unknown; The airport says its SAMP sets direction for future capital improvements, lists safety and sustainability projects, and says timing can vary with approval, design, and funding availability.",
+            "limitation": "The 2018 planning material is a development framework and its project timing is conditional."
+          },
+          {
+            "source_id": "pwm_bond_statement_2019",
+            "locator": "Preliminary Official Statement, section titled Terminal",
+            "date": "2019-11-14",
+            "claim": "Status unknown; The City reports that the terminal expansion and renovation was completed in 2012; the statement describes approximately 300,000 square feet and 14 passenger gates at that time.",
+            "limitation": "The 2018 planning material is a development framework and its project timing is conditional."
+          },
+          {
+            "source_id": "bos_edr_2023_2024",
+            "locator": "Section 10.2, Terminal E Modernization, including project status and Figure 10-1 (status as of December 2024)",
+            "date": "2025-10-01",
+            "claim": "Status unknown; Massport describes a seven-gate Terminal E modernization phased as four Phase I gates and three Phase II gates; the report labels Phase I completed and Phase II deferred as of December 2024.",
+            "limitation": "Project status is dated to December 2024 and may have changed since the report."
+          }
+        ],
+        "exclusions": [
+          "PVC: 2024 coverage is incomplete (missing months: 12)"
+        ],
+        "limitations": [
+          "Screen scores are heuristic traffic pressure, not terminal capacity or investment success.",
+          "The screen score is a relative traffic heuristic, not a capacity measure, causal finding, investment-success probability, or profitability estimate.",
+          "Reviewed PVD plan evidence is historical and airfield-focused; no current terminal bottleneck is verified.",
+          "The 2018 planning material is a development framework and its project timing is conditional.",
+          "The 2019 terminal description is historical; gate count and floor area do not measure current throughput or utilization.",
+          "The screen score is not a terminal capacity, latent-demand, or profitability measure.",
+          "Project status is dated to December 2024 and may have changed since the report.",
+          "A high traffic-pressure screen score does not identify a terminal constraint or establish that additional gates would solve one."
+        ]
+      }
+    },
+    {
+      "name": "operations",
+      "request": {
+        "action": "compare",
+        "airports": [
+          "LAX",
+          "SNA"
+        ],
+        "metric": "congestion",
+        "year": 2024
+      },
+      "http_status": 200,
+      "response": {
+        "result_id": "7627288e-0edb-4dad-810e-19a8574c3848",
+        "request_id": "d3af3220-1d45-46b1-bf20-4772221e540b",
+        "status": "ok",
+        "scope": {
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "year": 2024,
+          "metric": "congestion",
+          "threshold_miles": null,
+          "population": "Domestic reporting-carrier scheduled departures at origin; 2024 only"
+        },
+        "rows": [
+          {
+            "airport": "LAX",
+            "metrics": [
+              {
+                "key": "cancellation_rate",
+                "value": 0.8147258738592034,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 1581,
+                "denominator": 194053,
+                "eligible_count": 194053,
+                "comparison_direction": "lower",
+                "source_ids": [
+                  "ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "diversion_rate",
+                "value": 0.2932188628879739,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 569,
+                "denominator": 194053,
+                "eligible_count": 194053,
+                "comparison_direction": "lower",
+                "source_ids": [
+                  "ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "departure_delay_minutes",
+                "value": 13.509893018868908,
+                "unit": "minutes",
+                "status": "ok",
+                "numerator": 2592589.0,
+                "denominator": 191903,
+                "eligible_count": 191903,
+                "comparison_direction": "lower",
+                "source_ids": [
+                  "ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "taxi_out_minutes",
+                "value": 18.660557677576694,
+                "unit": "minutes",
+                "status": "ok",
+                "numerator": 3581017.0,
+                "denominator": 191903,
+                "eligible_count": 191903,
+                "comparison_direction": "higher",
+                "source_ids": [
+                  "ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": null
+          },
+          {
+            "airport": "SNA",
+            "metrics": [
+              {
+                "key": "cancellation_rate",
+                "value": 0.9283301546450975,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 404,
+                "denominator": 43519,
+                "eligible_count": 43519,
+                "comparison_direction": "higher",
+                "source_ids": [
+                  "ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "diversion_rate",
+                "value": 0.29872009926698684,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 130,
+                "denominator": 43519,
+                "eligible_count": 43519,
+                "comparison_direction": "higher",
+                "source_ids": [
+                  "ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "departure_delay_minutes",
+                "value": 14.3452367104804,
+                "unit": "minutes",
+                "status": "ok",
+                "numerator": 616630.0,
+                "denominator": 42985,
+                "eligible_count": 42985,
+                "comparison_direction": "higher",
+                "source_ids": [
+                  "ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "taxi_out_minutes",
+                "value": 15.437617773641968,
+                "unit": "minutes",
+                "status": "ok",
+                "numerator": 663586.0,
+                "denominator": 42985,
+                "eligible_count": 42985,
+                "comparison_direction": "lower",
+                "source_ids": [
+                  "ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": null
+          }
+        ],
+        "summary": "Mixed picture: indicators favor LAX and SNA across 4 comparable operational measures.",
+        "series": [],
+        "sources": [
+          {
+            "id": "ontime-cceee68e94d79e332f37",
+            "name": "BTS Reporting Carrier On-Time Performance",
+            "url": "https://transtats.bts.gov/PREZIP/",
+            "snapshot_id": "ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b",
+            "period": "2024",
+            "retrieved_at": null
+          }
+        ],
+        "evidence": [],
+        "exclusions": [],
+        "limitations": [
+          "Domestic reporting-carrier scheduled departures at origin; not all airlines or international traffic",
+          "Delay and taxi means exclude cancelled/diverted flights; operational indicators do not prove terminal causation.",
+          "LAX 2024 on-time coverage: observed months 01,02,03,04,05,06,07,08,09,10,11,12; missing months none; reporting carriers AA, AS, B6, DL, F9, G4, HA, MQ, NK, OO, UA, WN; valid scheduled records 194053; invalid rows 0.",
+          "SNA 2024 on-time coverage: observed months 01,02,03,04,05,06,07,08,09,10,11,12; missing months none; reporting carriers AA, AS, DL, F9, G4, NK, OO, UA, WN; valid scheduled records 43519; invalid rows 0."
+        ]
+      }
+    },
+    {
+      "name": "anc",
+      "request": {
+        "action": "metric",
+        "airports": [
+          "ANC"
+        ],
+        "metric": "long_haul_share",
+        "year": 2024,
+        "threshold_miles": 3000
+      },
+      "http_status": 200,
+      "response": {
+        "result_id": "c5d92500-7627-47d6-8bff-3eb6cee1fc6c",
+        "request_id": "8953fe64-8d50-463b-9c2a-a1372b20be31",
+        "status": "ok",
+        "scope": {
+          "airports": [
+            "ANC"
+          ],
+          "year": 2024,
+          "metric": "long_haul_share",
+          "threshold_miles": 3000.0,
+          "population": "BTS T-100 scheduled passenger origin traffic; 2023 and 2024 where applicable"
+        },
+        "rows": [
+          {
+            "airport": "ANC",
+            "metrics": [
+              {
+                "key": "long_haul_share",
+                "value": 2.373991053802134,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 950,
+                "denominator": 40017,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": null
+          }
+        ],
+        "summary": "Long-haul share uses performed departures at or above 3000 miles.",
+        "series": [],
+        "sources": [
+          {
+            "id": "t100-e046736d0936743c3f6d",
+            "name": "BTS T-100 Segment All Carriers",
+            "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG",
+            "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+            "period": "2023-2024",
+            "retrieved_at": null
+          }
+        ],
+        "evidence": [],
+        "exclusions": [],
+        "limitations": [
+          "The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."
+        ]
+      }
+    },
+    {
+      "name": "sfo_pressure",
+      "request": {
+        "action": "metric",
+        "airports": [
+          "SFO"
+        ],
+        "metric": "sfo_pressure",
+        "year": 2024
+      },
+      "http_status": 200,
+      "response": {
+        "result_id": "bdb4232f-972b-4615-a753-041165230695",
+        "request_id": "fbf2f51e-e986-44de-8c1b-3ea3a89863c8",
+        "status": "ok",
+        "scope": {
+          "airports": [
+            "SFO"
+          ],
+          "year": 2024,
+          "metric": "sfo_pressure",
+          "threshold_miles": null,
+          "population": "SFO Enplaned passengers combined Domestic and International; T-100 and on-time populations separately identified"
+        },
+        "rows": [
+          {
+            "airport": "SFO",
+            "metrics": [
+              {
+                "key": "sfo_enplaned_trend",
+                "value": 26054586,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "datasf-a7952fc3c1649f96aaa0"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 25288609,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seats",
+                "value": 30369317,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "departures",
+                "value": 174804,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 3.9579148307226224,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 962795,
+                "denominator": 24325814,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 83.27025925541888,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 25288609,
+                "denominator": 30369317,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "cancellation_rate",
+                "value": 1.3283646223829069,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 1793,
+                "denominator": 134978,
+                "eligible_count": 134978,
+                "comparison_direction": null,
+                "source_ids": [
+                  "bts_ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "diversion_rate",
+                "value": 0.2511520395916372,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 339,
+                "denominator": 134978,
+                "eligible_count": 134978,
+                "comparison_direction": null,
+                "source_ids": [
+                  "bts_ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "departure_delay_minutes",
+                "value": 17.36998479442362,
+                "unit": "minutes",
+                "status": "ok",
+                "numerator": 2307533.0,
+                "denominator": 132846,
+                "eligible_count": 132846,
+                "comparison_direction": null,
+                "source_ids": [
+                  "bts_ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "taxi_out_minutes",
+                "value": 20.096593047588936,
+                "unit": "minutes",
+                "status": "ok",
+                "numerator": 2669752.0,
+                "denominator": 132846,
+                "eligible_count": 132846,
+                "comparison_direction": null,
+                "source_ids": [
+                  "bts_ontime-cceee68e94d79e332f37"
+                ],
+                "reason": null
+              },
+              {
+                "key": "sfo_pressure",
+                "value": -0.03657706976654129,
+                "unit": "percentage_points",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": null
+          }
+        ],
+        "summary": "SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable.",
+        "series": [
+          {
+            "period": "202301",
+            "value": 1607927,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202302",
+            "value": 1570749,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202303",
+            "value": 1952141,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202304",
+            "value": 1962171,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202305",
+            "value": 2194151,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202306",
+            "value": 2399561,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202307",
+            "value": 2419322,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202308",
+            "value": 2317631,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202309",
+            "value": 2167533,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202310",
+            "value": 2217499,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202311",
+            "value": 2071308,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202312",
+            "value": 2112093,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202401",
+            "value": 1746648,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202402",
+            "value": 1718709,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202403",
+            "value": 2084687,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202404",
+            "value": 2019052,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202405",
+            "value": 2261423,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202406",
+            "value": 2379631,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202407",
+            "value": 2451730,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202408",
+            "value": 2385664,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202409",
+            "value": 2192489,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202410",
+            "value": 2345080,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202411",
+            "value": 2147267,
+            "unit": "count",
+            "status": "ok"
+          },
+          {
+            "period": "202412",
+            "value": 2322206,
+            "unit": "count",
+            "status": "ok"
+          }
+        ],
+        "sources": [
+          {
+            "id": "datasf-a7952fc3c1649f96aaa0",
+            "name": "DataSF SFO passenger statistics",
+            "url": "https://data.sf.gov/resource/rkru-6vcg.csv",
+            "snapshot_id": "datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf",
+            "period": "2023-2024",
+            "retrieved_at": null
+          },
+          {
+            "id": "t100-e046736d0936743c3f6d",
+            "name": "BTS T-100 Segment All Carriers",
+            "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG",
+            "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+            "period": "2023-2024",
+            "retrieved_at": null
+          },
+          {
+            "id": "bts_ontime-cceee68e94d79e332f37",
+            "name": "BTS Reporting Carrier On-Time Performance",
+            "url": "https://transtats.bts.gov/PREZIP/",
+            "snapshot_id": "ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b",
+            "period": "2024",
+            "retrieved_at": null
+          },
+          {
+            "id": "sfo_cip_statement_2023",
+            "name": "San Francisco International Airport / Airport Commission: Preliminary Official Statement \u2014 Series 2023AB, capital program and Airport Development Plan",
+            "url": "https://www.flysfo.com/sites/default/files/2023-02/Preliminary%20Official%20Statement%20-%20Series%202023AB.pdf",
+            "snapshot_id": "curated-sfo_cip_statement_2023",
+            "period": "2023-02-01",
+            "retrieved_at": null
+          },
+          {
+            "id": "sfo_t3_project_page",
+            "name": "San Francisco International Airport: Terminal 3 Construction \u2014 Terminal 3 West Modernization Project",
+            "url": "https://www.flysfo.com/it/node/15471",
+            "snapshot_id": "curated-sfo_t3_project_page",
+            "period": "undated",
+            "retrieved_at": null
+          }
+        ],
+        "evidence": [
+          {
+            "source_id": "sfo_cip_statement_2023",
+            "locator": "Preliminary Official Statement, Airport Development Plan and Capital Improvement Plan discussion (statement basis: January 2023)",
+            "date": "2023-02-01",
+            "claim": "Status unknown; SFO's 2023 financing statement says its recommended Airport Development Plan was completed in 2016, framed potential long-term development for up to approximately 71 million annual passengers, and was not included in Ascent Phase 1 or the then-current CIP.",
+            "limitation": "The 2023 financing statement is historical and is not proof of the current CIP or project status."
+          },
+          {
+            "source_id": "sfo_t3_project_page",
+            "locator": "Terminal 3 Construction page, Terminal 3 West Modernization Project and Travel Alerts",
+            "date": "2026-09-27",
+            "claim": "Status unknown; SFO currently describes active Terminal 3 West modernization, construction-related passenger routing and curbside impacts, and a Terminal 3 AirTrain station closed pending the new facility expected in 2027.",
+            "limitation": "The 2023 financing statement is historical and is not proof of the current CIP or project status."
+          }
+        ],
+        "exclusions": [],
+        "limitations": [
+          "These transported-passenger, supplied-seat and operational indicators do not identify unmet demand, terminal saturation, or the cause of any observed pressure.",
+          "Profitability and quantitative unmet demand are not_identifiable.",
+          "The 2023 financing statement is historical and is not proof of the current CIP or project status.",
+          "The live Terminal 3 project page is undated; its observed status is checked as of 2026-09-27 and should be refreshed before future decisions.",
+          "Precise quantitative unmet demand and profitability remain not_identifiable from the qualified data and reviewed evidence."
+        ]
+      }
+    },
+    {
+      "name": "growth",
+      "request": {
+        "action": "compare",
+        "airports": [
+          "BOS",
+          "PVD"
+        ],
+        "metric": "passenger_growth",
+        "year": 2024
+      },
+      "http_status": 200,
+      "response": {
+        "result_id": "7bc18dde-df94-4a2f-80ec-51a547795b98",
+        "request_id": "b357c99e-131a-40b9-b858-a7bbf4cd9e48",
+        "status": "ok",
+        "scope": {
+          "airports": [
+            "BOS",
+            "PVD"
+          ],
+          "year": 2024,
+          "metric": "passenger_growth",
+          "threshold_miles": null,
+          "population": "BTS T-100 scheduled passenger origin traffic; 2023 and 2024 where applicable"
+        },
+        "rows": [
+          {
+            "airport": "BOS",
+            "metrics": [
+              {
+                "key": "passenger_growth",
+                "value": 6.577803145079383,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 1314260,
+                "denominator": 19980227,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": null
+          },
+          {
+            "airport": "PVD",
+            "metrics": [
+              {
+                "key": "passenger_growth",
+                "value": 14.553002903865139,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 251933,
+                "denominator": 1731141,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": null
+          }
+        ],
+        "summary": "PVD is higher than BOS on passenger_growth.",
+        "series": [],
+        "sources": [
+          {
+            "id": "t100-e046736d0936743c3f6d",
+            "name": "BTS T-100 Segment All Carriers",
+            "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG",
+            "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+            "period": "2023-2024",
+            "retrieved_at": null
+          }
+        ],
+        "evidence": [],
+        "exclusions": [],
+        "limitations": [
+          "These descriptive T-100 comparisons are not evidence of terminal capacity or profitability."
+        ]
+      }
+    },
+    {
+      "name": "growth_rank",
+      "request": {
+        "action": "rank",
+        "region": "new_england",
+        "metric": "passenger_growth",
+        "year": 2024
+      },
+      "http_status": 200,
+      "response": {
+        "result_id": "4ac318ab-f608-4ac6-b60e-0125e3c8d659",
+        "request_id": "8a47aec0-ddbe-41b5-bfa2-9e52f3e8a661",
+        "status": "partial",
+        "scope": {
+          "airports": [
+            "ACK",
+            "AUG",
+            "BDL",
+            "BGR",
+            "BHB",
+            "BID",
+            "BOS",
+            "BTV",
+            "HVN",
+            "HYA",
+            "LEB",
+            "MHT",
+            "MVY",
+            "ORH",
+            "PQI",
+            "PSM",
+            "PVC",
+            "PVD",
+            "PWM",
+            "RKD",
+            "RUT",
+            "WST"
+          ],
+          "year": 2024,
+          "metric": "passenger_growth",
+          "threshold_miles": null,
+          "population": "Raw 2024 versus 2023 passenger growth; rank positions against the full growth-eligible New England cohort"
+        },
+        "rows": [
+          {
+            "airport": "HYA",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 52.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 25122,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 48.11626672955604,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 42.52344358305968,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 25122,
+                "denominator": 59078,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 1
+          },
+          {
+            "airport": "HVN",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 78.49999999999999,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 588441,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 20.145414007276827,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 78.8747327574074,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 588441,
+                "denominator": 746045,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 2
+          },
+          {
+            "airport": "PVD",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 87.00000000000001,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 1983074,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 14.553002903865139,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 80.22179710346607,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 1983074,
+                "denominator": 2471989,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 3
+          },
+          {
+            "airport": "PSM",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 68.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 56378,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 13.256594146125876,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 79.57487049923076,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 56378,
+                "denominator": 70849,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 4
+          },
+          {
+            "airport": "ACK",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 63.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 147798,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 12.23005193937369,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 65.79502657656454,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 147798,
+                "denominator": 224634,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 5
+          },
+          {
+            "airport": "PQI",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 52.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 21608,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 12.226030954606834,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 65.67781155015197,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 21608,
+                "denominator": 32900,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 6
+          },
+          {
+            "airport": "PWM",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 83.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 1221636,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 9.683681082726316,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 83.33772203295482,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 1221636,
+                "denominator": 1465886,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 7
+          },
+          {
+            "airport": "ORH",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 57.50000000000001,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 112744,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 7.833272758574516,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 68.50864986722894,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 112744,
+                "denominator": 164569,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 8
+          },
+          {
+            "airport": "BHB",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 44.99999999999999,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 10528,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 7.769474869485106,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 69.34071000461041,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 10528,
+                "denominator": 15183,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 9
+          },
+          {
+            "airport": "BOS",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 80.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 21294487,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 6.577803145079383,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 83.12046707840817,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 21294487,
+                "denominator": 25618825,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 10
+          },
+          {
+            "airport": "BGR",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 65.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 373114,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 6.339063818144509,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 81.4967225611421,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 373114,
+                "denominator": 457827,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 11
+          },
+          {
+            "airport": "RKD",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 30.000000000000004,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 7197,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 5.869373345101501,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 59.41059930658742,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 7197,
+                "denominator": 12114,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 12
+          },
+          {
+            "airport": "BDL",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 71.50000000000001,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 3294371,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 5.4143398554443865,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 82.76548801517849,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 3294371,
+                "denominator": 3980368,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 13
+          },
+          {
+            "airport": "BTV",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 60.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 670297,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 3.1614993343644913,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 79.84269620093339,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 670297,
+                "denominator": 839522,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 14
+          },
+          {
+            "airport": "WST",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 24.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 12283,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 1.6299851067350655,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 48.223469828432336,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 12283,
+                "denominator": 25471,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 15
+          },
+          {
+            "airport": "LEB",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 23.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 10588,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": 0.5126257831782799,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 56.1013087479468,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 10588,
+                "denominator": 18873,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 16
+          },
+          {
+            "airport": "MVY",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 33.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 80485,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -0.38368710935082617,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 63.3555578296087,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 80485,
+                "denominator": 127037,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 17
+          },
+          {
+            "airport": "MHT",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 46.5,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 633010,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -1.807458792359407,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 78.6124195725688,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 633010,
+                "denominator": 805229,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 18
+          },
+          {
+            "airport": "AUG",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 10.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 5184,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -2.003780718336484,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 48.5256950294861,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 5184,
+                "denominator": 10683,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 19
+          },
+          {
+            "airport": "RUT",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 8.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 4458,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -12.878639828024234,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 55.40641312453393,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 4458,
+                "denominator": 8046,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 20
+          },
+          {
+            "airport": "BID",
+            "metrics": [
+              {
+                "key": "screen_score",
+                "value": 9.0,
+                "unit": "score",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passengers",
+                "value": 12066,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "passenger_growth",
+                "value": -17.744904219783216,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              },
+              {
+                "key": "seat_occupancy",
+                "value": 47.89425634104712,
+                "unit": "percent",
+                "status": "ok",
+                "numerator": 12066,
+                "denominator": 25193,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 21
+          }
+        ],
+        "summary": "Ranked 21 assessable airports by passenger_growth; ranks use raw growth across the full eligible cohort.",
+        "series": [],
+        "sources": [
+          {
+            "id": "t100-e046736d0936743c3f6d",
+            "name": "BTS T-100 Segment All Carriers",
+            "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG",
+            "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+            "period": "2023-2024",
+            "retrieved_at": null
+          },
+          {
+            "id": "pvd_master_plan_2021_s5",
+            "name": "Rhode Island Airport Corporation: T.F. Green Airport Master Plan \u2014 Section 5: Aviation Demand/Capacity Analysis and Facility Requirements",
+            "url": "https://flyri.com/wp-content/uploads/2022/01/pvd-mp-report-sect-5-fac-requirements.pdf",
+            "snapshot_id": "curated-pvd_master_plan_2021_s5",
+            "period": "2021-05-01",
+            "retrieved_at": null
+          }
+        ],
+        "evidence": [
+          {
+            "source_id": "pvd_master_plan_2021_s5",
+            "locator": "Section 5, printed pp. 5-2 and 5-6 (PDF pp. 1 and 5), Tables 5.1\u20135.2 and annual service volume discussion",
+            "date": "2021-05-01",
+            "claim": "Status unknown; The plan's 2017-based PAL forecast lists 1.9 million annual enplanements at the 2017 baseline and 2.6, 3.0, and 3.7 million at PAL 1\u20133. It says forecast aircraft operations were not projected to exceed 60% of annual service volume during its planning period and therefore major airfield capacity improvements were not recommended.",
+            "limitation": "The screen score is a relative traffic heuristic, not a capacity measure, causal finding, investment-success probability, or profitability estimate."
+          }
+        ],
+        "exclusions": [
+          "PVC: 2024 coverage is incomplete; missing months: 12"
+        ],
+        "limitations": [
+          "Screen scores are heuristic traffic pressure, not terminal capacity or investment success.",
+          "Terminal evidence for HYA is not_reviewed.",
+          "Terminal evidence for HVN is not_reviewed.",
+          "The screen score is a relative traffic heuristic, not a capacity measure, causal finding, investment-success probability, or profitability estimate.",
+          "Reviewed PVD plan evidence is historical and airfield-focused; no current terminal bottleneck is verified."
+        ]
+      }
+    },
+    {
+      "name": "pvc2023",
+      "request": {
+        "action": "rank",
+        "airports": [
+          "PVC"
+        ],
+        "metric": "passengers",
+        "year": 2023
+      },
+      "http_status": 200,
+      "response": {
+        "result_id": "7c9c7aa1-eb17-4297-a751-274216625b08",
+        "request_id": "8b04360a-d1c0-44a0-840b-f9f4ca1318bc",
+        "status": "partial",
+        "scope": {
+          "airports": [
+            "PVC"
+          ],
+          "year": 2023,
+          "metric": "passengers",
+          "threshold_miles": null,
+          "population": "Raw BTS T-100 passengers for CY2023; rank positions against the full eligible New England cohort with valid requested-year values"
+        },
+        "rows": [
+          {
+            "airport": "PVC",
+            "metrics": [
+              {
+                "key": "passengers",
+                "value": 7535,
+                "unit": "count",
+                "status": "ok",
+                "numerator": null,
+                "denominator": null,
+                "eligible_count": null,
+                "comparison_direction": null,
+                "source_ids": [
+                  "t100-e046736d0936743c3f6d"
+                ],
+                "reason": null
+              }
+            ],
+            "rank": 19
+          }
+        ],
+        "summary": "Ranked 1 assessable airports by passengers in 2023; rank positions are against the full eligible cohort.",
+        "series": [],
+        "sources": [
+          {
+            "id": "t100-e046736d0936743c3f6d",
+            "name": "BTS T-100 Segment All Carriers",
+            "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG",
+            "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+            "period": "2023-2024",
+            "retrieved_at": null
+          }
+        ],
+        "evidence": [],
+        "exclusions": [],
+        "limitations": [
+          "Screen scores are heuristic traffic pressure, not terminal capacity or investment success.",
+          "Terminal evidence for PVC is not_reviewed."
+        ]
+      }
+    },
+    {
+      "name": "pvc2024",
+      "request": {
+        "action": "rank",
+        "airports": [
+          "PVC"
+        ],
+        "metric": "passengers",
+        "year": 2024
+      },
+      "http_status": 422,
+      "response": {
+        "success": false,
+        "error": {
+          "code": "insufficient_data",
+          "message": "No airports in the requested ranking scope have assessable metric data.",
+          "request_id": "b6a76bc2-99c2-4160-a0fb-1625bb89d98f"
+        }
+      }
+    }
+  ],
+  "independent_snapshot_sql_checks": {
+    "anc": {
+      "numerator": 950,
+      "denominator": 40017
+    },
+    "operations": [
+      {
+        "airport": "LAX",
+        "metric": "cancellation_rate",
+        "numerator": 1581,
+        "denominator": 194053,
+        "value": 0.8147258738592034
+      },
+      {
+        "airport": "LAX",
+        "metric": "diversion_rate",
+        "numerator": 569,
+        "denominator": 194053,
+        "value": 0.2932188628879739
+      },
+      {
+        "airport": "LAX",
+        "metric": "departure_delay_minutes",
+        "numerator": 2592589.0,
+        "denominator": 191903,
+        "value": 13.509893018868908
+      },
+      {
+        "airport": "LAX",
+        "metric": "taxi_out_minutes",
+        "numerator": 3581017.0,
+        "denominator": 191903,
+        "value": 18.660557677576694
+      },
+      {
+        "airport": "SNA",
+        "metric": "cancellation_rate",
+        "numerator": 404,
+        "denominator": 43519,
+        "value": 0.9283301546450975
+      },
+      {
+        "airport": "SNA",
+        "metric": "diversion_rate",
+        "numerator": 130,
+        "denominator": 43519,
+        "value": 0.29872009926698684
+      },
+      {
+        "airport": "SNA",
+        "metric": "departure_delay_minutes",
+        "numerator": 616630.0,
+        "denominator": 42985,
+        "value": 14.3452367104804
+      },
+      {
+        "airport": "SNA",
+        "metric": "taxi_out_minutes",
+        "numerator": 663586.0,
+        "denominator": 42985,
+        "value": 15.437617773641968
+      }
+    ],
+    "result": "all match API output"
+  },
+  "verification_mode": {
+    "upstream": "Fresh unauthenticated DataSF and FAA HTTP requests. No BTS redownload in this check.",
+    "application": "FastAPI TestClient against actual accepted snapshots; no source or dispatcher mocks.",
+    "datasf_comparison": "Independently sum fresh CSV Enplaned rows by month; compare all 24 values with stored calculation and application response.",
+    "sql_comparison": "Independent SQL sums/counts over checksum-verified on-time/T-100 Parquet; compare actual API values and denominators."
+  },
+  "implementation_sha256": {
+    "backend/app/calculations/comparison.py": "b84242cf783dec00ba9c9c40b136c0fd1cb0da50c56e715ef5538382f950438e",
+    "backend/app/calculations/long_haul.py": "63f5ad2217a164e10271eefba20180e7131a4b2cd89c0ba773e3d986ef9359fd",
+    "backend/app/calculations/operations.py": "87514446240361333fcf11acd05bbfd338044471e867bfd4c1beb33f6102012e",
+    "backend/app/calculations/screen.py": "5e37dd6ec8fa3c7664754d10bf1aeed2030cbcd7835eeaa548824131bb5a49c0",
+    "backend/app/calculations/sfo.py": "988657e3f6fc97db5cf8b8067cc208ed2746ae26508bfafd9ed1147b74247525",
+    "backend/app/calculations/traffic.py": "e483cdb4e87611c40e5878c1bb5f5cee8744045e3b71adfe6262d1c043821bb5",
+    "backend/app/contracts.py": "8f4af3a72d28ef1e06e35a178e67116114b8bea91e41e31637dd1f6e7bee0ffe",
+    "backend/app/dispatch.py": "ca9757db79bfff85937ce662a602232730d380def18419d9cbbd168afff7dff8",
+    "backend/app/evidence.py": "57ccf5690583fed6b9f0ba186cfddb7435a07249262657612c116855e148be7b",
+    "backend/app/intent.py": "a7578dc44f833510abf1c5d975ed932b5e63c86fe2b3eccb9bce0f7d4ed65b7b",
+    "backend/app/main.py": "6d3e2ab0a76619db81578c26fcd82ce3781624c2c12c4f449eaeb2ec3567b88d",
+    "backend/app/session.py": "4f808167db5fe96fbceaa5f0ce0c0da776813c9ef10c0a935ea4ea4c89d43390",
+    "backend/app/settings.py": "6be55b4a18418468b83ee71db18f8e7721dc42e5f178cb2d9a21cd0edd176ba7",
+    "backend/app/sources/datasf.py": "cab164915772b706f42870c24487f6321d1a0b7f707be0002fd36d9d3bb9b151",
+    "backend/app/sources/faa.py": "afea231c032b5894dc19263249de5efd27a2b55f1850541a339efa7134eda41c",
+    "backend/app/sources/ontime.py": "9a5c1fde705be0b3c33f137a5d5eb1cc722d825671c9346d6ab9a8797cfd4af4",
+    "backend/app/sources/t100.py": "bd28f42e4c5193a40acd3c8b239e6ec9eb57fed737599fd3bd88b0cf3af77f8a",
+    "backend/app/static/app.js": "cd7a0b6cd6d0e16e15def88f66abd37a3f0dba44799b8daa6de23163e1ef21a6",
+    "backend/app/static/index.html": "d34ebade6578281db855788fb4a67593c2a6636add0d512fc8cf414bb50c41fa"
+  },
+  "application_rechecked_at_utc": "2026-09-27T07:57:55.170420+00:00",
+  "adaptation": "T-100 and on-time retrieved_at are null: imported_at is local processing time, not recovered acquisition time. DataSF retains its actual snapshot retrieval time."
+}

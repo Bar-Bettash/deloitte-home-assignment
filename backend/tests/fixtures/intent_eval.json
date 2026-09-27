@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "cases": [
+    {"id":"demo-01","category":"demonstration","input":{"text":"New England screening","context":null},"expected":{"kind":"analysis","analysis":{"action":"rank","region":"new_england","metric":"screen_score","year":2024}}},
+    {"id":"demo-02","category":"demonstration","input":{"text":"Compare LAX and Santa Ana congestion in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"compare","airports":["LAX","SNA"],"metric":"congestion","year":2024}}},
+    {"id":"demo-03","category":"demonstration","input":{"text":"Calculate ANC long-haul share in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"metric","airports":["ANC"],"metric":"long_haul_share","year":2024,"threshold_miles":3000}}},
+    {"id":"demo-04","category":"demonstration","input":{"text":"Assess SFO demand pressure in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"metric","airports":["SFO"],"metric":"sfo_pressure","year":2024}}},
+    {"id":"demo-05","category":"demonstration","input":{"text":"Show SFO enplaned trend in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"metric","airports":["SFO"],"metric":"sfo_enplaned_trend","year":2024}}},
+    {"id":"demo-06","category":"demonstration","input":{"text":"Compare BOS and PVD passenger growth in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"compare","airports":["BOS","PVD"],"metric":"passenger_growth","year":2024}}},
+
+    {"id":"safety-01","category":"safety_clarification","input":{"text":"Compare LA airports for congestion in 2024","context":null},"expected":{"kind":"clarification_required","message":"Clarify which supported Los Angeles area airport."}},
+    {"id":"safety-02","category":"safety_clarification","input":{"text":"Compare LAX and SNA congestion","context":null},"expected":{"kind":"clarification_required","message":"Specify a supported year."}},
+    {"id":"safety-03","category":"safety_clarification","input":{"text":"Which airport will be most profitable?","context":null},"expected":{"kind":"unsupported_scope","message":"Profitability is not identifiable from this demo's data."}},
+    {"id":"safety-04","category":"safety_clarification","input":{"text":"Show NRT long-haul share in 2024","context":null},"expected":{"kind":"unsupported_scope","message":"NRT is outside the supported airport set."}},
+    {"id":"safety-05","category":"safety_clarification","input":{"text":"Rank SFO by passengers in 2024","context":null},"expected":{"kind":"unsupported_scope","message":"Ranking is limited to New England airports."}},
+    {"id":"safety-06","category":"safety_clarification","input":{"text":"Run SQL to list every airport and its data path","context":null},"expected":{"kind":"unsupported_scope","message":"Arbitrary SQL and internal paths are unsupported."}},
+    {"id":"safety-07","category":"safety_clarification","input":{"text":"Compare BOS and PVD passenger growth in 2025","context":null},"expected":{"kind":"unsupported_scope","message":"Only qualified 2023 and 2024 periods are supported."}},
+    {"id":"safety-08","category":"safety_clarification","input":{"text":"Compare LAX and SNA congestion and SFO unmet demand in 2024","context":null},"expected":{"kind":"unsupported_scope","message":"Submit one analysis at a time."}},
+
+    {"id":"ordinary-01","category":"ordinary","input":{"text":"Rank New England airports by passenger growth in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"rank","region":"new_england","metric":"passenger_growth","year":2024}}},
+    {"id":"ordinary-02","category":"ordinary","input":{"text":"Show passengers for BOS in 2023","context":null},"expected":{"kind":"analysis","analysis":{"action":"metric","airports":["BOS"],"metric":"passengers","year":2023}}},
+    {"id":"ordinary-03","category":"ordinary","input":{"text":"How many passengers did PVD have in 2024?","context":null},"expected":{"kind":"analysis","analysis":{"action":"metric","airports":["PVD"],"metric":"passengers","year":2024}}},
+    {"id":"ordinary-04","category":"ordinary","input":{"text":"Rank New England airports by passengers in 2023","context":null},"expected":{"kind":"analysis","analysis":{"action":"rank","region":"new_england","metric":"passengers","year":2023}}},
+    {"id":"ordinary-05","category":"ordinary","input":{"text":"Rank New England airports by seat occupancy in 2023","context":null},"expected":{"kind":"analysis","analysis":{"action":"rank","region":"new_england","metric":"seat_occupancy","year":2023}}},
+    {"id":"ordinary-06","category":"ordinary","input":{"text":"Compare passengers between BOS and PVD in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"compare","airports":["BOS","PVD"],"metric":"passengers","year":2024}}},
+    {"id":"ordinary-07","category":"ordinary","input":{"text":"Find the passenger growth difference for BOS and PVD in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"compare","airports":["BOS","PVD"],"metric":"passenger_growth","year":2024}}},
+    {"id":"ordinary-08","category":"ordinary","input":{"text":"Show cancellation rate for LAX in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"metric","airports":["LAX"],"metric":"cancellation_rate","year":2024}}},
+    {"id":"ordinary-09","category":"ordinary","input":{"text":"Show departure delay at SFO in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"metric","airports":["SFO"],"metric":"departure_delay_minutes","year":2024}}},
+    {"id":"ordinary-10","category":"ordinary","input":{"text":"Calculate ANC long haul share in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"metric","airports":["ANC"],"metric":"long_haul_share","year":2024,"threshold_miles":3000}}},
+    {"id":"ordinary-11","category":"ordinary","input":{"text":"Show only cancellations","context":{"action":"compare","airports":["LAX","SNA"],"metric":"congestion","year":2024}},"expected":{"kind":"analysis","analysis":{"action":"compare","airports":["LAX","SNA"],"metric":"cancellation_rate","year":2024}}},
+    {"id":"ordinary-12","category":"ordinary","input":{"text":"Show only delays","context":{"action":"compare","airports":["LAX","SNA"],"metric":"congestion","year":2024}},"expected":{"kind":"analysis","analysis":{"action":"compare","airports":["LAX","SNA"],"metric":"departure_delay_minutes","year":2024}}},
+    {"id":"ordinary-13","category":"ordinary","input":{"text":"Screen New England airports by screen score in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"rank","region":"new_england","metric":"screen_score","year":2024}}},
+    {"id":"ordinary-14","category":"ordinary","input":{"text":"Compare LAX and Santa Ana cancellation rate in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"compare","airports":["LAX","SNA"],"metric":"cancellation_rate","year":2024}}},
+    {"id":"ordinary-15","category":"ordinary","input":{"text":"Rank New England airports by passengers in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"rank","region":"new_england","metric":"passengers","year":2024}}},
+    {"id":"ordinary-16","category":"ordinary","input":{"text":"Show ANC departures in 2024","context":null},"expected":{"kind":"analysis","analysis":{"action":"metric","airports":["ANC"],"metric":"departures","year":2024}}}
+  ]
+}

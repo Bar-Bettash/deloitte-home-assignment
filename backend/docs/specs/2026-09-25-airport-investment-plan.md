@@ -1,5 +1,7 @@
 # Spec: Airport Investment Intelligence local demo
 
+> **Historical reference only.** This document is superseded for implementation by [README revision 4](../../../README.md) and the [API/UI map](../../../docs/API_UI_MAP.md). Preserve it as historical context; use those documents for current implementation decisions.
+
 **Status: plan only.** No app, adapter, calculation or browser journey is built or runtime-proven. The root [README](../../../README.md) is canonical for formulas, source contracts, supported periods, evidence gates and atomic build steps. This spec records the product boundary without duplicating those rules.
 
 ## Outcome and architecture

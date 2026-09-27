@@ -1,3 +1,10 @@
 # macOS metadata files created on external drives
 .DS_Store
 ._*
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local backend environment and disposable API probe output
+backend/.env
+/backend/data/raw/
