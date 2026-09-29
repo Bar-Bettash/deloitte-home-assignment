@@ -392,6 +392,7 @@ ErrorCode = Literal[
     "unsupported_scope", "clarification_required", "insufficient_data", "busy",
     "session_expired", "result_mismatch", "ai_unavailable",
     "data_unavailable", "query_timeout", "internal_error",
+    "access_required", "access_denied",
 ]
 
 
