@@ -1,5 +1,13 @@
 import pytest
-from app.settings import HostingConfigError, Settings, load_hosting, load_settings
+from app.settings import (
+    DEFAULT_GEMINI_MODEL,
+    LOCAL_ENV_FILE,
+    HostingConfigError,
+    Settings,
+    load_hosting,
+    load_local_env,
+    load_settings,
+)
 from pydantic import ValidationError
 
 
@@ -15,8 +23,9 @@ def test_defaults_enforce_documented_prototype_limits() -> None:
     assert settings.model_timeout_seconds == 20
     assert settings.model_max_output_tokens == 512
     assert settings.model_max_prompt_tokens == 8000
-    assert settings.model_runtime_enabled is False
-    assert settings.model_runtime_admitted("a" * 64) is False
+    assert settings.model_name == DEFAULT_GEMINI_MODEL == "gemini-2.5-flash"
+    assert settings.model_thinking_budget == 0
+    assert settings.model_access_available is False
 
 
 def test_missing_model_access_keeps_settings_usable_for_presets() -> None:
@@ -38,69 +47,41 @@ def test_validated_environment_overrides_are_typed() -> None:
     settings = load_settings({
         "QUERY_TIMEOUT_SECONDS": "25",
         "SOURCE_MAX_PAGES": "3",
-        "OPENAI_API_KEY": "  test-key-value  ",
-        "OPENAI_MODEL": "test.model-v1",
+        "GEMINI_API_KEY": "  test-key-value  ",
+        "GEMINI_MODEL": "gemini-test.model-v1",
+        "GEMINI_THINKING_BUDGET": "256",
     })
 
     assert settings.query_timeout_seconds == 25
     assert settings.source_max_pages == 3
     assert settings.model_access_available is True
-    assert settings.model_runtime_admitted("a" * 64) is False
+    assert settings.model_api_key.get_secret_value() == "test-key-value"
+    assert settings.model_name == "gemini-test.model-v1"
+    assert settings.model_thinking_budget == 256
 
 
-def test_exact_runtime_admission_requires_explicit_model_and_adapter() -> None:
-    admitted = load_settings({
-        "OPENAI_API_KEY": "fake-key",
-        "OPENAI_MODEL": "demo.model-v1",
-        "MODEL_RUNTIME_ENABLED": "TrUe",
-        "MODEL_ADMITTED_NAME": "demo.model-v1",
-        "MODEL_ADMITTED_ADAPTER_SHA256": "a" * 64,
-    })
-    assert admitted.model_runtime_admitted("a" * 64) is True
-    assert admitted.model_runtime_admitted("b" * 64) is False
-    assert admitted.model_runtime_enabled is True
+def test_free_text_is_available_exactly_when_a_key_is_set() -> None:
+    assert load_settings({"GEMINI_API_KEY": "fake-key"}).model_access_available is True
+    assert load_settings({"GEMINI_API_KEY": "   "}).model_access_available is False
+    assert load_settings({"GEMINI_MODEL": "gemini-2.5-pro"}).model_access_available is False
 
 
-@pytest.mark.parametrize("missing", [
-    "OPENAI_API_KEY", "OPENAI_MODEL", "MODEL_RUNTIME_ENABLED",
-    "MODEL_ADMITTED_NAME", "MODEL_ADMITTED_ADAPTER_SHA256",
-])
-def test_runtime_admission_fails_closed_when_any_field_is_missing(missing: str) -> None:
-    values = {
-        "OPENAI_API_KEY": "fake-key",
-        "OPENAI_MODEL": "demo.model-v1",
-        "MODEL_RUNTIME_ENABLED": "true",
-        "MODEL_ADMITTED_NAME": "demo.model-v1",
-        "MODEL_ADMITTED_ADAPTER_SHA256": "a" * 64,
-    }
-    values.pop(missing)
-    assert load_settings(values).model_runtime_admitted("a" * 64) is False
+@pytest.mark.parametrize(("raw", "expected"), [("", None), ("default", None), (" Default ", None), ("0", 0), ("1024", 1024)])
+def test_thinking_budget_parsing(raw: str, expected: int | None) -> None:
+    assert load_settings({"GEMINI_THINKING_BUDGET": raw}).model_thinking_budget == expected
 
 
-def test_runtime_admission_requires_exact_model_name() -> None:
+def test_blank_model_name_falls_back_to_default() -> None:
+    assert load_settings({"GEMINI_MODEL": "  "}).model_name == DEFAULT_GEMINI_MODEL
+
+
+def test_removed_openai_and_admission_settings_are_not_read() -> None:
     settings = load_settings({
-        "OPENAI_API_KEY": "fake-key",
-        "OPENAI_MODEL": "demo.model-v1",
-        "MODEL_RUNTIME_ENABLED": "true",
-        "MODEL_ADMITTED_NAME": "demo.model-v2",
-        "MODEL_ADMITTED_ADAPTER_SHA256": "a" * 64,
+        "OPENAI_API_KEY": "not-read", "OPENAI_MODEL": "not-read", "MODEL_RUNTIME_ENABLED": "true",
+        "MODEL_ADMITTED_NAME": "x", "MODEL_ADMITTED_ADAPTER_SHA256": "a" * 64, "MODEL_REASONING_EFFORT": "low",
     })
-    assert settings.model_access_available is True
-    assert settings.model_runtime_admitted("a" * 64) is False
-
-
-@pytest.mark.parametrize("overrides", [
-    {"MODEL_RUNTIME_ENABLED": "1"},
-    {"MODEL_RUNTIME_ENABLED": "yes"},
-    {"MODEL_RUNTIME_ENABLED": ""},
-    {"MODEL_ADMITTED_NAME": "unsafe model name"},
-    {"MODEL_ADMITTED_ADAPTER_SHA256": "a" * 63},
-    {"MODEL_ADMITTED_ADAPTER_SHA256": "A" * 64},
-    {"MODEL_ADMITTED_ADAPTER_SHA256": "g" * 64},
-])
-def test_invalid_admission_values_rejected(overrides: dict[str, str]) -> None:
-    with pytest.raises(ValueError):
-        load_settings(overrides)
+    assert settings.model_access_available is False
+    assert not hasattr(settings, "model_runtime_enabled")
 
 
 @pytest.mark.parametrize(
@@ -111,13 +92,61 @@ def test_invalid_admission_values_rejected(overrides: dict[str, str]) -> None:
         {"SOURCE_MAX_PAGES": "5"},
         {"SOURCE_PAGE_SIZE": "5001"},
         {"MODEL_TIMEOUT_SECONDS": "21"},
-        {"OPENAI_MODEL": "unsafe model name"},
-        {"OPENAI_API_KEY": "invalid\nkey"},
+        {"GEMINI_MODEL": "unsafe model name"},
+        {"GEMINI_MODEL": "models/../x y"},
+        {"GEMINI_API_KEY": "invalid\nkey"},
+        {"GEMINI_THINKING_BUDGET": "-1"},
+        {"GEMINI_THINKING_BUDGET": "lots"},
+        {"GEMINI_THINKING_BUDGET": "99999"},
     ],
 )
 def test_malformed_or_unsafe_environment_values_are_rejected(overrides: dict[str, str]) -> None:
     with pytest.raises(ValueError):
         load_settings(overrides)
+
+
+def _env_file(tmp_path, text: str):
+    path = tmp_path / ".env"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_local_env_file_is_loaded_without_overriding_the_shell(tmp_path) -> None:
+    path = _env_file(tmp_path, (
+        "# comment\n"
+        "GEMINI_API_KEY=\"quoted-key\"\n"
+        "export GEMINI_MODEL=gemini-x # trailing note\n"
+        "EMPTY=\n"
+        "SINGLE='a # b'\n"
+        "not a variable line\n"
+        "APP_SIGNING_KEY=from-file\n"
+    ))
+    environ = {"APP_SIGNING_KEY": "from-shell"}
+    loaded = load_local_env(path, environ)
+    assert loaded == ["GEMINI_API_KEY", "GEMINI_MODEL", "SINGLE"]
+    assert environ == {
+        "APP_SIGNING_KEY": "from-shell", "GEMINI_API_KEY": "quoted-key",
+        "GEMINI_MODEL": "gemini-x", "SINGLE": "a # b",
+    }
+
+
+@pytest.mark.parametrize("marker", ["VERCEL", "APP_NO_DOTENV"])
+def test_local_env_file_is_ignored_on_vercel_and_in_tests(tmp_path, marker: str) -> None:
+    path = _env_file(tmp_path, "GEMINI_API_KEY=abc\n")
+    environ = {marker: "1"}
+    assert load_local_env(path, environ) == []
+    assert "GEMINI_API_KEY" not in environ
+
+
+def test_missing_local_env_file_is_a_no_op(tmp_path) -> None:
+    environ: dict[str, str] = {}
+    assert load_local_env(tmp_path / "missing.env", environ) == []
+    assert environ == {}
+
+
+def test_default_local_env_path_is_the_backend_folder() -> None:
+    assert LOCAL_ENV_FILE.name == ".env"
+    assert LOCAL_ENV_FILE.parent.name == "backend"
 
 
 def test_removed_spending_settings_are_not_read() -> None:
@@ -195,18 +224,6 @@ def test_vercel_hosts_are_ignored_off_vercel() -> None:
 def test_malformed_host_or_limit_is_rejected(environ) -> None:
     with pytest.raises(HostingConfigError):
         load_hosting({"APP_SIGNING_KEY": FAKE_KEY, **environ})
-
-
-@pytest.mark.parametrize("value,expected", [("low", "low"), ("minimal", "minimal"), ("", None)])
-def test_reasoning_effort_is_optional_and_enumerated(value, expected) -> None:
-    assert load_settings({"MODEL_REASONING_EFFORT": value}).model_reasoning_effort == expected
-    assert load_settings({}).model_reasoning_effort is None
-
-
-@pytest.mark.parametrize("value", ["LOW", "extreme", " low"])
-def test_invalid_reasoning_effort_is_rejected(value) -> None:
-    with pytest.raises(ValueError):
-        load_settings({"MODEL_REASONING_EFFORT": value})
 
 
 def test_explicit_concurrency_limit_is_used() -> None:

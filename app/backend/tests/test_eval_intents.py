@@ -22,8 +22,8 @@ HISTORICAL_CORPUS = Path(__file__).parent / "fixtures" / "intent_eval.json"
 
 def _live_settings(**overrides):
     values = {
-        "OPENAI_API_KEY": "fake-key-never-output",
-        "OPENAI_MODEL": "fake.model-v1",
+        "GEMINI_API_KEY": "fake-key-never-output",
+        "GEMINI_MODEL": "fake.model-v1",
     }
     values.update(overrides)
     return load_settings(values)

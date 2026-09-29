@@ -25,7 +25,7 @@ flowchart LR
     Guard --> API[main.py query route]
     API --> Contract[contracts.py strict validation]
     API <-->|airport_context cookie| Ctx[context_token.py HMAC sign/verify]
-    API -.->|free text, only when admitted| Model[model_adapter.py: one Responses API call]
+    API -.->|free text, only when a key is set| Model[model_adapter.py: one Gemini generateContent call]
     Model -.->|validated AnalysisRequest| Dispatch
     Contract --> Dispatch[dispatch.py deterministic routing]
     Dispatch --> Calc[calculations/*]
@@ -39,7 +39,7 @@ flowchart LR
 
 | Module | Responsibility |
 |---|---|
-| `main.py` | Transport, the HostGuard, safe errors, the 30 s query deadline, per-instance concurrency slots, the context cookie and the model admission gate |
+| `main.py` | Transport, the HostGuard, safe errors, the 30 s query deadline, per-instance concurrency slots, the context cookie and the model switch |
 | `contracts.py` | The strict request, result and error models, including the closed list of airports, metrics and years |
 | `dispatch.py` | Resolves the bundle and year, routes each request to one calculation, and projects typed results |
 | `calculations/` | Plain functions |
@@ -87,7 +87,7 @@ The cookie is read only when a request carries `context_result_id`. What happens
 2. Otherwise the server **recomputes** the referenced result from the signed request.
 3. It then checks the result digest. A mismatch means the data changed, and also gives `409 result_mismatch`.
 
-The recomputed result has two uses. `explain` renders it without changing it. An admitted free-text follow-up receives only the previous validated request as model context.
+The recomputed result has two uses. `explain` renders it without changing it. A free-text follow-up receives only the previous validated request as model context.
 
 Any instance with the same `APP_SIGNING_KEY` can verify the cookie, so no server state is needed. Replaying a cookie within its hour grants nothing beyond recomputing a public-data result the holder already received. Rotating the key invalidates every cookie.
 
@@ -121,28 +121,21 @@ Any instance with the same `APP_SIGNING_KEY` can verify the cookie, so no server
 - Any extra request gets `409 busy`.
 - A timed-out or cancelled analysis keeps its slot until its worker thread finishes, and its late result is discarded.
 
-There is **no login** and no in-app spending ledger. Model cost is bounded by caps on each call and by the OpenAI project's hard monthly budget (see the next section).
+There is **no login** and no in-app spending ledger. Model cost is bounded by caps on each call and by the Google project's quota or budget (see the next section).
 
-### Model gate
+### Model switch
 
-A `message` request reaches the model only when `settings.model_runtime_admitted(ADAPTER_SHA256)` is true. That requires all of the following:
+A `message` request reaches the model only when `GEMINI_API_KEY` is set (`settings.model_access_available`). Otherwise it gets `503 ai_unavailable`, and structured requests are unaffected. A local run also reads `backend/.env` through `settings.load_local_env`; shell variables win, and the file is ignored on Vercel and in tests.
 
-- `MODEL_RUNTIME_ENABLED=true`
-- `OPENAI_API_KEY` and `OPENAI_MODEL` are set
-- `MODEL_ADMITTED_NAME` equals `OPENAI_MODEL`
-- `MODEL_ADMITTED_ADAPTER_SHA256` equals the SHA-256 of `model_adapter.py`
+The adapter makes one streamed POST to `https://generativelanguage.googleapis.com/v1beta/models/<GEMINI_MODEL>:generateContent`, with the key in the `x-goog-api-key` header. The call has these properties:
 
-If any of these fails, the request gets `503 ai_unavailable`, and structured requests are unaffected.
-
-The adapter makes one streamed POST to `https://api.openai.com/v1/responses`. The call has these properties:
-
-- It uses a strict JSON schema and sets `store: false`.
+- `responseMimeType: application/json` with a `responseSchema` (Gemini's OpenAPI subset), temperature 0.
 - It uses the settings caps: 512 output tokens, 8,000 prompt bytes, a 20 s timeout and a 64 KiB response limit.
-- `reasoning.effort` is optional and is sent only when `MODEL_REASONING_EFFORT` is set.
-- It validates the reported token usage against its bounds.
-- It logs only metadata, never question text.
+- `thinkingConfig.thinkingBudget` is 0 by default so thinking tokens do not eat the output cap; `GEMINI_THINKING_BUDGET=default` omits it.
+- A blocked prompt or a safety stop becomes `model_refusal`; `MAX_TOKENS` becomes `model_incomplete`; thought parts are ignored.
+- It logs only metadata, never question text. A provider HTTP error is logged as, for example, `ai_unavailable:http_404`, and never returned to the client.
 
-Every provider failure is mapped to a sanitized code. **No live call has been made yet.**
+Every provider failure is mapped to a sanitized code. **No live Gemini call has been made yet.**
 
 ## Scope and data bundles
 
@@ -215,7 +208,7 @@ ruff check app/backend --ignore EXE002,SIM905
 
 **Not yet done.**
 
-- Live model admission.
+- A live Gemini run with a real key.
 - A deployed smoke test.
 - A live freshness recheck after 2026-09-27.
 

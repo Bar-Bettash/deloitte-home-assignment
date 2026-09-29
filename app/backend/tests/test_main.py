@@ -178,11 +178,7 @@ def test_bad_context_cookie_does_not_block_an_independent_preset(hosted):
 
 
 def test_hosted_model_path_passes_signed_context(hosted, monkeypatch):
-    admitted = Settings.model_validate({
-        "model_api_key": "offline-test-only", "model_name": "fake-model",
-        "model_runtime_enabled": True, "model_admitted_name": "fake-model",
-        "model_admitted_adapter_sha256": main.ADAPTER_SHA256,
-    })
+    admitted = Settings.model_validate({"model_api_key": "offline-test-only", "model_name": "fake-model"})
     monkeypatch.setattr(main, "load_settings", lambda: admitted)
     contexts = []
 

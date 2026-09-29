@@ -26,7 +26,7 @@ Open <http://127.0.0.1:8000/>. The presets, the "Adjust scope" controls and "Exp
 
 - `GET /health` only shows that the server is running.
 - A local run needs no environment variables. The signing key for follow-up context is then generated fresh each time the server starts, so a restart ends any follow-up context.
-- Free text needs an admitted model. See [Enable free text](#enable-free-text) below.
+- Free text (typing a question) needs a Gemini API key. See [Enable free text](#enable-free-text) below.
 
 ## Test
 
@@ -42,35 +42,36 @@ The two skipped tests need raw input files that exist only on the original autho
 
 ## Configuration
 
-All settings are environment variables. The app never reads a `.env` file itself. [backend/.env.example](backend/.env.example) lists every variable, with placeholders.
+All settings are environment variables. For a local run the backend also reads `backend/.env` (git-ignored); anything already set in your shell wins, and nothing is read from it on Vercel. [backend/.env.example](backend/.env.example) lists every variable, with placeholders.
 
 | Variable | When it is needed |
 |---|---|
 | `APP_SIGNING_KEY` | Required when hosted. It must be 32–512 bytes. Generate one with `python -c "import secrets;print(secrets.token_urlsafe(32))"`. |
 | `ALLOWED_HOSTS` | Optional. A comma-separated list of hostnames, needed only for a custom domain. Vercel's own hostnames are allowed automatically. |
 | `MAX_CONCURRENT_QUERIES` | Optional. The limit is per instance: 1–16, default 4 when hosted. |
-| `OPENAI_API_KEY`, `OPENAI_MODEL`, `MODEL_RUNTIME_ENABLED`, `MODEL_ADMITTED_NAME`, `MODEL_ADMITTED_ADAPTER_SHA256`, `MODEL_REASONING_EFFORT` | Free text only, and only after admission. |
+| `GEMINI_API_KEY` | Turns on free text. Without it, typed questions return `503 ai_unavailable`; presets still work. |
+| `GEMINI_MODEL` | Optional. Default `gemini-2.5-flash`. |
+| `GEMINI_THINKING_BUDGET` | Optional. Default `0` (thinking off, so answers fit the 512-token cap). `default` lets the model decide. |
 
 ## Enable free text
 
-Free text is off by default. It turns on only when all of the following are true:
+Free text is on whenever `GEMINI_API_KEY` is set. The model only turns the question into a structured request; every number still comes from the deterministic engine.
 
-- `MODEL_RUNTIME_ENABLED=true`
-- `OPENAI_API_KEY` and `OPENAI_MODEL` are both set
-- `MODEL_ADMITTED_NAME` equals `OPENAI_MODEL`
-- `MODEL_ADMITTED_ADAPTER_SHA256` equals `sha256sum app/backend/app/model_adapter.py`
+1. Create a key at <https://aistudio.google.com/apikey>. Set a quota or budget on its Google project: that is the only spending cap, because the app keeps no record of spend.
+2. Local run: create `app/backend/.env` from the example and paste the key after `GEMINI_API_KEY=`, then restart the server.
 
-To admit a model:
+   ```sh
+   cp app/backend/.env.example app/backend/.env   # then edit GEMINI_API_KEY=...
+   ```
 
-1. Create an OpenAI project and give it a **hard monthly budget**. That budget is the only spending cap, because the app keeps no record of spend.
-2. From `app/backend/`, run the live evaluation. It passes at 29 of 30 or better. The network must allow `api.openai.com`.
+3. Optional quality check. From `app/backend/`, run the 30-question evaluation against the live model (prices are per million tokens, read from Google's price list on the day):
 
    ```sh
    python -m scripts.eval_intents --mode candidate --live --acceptance \
      --input-usd-per-mtok <price> --output-usd-per-mtok <price>
    ```
 
-3. If the evaluation passes, set the admission variables. Any change to `model_adapter.py` changes its hash and turns free text off again.
+Each model call writes one log line with the model, outcome, latency and token counts, never the question. A wrong key or model name shows up there as, for example, `outcome=ai_unavailable:http_404`.
 
 ## Deploy to Vercel
 
@@ -80,7 +81,7 @@ To admit a model:
    - There is no `public/` folder, so every file is served through the host and Origin checks.
 2. **Environment variables.**
    - Set `APP_SIGNING_KEY` for both Preview and Production. Without it, every route except `/health` returns 503.
-   - Add the model variables only after admission. Put the key in Vercel's encrypted settings, never in Git.
+   - Set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`) as a **Sensitive** environment variable. It lives only in Vercel's encrypted settings, never in Git; `backend/.env` is not uploaded.
 3. **Check these before the first deploy.** They could not be verified offline; details are in [vercel-package-check.md](../docs/evidence/vercel-package-check.md).
    - Is `requirements.txt` found next to the entrypoint (`backend/`)? If not, copy or reference it at `app/requirements.txt`.
    - Is Python 3.12 selected from `.python-version`?
@@ -96,6 +97,6 @@ To admit a model:
 
 ## What's left
 
-- [ ] **Admit the live model.** Follow [Enable free text](#enable-free-text), save the result without secrets under `docs/evidence/`, and demo the four questions as free text plus one follow-up.
+- [ ] **Try free text with a real Gemini key.** Follow [Enable free text](#enable-free-text) and ask the four questions in your own words, plus one follow-up. Optionally run the evaluation and save its report (it contains no secrets) under `docs/evidence/`.
 - [ ] **Deploy to Vercel.** Follow the section above, then run the smoke test.
 - [ ] **Recheck data freshness before the demo.** From `app/backend/`, run `python -m scripts.check_source_status --bundle annual-2025-r1 --output <receipt.json>` on a host that can reach BTS, DataSF and FAA. Re-promoting `annual-2025-r1` after **2026-10-04T17:17Z** requires a new freshness receipt. Serving the current bundle does not depend on this, and the date is not a rebuild deadline: a rebuilt bundle needs its own fresh receipt whenever it is promoted. As of 2026-09-29 the check blocks on FAA, which replaced its preliminary CY2025 PDF with the final edition; see [the FAA impact check](../docs/evidence/faa-final-cy2025-impact-20260929.md).

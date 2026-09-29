@@ -1,11 +1,10 @@
-"""Offline contract tests for the one-call model interpreter."""
+"""Offline contract tests for the one-call Gemini interpreter."""
 
 from __future__ import annotations
 
 import asyncio
 import hashlib
 import json
-from copy import deepcopy
 from functools import wraps
 from pathlib import Path
 
@@ -19,9 +18,10 @@ from app.model_adapter import (
     PROMPT_SHA256,
     ModelAdapterError,
     interpret_message,
-    provider_input_token_ceiling,
 )
 from app.settings import Settings
+
+KEY = "test-private-value"
 
 
 def run_async(function):
@@ -33,7 +33,7 @@ def run_async(function):
 
 
 def _settings(**overrides: object) -> Settings:
-    return Settings.model_validate({"model_api_key": "test-private-value", "model_name": "test.model", **overrides})
+    return Settings.model_validate({"model_api_key": KEY, "model_name": "test.model", **overrides})
 
 
 def _analysis() -> dict[str, object]:
@@ -43,13 +43,16 @@ def _analysis() -> dict[str, object]:
     }
 
 
-def _response(outcome: dict[str, object] | None = None, **overrides: object) -> dict[str, object]:
-    outcome = outcome or {"kind": "analysis", "analysis": _analysis(), "message": None}
+def _response(outcome: dict[str, object] | None = None, *, parts: list | None = None, **overrides: object) -> dict:
+    outcome = outcome or {"kind": "analysis", "analysis": _analysis()}
+    candidate = {
+        "content": {"role": "model", "parts": parts if parts is not None else [{"text": json.dumps(outcome)}]},
+        "finishReason": "STOP",
+    }
+    candidate.update(overrides.pop("candidate", {}))
     return {
-        "status": "completed",
-        "output": [{"type": "message", "role": "assistant", "status": "completed",
-                    "content": [{"type": "output_text", "text": json.dumps(outcome)}]}],
-        "usage": {"input_tokens": 300, "output_tokens": 70},
+        "candidates": [candidate],
+        "usageMetadata": {"promptTokenCount": 300, "candidatesTokenCount": 70, "totalTokenCount": 370},
         **overrides,
     }
 
@@ -59,7 +62,7 @@ def _client(handler) -> httpx.AsyncClient:
 
 
 @run_async
-async def test_one_request_exact_responses_contract_and_validated_analysis() -> None:
+async def test_one_request_exact_gemini_contract_and_validated_analysis() -> None:
     calls: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -72,58 +75,67 @@ async def test_one_request_exact_responses_contract_and_validated_analysis() -> 
         "action": "metric", "airports": ["ANC"], "metric": "long_haul_share",
         "year": 2024, "threshold_miles": 3000.0,
     }}
-    assert result.usage.input_tokens == 300
-    assert result.usage.output_tokens == 70
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (300, 70)
     assert len(calls) == 1
     request = calls[0]
-    assert request.method == "POST" and str(request.url) == "https://api.openai.com/v1/responses"
-    assert request.headers["authorization"] == "Bearer test-private-value"
+    assert request.method == "POST"
+    assert str(request.url) == "https://generativelanguage.googleapis.com/v1beta/models/test.model:generateContent"
+    assert request.headers["x-goog-api-key"] == KEY
+    assert "authorization" not in request.headers
+    assert KEY not in str(request.url)
     payload = json.loads(request.content)
-    assert payload["model"] == "test.model"
-    assert payload["store"] is False and payload["max_output_tokens"] == 512
-    assert "tools" not in payload and "previous_response_id" not in payload
-    assert payload["text"]["format"] == {
-        "type": "json_schema", "name": "airport_intent", "strict": True, "schema": OUTPUT_SCHEMA,
+    assert set(payload) == {"systemInstruction", "contents", "generationConfig"}
+    assert payload["systemInstruction"] == {"parts": [{"text": model_adapter.SYSTEM_PROMPT}]}
+    assert payload["contents"][0]["role"] == "user"
+    assert payload["generationConfig"] == {
+        "responseMimeType": "application/json",
+        "responseSchema": OUTPUT_SCHEMA,
+        "maxOutputTokens": 512,
+        "temperature": 0,
+        "thinkingConfig": {"thinkingBudget": 0},
     }
-    assert OUTPUT_SCHEMA["additionalProperties"] is False
-    assert set(OUTPUT_SCHEMA["required"]) == set(OUTPUT_SCHEMA["properties"])
+    assert "tools" not in payload
+
+
+def test_schema_uses_gemini_openapi_subset() -> None:
+    assert OUTPUT_SCHEMA["type"] == "OBJECT"
+    assert set(OUTPUT_SCHEMA["required"]) == set(OUTPUT_SCHEMA["properties"]) == {"kind", "analysis"}
     nested = OUTPUT_SCHEMA["properties"]["analysis"]
-    assert nested["additionalProperties"] is False
-    assert set(nested["required"]) == set(nested["properties"])
-    assert len(PROMPT_SHA256) == 64
+    assert nested["nullable"] is True
+    assert set(nested["propertyOrdering"]) == set(nested["properties"])
+    for field in nested["properties"].values():
+        assert field["type"].isupper()
+        assert all(isinstance(value, str) for value in field.get("enum", []))
+    assert "bundle_id" not in nested["properties"]
+    assert "additionalProperties" not in json.dumps(OUTPUT_SCHEMA)
 
 
 def test_adapter_identity_covers_complete_source_not_only_prompt() -> None:
     source = Path(model_adapter.__file__).read_bytes()
     assert ADAPTER_SHA256 == hashlib.sha256(source).hexdigest()
-    assert ADAPTER_SHA256 != hashlib.sha256(source + b"\n").hexdigest()
     assert ADAPTER_SHA256 != PROMPT_SHA256
-
-
-def test_provider_input_ceiling_includes_schema_request_and_framing(monkeypatch) -> None:
-    settings = _settings()
-    original = provider_input_token_ceiling(settings)
-    assert original > settings.model_max_prompt_tokens + 4096
-    expanded = deepcopy(OUTPUT_SCHEMA)
-    expanded["description"] = "schema context " * 100
-    monkeypatch.setattr(model_adapter, "OUTPUT_SCHEMA", expanded)
-    assert provider_input_token_ceiling(settings) > original
+    assert len(PROMPT_SHA256) == 64
 
 
 @run_async
-async def test_provider_usage_accepts_ceiling_and_rejects_above_it() -> None:
-    settings = _settings()
-    ceiling = provider_input_token_ceiling(settings)
-    assert ceiling > settings.model_max_prompt_tokens
-    accepted = _response(usage={"input_tokens": ceiling, "output_tokens": 70})
-    async with _client(lambda request: httpx.Response(200, json=accepted)) as client:
-        result = await interpret_message("question", settings=settings, client=client)
-    assert result.usage.input_tokens == ceiling
-    rejected = _response(usage={"input_tokens": ceiling + 1, "output_tokens": 70})
-    async with _client(lambda request: httpx.Response(200, json=rejected)) as client:
-        with pytest.raises(ModelAdapterError) as exc:
-            await interpret_message("question", settings=settings, client=client)
-    assert exc.value.code == "model_invalid_response"
+async def test_thinking_config_is_omitted_when_budget_unset() -> None:
+    payload, _ = await _captured_payload(_settings(model_thinking_budget=None))
+    assert "thinkingConfig" not in payload["generationConfig"]
+    payload, _ = await _captured_payload(_settings(model_thinking_budget=128))
+    assert payload["generationConfig"]["thinkingConfig"] == {"thinkingBudget": 128}
+
+
+@run_async
+async def test_model_name_is_url_escaped() -> None:
+    urls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        urls.append(str(request.url))
+        return httpx.Response(200, json=_response())
+
+    async with _client(handler) as client:
+        await interpret_message("question", settings=_settings(model_name="gemini-2.5-flash"), client=client)
+    assert urls == ["https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"]
 
 
 @run_async
@@ -134,11 +146,11 @@ async def test_context_is_validated_before_call_and_server_owns_safe_message() -
         nonlocal calls
         calls += 1
         sent = json.loads(request.content)
-        assert json.loads(sent["input"][1]["content"])["previous_analysis"] == {
+        assert json.loads(sent["contents"][0]["parts"][0]["text"])["previous_analysis"] == {
             "action": "metric", "airports": ["ANC"], "metric": "long_haul_share",
             "year": 2024, "threshold_miles": 3000.0,
         }
-        return httpx.Response(200, json=_response({"kind": "clarification_required", "analysis": None, "message": None}))
+        return httpx.Response(200, json=_response({"kind": "clarification_required", "analysis": None}))
 
     async with _client(handler) as client:
         result = await interpret_message("and last year?", settings=_settings(), context=_analysis(), client=client)
@@ -153,16 +165,44 @@ async def test_context_is_validated_before_call_and_server_owns_safe_message() -
 
 
 @run_async
+async def test_unsupported_scope_and_omitted_analysis_key() -> None:
+    async with _client(lambda request: httpx.Response(200, json=_response({"kind": "unsupported_scope"}))) as client:
+        result = await interpret_message("what is BOS ROI?", settings=_settings(), client=client)
+    assert result.kind == "unsupported_scope"
+    assert result.message == "That question is outside the supported airport analyses and periods."
+
+
+@run_async
+@pytest.mark.parametrize("empty", [{}, {"action": None, "airports": None, "year": None}])
+async def test_empty_analysis_object_counts_as_null_for_safe_outcomes(empty) -> None:
+    body = _response({"kind": "clarification_required", "analysis": empty})
+    async with _client(lambda request: httpx.Response(200, json=body)) as client:
+        result = await interpret_message("which airport?", settings=_settings(), client=client)
+    assert result.kind == "clarification_required" and result.analysis is None
+
+
+@run_async
+async def test_omitted_nullable_analysis_fields_default_to_null() -> None:
+    outcome = {"kind": "analysis", "analysis": {"action": "metric", "airports": ["ANC"], "metric": "long_haul_share"}}
+    _, result = await _captured_payload(_settings(), outcome)
+    assert result.analysis.year is None and result.analysis.threshold_miles is None
+
+
+@run_async
 @pytest.mark.parametrize("outcome", [
-    {"kind": "analysis", "analysis": {**_analysis(), "metric": "made_up"}, "message": None},
-    {"kind": "analysis", "analysis": {**_analysis(), "year": 2022}, "message": None},
+    {"kind": "analysis", "analysis": {**_analysis(), "metric": "made_up"}},
+    {"kind": "analysis", "analysis": {**_analysis(), "year": 2022}},
+    {"kind": "analysis", "analysis": {**_analysis(), "extra": "x"}},
+    {"kind": "analysis", "analysis": None},
     {"kind": "analysis", "analysis": _analysis(), "message": "provider prose"},
-    {"kind": "analysis", "analysis": {**_analysis(), "extra": "x"}, "message": None},
-    {"kind": "unsupported_scope", "analysis": _analysis(), "message": None},
-    {"kind": "unsupported_scope", "analysis": None, "message": "provider prose"},
+    {"kind": "unsupported_scope", "analysis": _analysis()},
+    {"kind": "something_else", "analysis": None},
+    {"analysis": _analysis()},
+    ["not", "an", "object"],
 ])
-async def test_invalid_outcomes_fail_closed(outcome: dict[str, object]) -> None:
-    async with _client(lambda request: httpx.Response(200, json=_response(outcome))) as client:
+async def test_invalid_outcomes_fail_closed(outcome: object) -> None:
+    body = _response(parts=[{"text": json.dumps(outcome)}])
+    async with _client(lambda request: httpx.Response(200, json=body)) as client:
         with pytest.raises(ModelAdapterError) as exc:
             await interpret_message("question", settings=_settings(), client=client)
     assert exc.value.code == "model_invalid_response"
@@ -170,15 +210,19 @@ async def test_invalid_outcomes_fail_closed(outcome: dict[str, object]) -> None:
 
 @run_async
 @pytest.mark.parametrize(("response", "code"), [
-    (_response(status="incomplete"), "model_incomplete"),
-    (_response(output=[{"type": "message", "status": "completed", "content": [{"type": "refusal", "refusal": "private"}]}]), "model_refusal"),
-    (_response(output=[]), "model_invalid_response"),
-    (_response(output=[*_response()["output"], *_response()["output"]]), "model_invalid_response"),
-    (_response(output=[{"type": "function_call"}, *_response()["output"]]), "model_invalid_response"),
-    (_response(usage={"input_tokens": 300, "output_tokens": 9999}), "model_invalid_response"),
-    (_response(usage=None), "model_invalid_response"),
+    ({"promptFeedback": {"blockReason": "SAFETY"}}, "model_refusal"),
+    (_response(candidate={"finishReason": "SAFETY"}), "model_refusal"),
+    (_response(candidate={"finishReason": "RECITATION"}), "model_refusal"),
+    (_response(candidate={"finishReason": "MAX_TOKENS"}), "model_incomplete"),
+    (_response(candidate={"finishReason": "OTHER"}), "model_invalid_response"),
+    (_response(candidates=[]), "model_invalid_response"),
+    (_response(parts=[]), "model_invalid_response"),
+    (_response(parts=[{"text": "{\"kind\": \"analysis\""}]), "model_invalid_response"),
+    (_response(usageMetadata={"promptTokenCount": -1}), "model_invalid_response"),
+    (_response(usageMetadata="nope"), "model_invalid_response"),
+    ([], "model_invalid_response"),
 ])
-async def test_response_envelope_failures(response: dict[str, object], code: str) -> None:
+async def test_response_envelope_failures(response: object, code: str) -> None:
     async with _client(lambda request: httpx.Response(200, json=response)) as client:
         with pytest.raises(ModelAdapterError) as exc:
             await interpret_message("question", settings=_settings(), client=client)
@@ -186,13 +230,35 @@ async def test_response_envelope_failures(response: dict[str, object], code: str
 
 
 @run_async
-async def test_http_and_provider_text_are_not_exposed() -> None:
-    private_body = "test-private-value provider stack trace"
-    async with _client(lambda request: httpx.Response(429, text=private_body)) as client:
+async def test_thought_parts_are_ignored_and_split_text_is_joined() -> None:
+    text = json.dumps({"kind": "analysis", "analysis": _analysis()})
+    body = _response(parts=[{"text": "private reasoning", "thought": True}, {"text": text[:20]}, {"text": text[20:]}])
+    body["usageMetadata"]["thoughtsTokenCount"] = 15
+    async with _client(lambda request: httpx.Response(200, json=body)) as client:
+        result = await interpret_message("question", settings=_settings(), client=client)
+    assert result.analysis.metric == "long_haul_share"
+    assert result.usage.output_tokens == 85
+
+
+@run_async
+async def test_missing_usage_metadata_is_tolerated() -> None:
+    body = _response()
+    del body["usageMetadata"]
+    async with _client(lambda request: httpx.Response(200, json=body)) as client:
+        result = await interpret_message("question", settings=_settings(), client=client)
+    assert (result.usage.input_tokens, result.usage.output_tokens) == (0, 0)
+
+
+@run_async
+@pytest.mark.parametrize("status", [400, 403, 404, 429, 500, 503])
+async def test_http_errors_keep_status_for_logs_and_hide_provider_text(status: int) -> None:
+    private_body = f"{KEY} provider stack trace"
+    async with _client(lambda request: httpx.Response(status, text=private_body)) as client:
         with pytest.raises(ModelAdapterError) as exc:
             await interpret_message("question", settings=_settings(), client=client)
     assert exc.value.code == "ai_unavailable"
-    assert private_body not in str(exc.value)
+    assert exc.value.provider_status == status
+    assert private_body not in str(exc.value) and KEY not in repr(exc.value)
 
 
 @run_async
@@ -208,7 +274,18 @@ async def test_hard_total_timeout_even_with_injected_client() -> None:
 
 
 @run_async
-async def test_no_call_for_missing_settings_or_oversized_prompt() -> None:
+async def test_transport_error_is_unavailable() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("no route", request=request)
+
+    async with _client(handler) as client:
+        with pytest.raises(ModelAdapterError) as exc:
+            await interpret_message("question", settings=_settings(), client=client)
+    assert exc.value.code == "ai_unavailable" and exc.value.provider_status is None
+
+
+@run_async
+async def test_no_call_for_missing_key_or_oversized_prompt() -> None:
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -220,6 +297,7 @@ async def test_no_call_for_missing_settings_or_oversized_prompt() -> None:
         for settings, message, expected_code in [
             (Settings(), "question", "ai_unavailable"),
             (_settings(), "x" * 4001, "model_prompt_too_large"),
+            (_settings(), "   ", "model_prompt_too_large"),
             (_settings(model_max_prompt_tokens=100), "question", "model_prompt_too_large"),
         ]:
             with pytest.raises(ModelAdapterError) as exc:
@@ -249,19 +327,9 @@ async def _captured_payload(settings: Settings, outcome: dict[str, object] | Non
     return captured[0], result
 
 
-@run_async
-async def test_reasoning_key_is_omitted_unless_effort_is_configured() -> None:
-    payload, _ = await _captured_payload(_settings())
-    assert "reasoning" not in payload
-    payload, _ = await _captured_payload(_settings(model_reasoning_effort="low"))
-    assert payload["reasoning"] == {"effort": "low"}
-    assert payload["max_output_tokens"] == 512
-
-
-def test_schema_and_prompt_declare_supported_periods_including_2025() -> None:
+def test_prompt_declares_supported_periods_including_2025() -> None:
     year = OUTPUT_SCHEMA["properties"]["analysis"]["properties"]["year"]
-    assert year == {"type": ["integer", "null"], "enum": [2023, 2024, 2025, None]}
-    assert "bundle_id" not in OUTPUT_SCHEMA["properties"]["analysis"]["properties"]
+    assert year == {"type": "INTEGER", "nullable": True}
     assert "2025" in model_adapter.SYSTEM_PROMPT
     assert "set year to null" in model_adapter.SYSTEM_PROMPT
 
@@ -269,9 +337,7 @@ def test_schema_and_prompt_declare_supported_periods_including_2025() -> None:
 @pytest.mark.parametrize("year", [2025, None])
 def test_2025_and_omitted_year_outcomes_are_accepted(year) -> None:
     analysis = {**_analysis(), "year": year}
-    _, result = asyncio.run(
-        _captured_payload(_settings(), {"kind": "analysis", "analysis": analysis, "message": None})
-    )
+    _, result = asyncio.run(_captured_payload(_settings(), {"kind": "analysis", "analysis": analysis}))
     assert result.analysis.year == year
     assert result.analysis.bundle_id is None
 
@@ -280,5 +346,5 @@ def test_2025_and_omitted_year_outcomes_are_accepted(year) -> None:
 async def test_unsupported_year_from_model_fails_closed() -> None:
     analysis = {**_analysis(), "year": 2026}
     with pytest.raises(ModelAdapterError) as exc:
-        await _captured_payload(_settings(), {"kind": "analysis", "analysis": analysis, "message": None})
+        await _captured_payload(_settings(), {"kind": "analysis", "analysis": analysis})
     assert exc.value.code == "model_invalid_response"

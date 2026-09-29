@@ -48,11 +48,7 @@ def context_claims(http_client):
 
 
 def admitted_settings(**overrides):
-    values = {
-        "model_api_key": "offline-test-only", "model_name": "fake-model",
-        "model_runtime_enabled": True, "model_admitted_name": "fake-model",
-        "model_admitted_adapter_sha256": main.ADAPTER_SHA256,
-    }
+    values = {"model_api_key": "offline-test-only", "model_name": "fake-model"}
     values.update(overrides)
     return Settings.model_validate(values)
 
@@ -594,19 +590,31 @@ def test_independent_question_after_prior_result_has_no_context(monkeypatch):
     assert second.json()["scope"]["airports"] == ["PVD"]
 
 
-def test_old_prompt_hash_cannot_admit_changed_adapter(monkeypatch):
-    from app.model_adapter import PROMPT_SHA256
-
-    assert PROMPT_SHA256 != main.ADAPTER_SHA256
-    monkeypatch.setattr(main, "load_settings", lambda: admitted_settings(model_admitted_adapter_sha256=PROMPT_SHA256))
+def test_free_text_without_a_gemini_key_never_calls_the_model(monkeypatch):
+    monkeypatch.setattr(main, "load_settings", lambda: Settings.model_validate({"model_name": "fake-model"}))
 
     async def fail(*_args, **_kwargs):
-        raise AssertionError("unadmitted prompt reached model")
+        raise AssertionError("a request without an API key reached the model")
 
     monkeypatch.setattr(main, "interpret_message", fail)
     response = client.post("/api/query", json={"message": "How many PVD passengers in 2024?"})
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "ai_unavailable"
+
+
+def test_provider_http_status_is_logged_but_not_returned(monkeypatch, caplog):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def not_found(*_args, **_kwargs):
+        raise ModelAdapterError("ai_unavailable", provider_status=404)
+
+    caplog.set_level("INFO", logger="app.main")
+    monkeypatch.setattr(main, "interpret_message", not_found)
+    response = client.post("/api/query", json={"message": "How many PVD passengers in 2024?"})
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "ai_unavailable"
+    assert "404" not in response.text
+    assert any("outcome=ai_unavailable:http_404" in record.getMessage() for record in caplog.records)
 
 
 def test_followup_passes_only_signed_request_and_stale_id_keeps_cookie(monkeypatch):

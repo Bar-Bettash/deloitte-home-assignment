@@ -24,9 +24,9 @@ from app.contracts import (
     validate_request_body_size,
 )
 from app.dispatch import DispatchFailure, dispatch_analysis
-from app.model_adapter import ADAPTER_SHA256, ModelAdapterError, interpret_message
+from app.model_adapter import ModelAdapterError, interpret_message
 from app.query_slots import QuerySlots
-from app.settings import HostingConfig, HostingConfigError, load_hosting, load_settings
+from app.settings import HostingConfig, HostingConfigError, load_hosting, load_local_env, load_settings
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -39,6 +39,8 @@ class HealthResponse(BaseModel):
 
 
 logger = logging.getLogger(__name__)
+# A local run reads backend/.env (for GEMINI_API_KEY); Vercel uses its own env settings.
+load_local_env()
 # Uvicorn and Vercel configure only their own loggers; give the app package an
 # INFO handler once so the per-call model metadata line is actually emitted.
 _app_logger = logging.getLogger("app")
@@ -292,7 +294,8 @@ async def _interpret_and_dispatch(
             context=claims.request.model_dump(mode="json", exclude_none=True) if claims is not None else None,
         )
     except ModelAdapterError as exc:
-        _log_model_call(request_id, settings, started, outcome=exc.code, follow_up=claims is not None)
+        outcome = exc.code if exc.provider_status is None else f"{exc.code}:http_{exc.provider_status}"
+        _log_model_call(request_id, settings, started, outcome=outcome, follow_up=claims is not None)
         raise
     except asyncio.CancelledError:
         _log_model_call(request_id, settings, started, outcome="cancelled", follow_up=claims is not None)
@@ -367,7 +370,7 @@ async def query(request: Request) -> AnalysisResult | JSONResponse:
     if analysis is None:
         try:
             settings = load_settings()
-            admitted = settings.model_runtime_admitted(ADAPTER_SHA256)
+            admitted = settings.model_access_available
         except (ValueError, ValidationError):
             admitted = False
         if not admitted:
