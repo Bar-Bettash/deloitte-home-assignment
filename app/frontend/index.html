@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Airport Investment Screening Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+  <script type="module" src="/static/globe.js"></script>
+</head>
+<body>
+<header class="contact-header">
+  <p class="contact"><span>Bar Bettash</span><a href="mailto:bar.bettash.jobs@gmail.com">bar.bettash.jobs@gmail.com</a></p>
+</header>
+<span id="health-status" class="visually-hidden" role="status">Backend checking</span>
+<nav class="skip-links" aria-label="Skip navigation"><a id="analysis-skip" href="#analyst-rail">Skip to analysis</a><a id="result-skip" href="#result-title">Skip to result</a></nav>
+<main id="workspace" class="page app-main">
+  <div id="hero-layout" class="hero-layout">
+   <div id="analysis-workspace" class="analysis-workspace" aria-label="Airport analysis workspace">
+   <details id="setup-controls" open>
+    <summary id="setup-toggle">Choose an analysis</summary>
+    <section id="landing-introduction" class="product-intro" aria-labelledby="landing-title">
+     <p class="eyebrow">AIRPORT INVESTMENT ANALYST</p>
+     <h1 id="landing-title">Airport modernization<br>insights</h1>
+     <p class="intro">Compare airport traffic and operational pressure, then inspect evidence and limitations.</p>
+     <p class="coverage-note">CY2024→CY2025 accepted bundle; 2023–2024 historical · FAA cohort · BTS + DataSF data.</p>
+    </section>
+  <aside id="analyst-rail" class="copy-column" aria-label="Analyst controls" tabindex="-1">
+   <div id="controls" aria-busy="false" aria-labelledby="analyst-title">
+    <h2 id="analyst-title" class="visually-hidden">Analysis controls</h2>
+    <section id="analyze" aria-labelledby="demo-title">
+      <h2 id="demo-title" class="visually-hidden">Choose an analysis</h2>
+      <p class="eyebrow try-label">TRY AN ANALYSIS</p>
+      <div class="prompt-grid">
+        <button type="button" class="prompt" data-preset="new-england" data-send><strong>New England expansion</strong></button>
+        <button type="button" class="prompt" data-preset="lax-sna" data-send><strong>LAX vs SNA congestion</strong></button>
+        <button type="button" class="prompt" data-preset="anc-long-haul" data-send><strong>ANC long-haul share</strong></button>
+        <button type="button" class="prompt" data-preset="sfo-pressure" data-send><strong>SFO demand pressure</strong></button>
+      </div>
+      <details class="more-examples">
+        <summary>More analyses</summary>
+        <div class="prompt-grid">
+          <button type="button" class="prompt" data-preset="sfo-trend" data-send><strong>SFO passenger trend</strong><span>Combined domestic/international monthly series.</span></button>
+          <button type="button" class="prompt" data-preset="bos-pvd" data-send><strong>BOS vs PVD growth</strong><span>2025 passenger growth against the 2024 baseline.</span></button>
+          <button type="button" class="prompt" data-preset="growth" data-send><strong>New England growth ranking</strong><span>Raw growth, separate from screening score.</span></button>
+        </div>
+      </details>
+    </section>
+    <button type="button" id="ask-trigger" class="ask-trigger" aria-expanded="false" aria-controls="conversation-composer"><span>Ask your own question</span> <span class="ask-arrow" aria-hidden="true">→</span></button>
+    <p id="feedback" class="notice" role="status" aria-live="polite" hidden></p>
+    <details id="scope-panel" class="scope-disclosure">
+      <summary id="scope-title">Adjust scope</summary>
+      <p id="scope-help" class="hint">Choose values, then run once. Rank applies to New England; leave airports blank for the full cohort. Compare needs two airports; metric needs one. Default period is the accepted CY2024→CY2025 bundle; 2023–2024 remain available as history. Operations support LAX/SNA/SFO in 2025 and 2024; SFO bundles support SFO only. Growth and screening compare against the prior year, so they are not available for 2023.</p>
+      <form id="scope-form" aria-describedby="scope-help">
+        <div class="fields">
+          <label for="action">Action<select id="action"><option value="rank">Rank</option><option value="compare">Compare</option><option value="metric">Single-airport metric</option></select><span id="action-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
+          <label for="airports">Airport codes, separated by commas<input id="airports" maxlength="150" placeholder="BOS, PVD" autocomplete="off"><span id="airports-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
+          <div class="airport-picker-row">
+            <label for="airport-picker">Add a supported airport<select id="airport-picker" aria-describedby="airport-picker-help">
+              <option value="">Choose an airport</option>
+              <option>BDL</option><option>HVN</option><option>PWM</option><option>BGR</option><option>PQI</option><option>RKD</option><option>BHB</option><option>AUG</option>
+              <option>BOS</option><option>ACK</option><option>ORH</option><option>MVY</option><option>HYA</option><option>PVC</option><option>MHT</option><option>PSM</option>
+              <option>LEB</option><option>PVD</option><option>WST</option><option>BID</option><option>BTV</option><option>RUT</option><option>EWB</option><option>ANC</option>
+              <option>LAX</option><option>SNA</option><option>SFO</option>
+            </select></label>
+            <button type="button" id="add-airport">Add to draft</button>
+          </div>
+          <p id="airport-picker-help" class="airport-picker-help">Add one of all 27 supported airports to the visible draft. Globe shortcuts show only six mapped locations.</p>
+          <label for="metric">Metric<select id="metric">
+            <option value="screen_score">Screening score</option><option value="passengers">Passengers</option><option value="seats">Seats</option><option value="departures">Departures</option><option value="passenger_growth">Passenger growth</option><option value="seat_occupancy">Seat occupancy</option><option value="long_haul_share">Long-haul share</option><option value="congestion">Operational comparison (four indicators)</option><option value="cancellation_rate">Cancellation rate</option><option value="diversion_rate">Diversion rate</option><option value="departure_delay_minutes">Departure delay</option><option value="taxi_out_minutes">Taxi out</option><option value="sfo_enplaned_trend">SFO passenger trend</option><option value="sfo_pressure">SFO demand pressure</option>
+          </select><span id="metric-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
+          <label for="year">Year<select id="year"><option value="2025" selected>2025 (vs 2024, accepted bundle)</option><option value="2024">2024 (historical, vs 2023)</option><option value="2023">2023 (T-100 levels/occupancy/long haul only)</option></select><span id="year-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
+          <label for="threshold">Long-haul threshold in miles<input id="threshold" type="number" min="1" max="12000" step="any" value="3000" aria-describedby="threshold-help" disabled><span id="threshold-help" class="hint">Used only for long-haul share.</span><span id="threshold-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
+        </div>
+        <button type="submit" class="primary" data-send>Run selected scope</button>
+      </form>
+    </details>
+   </div>
+  </aside>
+   </details>
+   </div>
+   <aside id="result-panel" class="results-column" aria-labelledby="result-title" hidden>
+    <button type="button" id="back-to-analysis" class="back-to-analysis" hidden aria-label="Back to analysis choices">← <span>Back</span></button>
+    <h2 id="result-title" tabindex="-1" hidden>Analysis result</h2>
+    <section id="result" aria-label="Analysis results" hidden></section>
+    <div id="result-actions" class="result-actions"><button type="button" id="view-evidence" hidden>View evidence</button><button type="button" id="fresh" hidden>Choose another question</button><button type="button" id="explain" data-send disabled hidden>Explain this result</button></div>
+   </aside>
+   <a id="view-globe" href="#earth-stage">View globe</a>
+   </div>
+   <section id="earth-stage" class="earth-stage" aria-label="Earth visualization" tabindex="-1">
+    <div class="earth-frame">
+      <img id="earth-poster" src="/static/assets/earth-poster.webp" alt="" aria-hidden="true">
+      <canvas id="earth-canvas" width="1024" height="1024" tabindex="0" aria-label="Interactive Earth globe; drag to rotate"></canvas>
+      <div id="globe-markers" class="globe-markers" aria-label="Airport markers"></div>
+      <p id="globe-status" class="globe-status" role="status">Earth visualization is loading.</p>
+    </div>
+    <p class="earth-caption">US airport screening <span>·</span> CY2024→CY2025 bundle; 2023–2024 historical</p>
+   </section>
+  </div>
+</main>
+<button id="globe-motion-toggle" class="globe-motion-toggle" type="button" aria-pressed="false" aria-label="Pause Earth motion"><span data-motion-icon aria-hidden="true">Ⅱ</span></button>
+<section id="conversation-composer" class="conversation-composer" aria-label="Ask an analysis follow-up" aria-hidden="true" hidden inert>
+  <form id="chat-form" novalidate>
+    <label class="visually-hidden" for="question">Ask a question about airport analysis</label>
+    <textarea id="question" maxlength="4000" required aria-describedby="question-help question-error" placeholder="Ask about this analysis…"></textarea>
+    <button type="submit" class="composer-send" data-send aria-label="Send question">↑</button>
+    <p id="question-help" class="visually-hidden">Your question is sent to the analysis service.</p>
+    <p id="question-error" class="field-error" role="alert" aria-live="assertive" hidden></p>
+  </form>
+</section>
+<p id="context-summary" class="visually-hidden">Supported coverage: CY2024→CY2025 accepted bundle; 2023–2024 historical traffic and selected operational measures.</p>
+</body>
+</html>

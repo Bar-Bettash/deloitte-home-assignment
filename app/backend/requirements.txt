@@ -1,0 +1,7 @@
+# Runtime dependencies (installed by Vercel and for local runs). Python 3.11 or 3.12.
+# Keep these versions aligned with pyproject.toml [project].dependencies.
+duckdb==1.2.2
+fastapi==0.115.12
+httpx==0.28.1
+pydantic==2.11.4
+uvicorn==0.34.2

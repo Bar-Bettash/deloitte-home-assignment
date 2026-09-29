@@ -1,0 +1,367 @@
+{
+  "receipt_type": "official_source_release_check",
+  "schema_version": 1,
+  "checked_at_utc": "2026-09-27T11:29:25Z",
+  "scope": {
+    "purpose": "candidate CY2025/FY2025 source release comparison",
+    "admission_status": "evidence_only_not_admitted",
+    "selected_period_class": "complete_annual",
+    "policy_note": "A current_for_scope source result records release comparison only. It does not accept a snapshot, change an accepted pointer, validate workflow coverage, or authorize a paid model call."
+  },
+  "workflow_checks": [
+    {
+      "workflow": "sfo_passenger_growth",
+      "source_population": "DataSF SFO passenger statistics dataset rkru-6vcg; selected activity periods 202401 through 202512",
+      "selected_period_class": "complete_annual",
+      "selected_period": "CY2024-CY2025 paired vintage",
+      "official_sources": [
+        {
+          "publisher": "DataSF",
+          "method": "GET",
+          "request_url": "https://data.sf.gov/resource/rkru-6vcg.csv?%24select=count%28%2A%29+AS+count%2Cmin%28activity_period%29+AS+min_period%2Cmax%28activity_period%29+AS+max_period",
+          "transport_result": "success",
+          "response_bytes": 60,
+          "response_sha256": "b6e770752ba6d393e2b4d61192c27657edf7812f4bf257059bad106d30f0e3bc",
+          "observed_result": {
+            "row_count_all_periods": 40626,
+            "minimum_activity_period": "199907",
+            "maximum_activity_period": "202607"
+          }
+        },
+        {
+          "publisher": "DataSF",
+          "method": "GET",
+          "request_url": "https://data.sf.gov/resource/rkru-6vcg.csv?%24select=activity_period%2Cactivity_period_start_date%2Coperating_airline%2Coperating_airline_iata_code%2Cpublished_airline%2Cpublished_airline_iata_code%2Cgeo_summary%2Cgeo_region%2Cactivity_type_code%2Cprice_category_code%2Cterminal%2Cboarding_area%2Cpassenger_count%2Cdata_as_of%2Cdata_loaded_at&%24where=activity_period+%3E%3D+%27202401%27+AND+activity_period+%3C%3D+%27202512%27&%24order=%3Aid&%24limit=2500&%24offset=0",
+          "transport_result": "success",
+          "response_bytes": 511559,
+          "response_sha256": "2b14c2864b10309ea71705bbbc74598e67e3b76777bccefbbb7915ea23b63cae"
+        },
+        {
+          "publisher": "DataSF",
+          "method": "GET",
+          "request_url": "https://data.sf.gov/resource/rkru-6vcg.csv?%24select=activity_period%2Cactivity_period_start_date%2Coperating_airline%2Coperating_airline_iata_code%2Cpublished_airline%2Cpublished_airline_iata_code%2Cgeo_summary%2Cgeo_region%2Cactivity_type_code%2Cprice_category_code%2Cterminal%2Cboarding_area%2Cpassenger_count%2Cdata_as_of%2Cdata_loaded_at&%24where=activity_period+%3E%3D+%27202401%27+AND+activity_period+%3C%3D+%27202512%27&%24order=%3Aid&%24limit=2500&%24offset=2500",
+          "transport_result": "success",
+          "response_bytes": 322447,
+          "response_sha256": "a26e6b9c498ec418eb98e39b86f27d0657fd100c3c196a366f47fc30f54ed06f"
+        }
+      ],
+      "latest_complete_annual_period": "CY2025",
+      "latest_partial_period": "CY2026 through 2026-07",
+      "publication_revision_marker": {
+        "type": "selected_period_content_hashes",
+        "value": [
+          "sha256:2b14c2864b10309ea71705bbbc74598e67e3b76777bccefbbb7915ea23b63cae",
+          "sha256:a26e6b9c498ec418eb98e39b86f27d0657fd100c3c196a366f47fc30f54ed06f"
+        ]
+      },
+      "selected_period_revision_comparison": {
+        "status": "unchanged",
+        "basis": "Both freshly retrieved selected-period page hashes equal the corresponding hashes in recent-source-qualification-20260927.json."
+      },
+      "accepted_snapshot": {
+        "snapshot_id": "datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf",
+        "content_hash": "sha256:cc472e67b5dd529d513ff7b4482797450acaf98ce17b64c8d78076cfa2fc8ee1",
+        "period": "CY2023-CY2024",
+        "relation_to_selected_period": "historical_only; no CY2025 candidate snapshot is accepted"
+      },
+      "candidate_qualification_reference": {
+        "path": "backend/docs/evidence/recent-source-qualification-20260927.json",
+        "supporting_manifest_sha256": "f40bb603c100bf3e9b8d38cb687d736dfc3df200f221d2c92fb59e9de99df567"
+      },
+      "outcome": "current_for_scope",
+      "outcome_reason": "The exact selected-period DataSF responses match the candidate qualification hashes; the newer CY2026 data is partial and does not supersede the complete CY2025 comparison."
+    },
+    {
+      "workflow": "t100_traffic_growth_and_pressure",
+      "source_population": "BTS T-100 Segment All Carriers table FMG; AK, CA, CT, MA, ME, NH, RI and VT; all months for 2024 and 2025",
+      "selected_period_class": "complete_annual",
+      "selected_period": "CY2024-CY2025 paired vintage",
+      "official_sources": [
+        {
+          "publisher": "Bureau of Transportation Statistics",
+          "method": "GET",
+          "request_url": "https://www.transtats.bts.gov/releaseinfo.asp",
+          "transport_result": "success",
+          "response_bytes": 153396,
+          "response_sha256": "395cbdc0c4a785332c83190997bf42b6049b3d23d148801a10dbc988661dba77",
+          "observed_result": "T-100 Segment (All Carriers): 6/2026 latest; 2026-09-14 release added 6/2026 and updated 2/2024 through 5/2026."
+        },
+        {
+          "publisher": "Bureau of Transportation Statistics",
+          "method": "POST",
+          "request_url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG",
+          "request_parameters": {
+            "years": [
+              2024,
+              2025
+            ],
+            "geographies": [
+              "Alaska",
+              "California",
+              "Connecticut",
+              "Massachusetts",
+              "Maine",
+              "New Hampshire",
+              "Rhode Island",
+              "Vermont"
+            ],
+            "period": "All",
+            "field_count": 24,
+            "field_identity": "Exact field list is preserved per request in recent-source-qualification-20260927.json, including AIRCRAFT_CONFIG."
+          },
+          "transport_result": "previously_acquired_and_qualified",
+          "acquired_at_utc_range": "2026-09-27T10:42:16Z/2026-09-27T10:46:12Z",
+          "supporting_manifest_sha256": "85cb994590e1408ff141323f07ef8a628b00af087e2fe741dcf185e2e8971c47"
+        }
+      ],
+      "latest_complete_annual_period": "CY2025",
+      "latest_partial_period": "CY2026 through 2026-06",
+      "publication_revision_marker": {
+        "type": "BTS release history",
+        "value": "2026-09-14: 6/2026 added; 2/2024 through 5/2026 updated"
+      },
+      "selected_period_revision_comparison": {
+        "status": "unchanged_for_historical_overlap",
+        "basis": "The candidate archives were acquired after the 2026-09-14 revision marker. The qualification receipt records all eight 2024 decompressed CSV payloads as byte-identical to the accepted 2024 CSV payloads. CY2025 has no accepted snapshot comparator."
+      },
+      "accepted_snapshot": {
+        "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+        "content_hash": "sha256:1c023467175d599cbbb642e5ca5d22e711134178dc07cb77d8c9e3a3f7f6f8d5",
+        "hash_subject": "accepted Parquet payload",
+        "period": "CY2023-CY2024",
+        "relation_to_selected_period": "historical_only; no CY2025 candidate snapshot is accepted"
+      },
+      "candidate_qualification_reference": {
+        "path": "backend/docs/evidence/recent-source-qualification-20260927.json",
+        "supporting_manifest_sha256": "85cb994590e1408ff141323f07ef8a628b00af087e2fe741dcf185e2e8971c47"
+      },
+      "outcome": "current_for_scope",
+      "outcome_reason": "The selected archives were acquired after the latest listed revision and contain all twelve months for both selected years; the newer CY2026 release is partial. This source result does not accept the candidate snapshot."
+    },
+    {
+      "workflow": "lax_sna_operations",
+      "source_population": "BTS Reporting Carrier On-Time Performance table FGJ; ANC, LAX, SFO and SNA; all months of 2025",
+      "selected_period_class": "complete_annual",
+      "selected_period": "CY2025",
+      "official_sources": [
+        {
+          "publisher": "Bureau of Transportation Statistics",
+          "method": "GET",
+          "request_url": "https://www.transtats.bts.gov/releaseinfo.asp",
+          "transport_result": "success",
+          "response_bytes": 153396,
+          "response_sha256": "395cbdc0c4a785332c83190997bf42b6049b3d23d148801a10dbc988661dba77",
+          "observed_result": "Reporting Carrier On-Time Performance (1987-present): 7/2026 latest; 2026-09-21 release added 7/2026."
+        },
+        {
+          "publisher": "Bureau of Transportation Statistics",
+          "method": "GET",
+          "request_url_template": "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_{month}.zip",
+          "request_urls": [
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_1.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_2.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_3.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_4.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_5.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_6.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_7.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_8.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_9.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_10.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_11.zip",
+            "https://transtats.bts.gov/PREZIP/On_Time_Reporting_Carrier_On_Time_Performance_1987_present_2025_12.zip"
+          ],
+          "request_parameters": {
+            "year": 2025,
+            "months": [
+              1,
+              2,
+              3,
+              4,
+              5,
+              6,
+              7,
+              8,
+              9,
+              10,
+              11,
+              12
+            ],
+            "origin_airports": [
+              "ANC",
+              "LAX",
+              "SFO",
+              "SNA"
+            ]
+          },
+          "transport_result": "success_12_of_12_archives",
+          "acquired_at_utc_range": "2026-09-27T10:52:38Z/2026-09-27T11:16:52Z",
+          "response_bytes_total": 355420830,
+          "supporting_manifest": {
+            "observed_path": "/private/tmp/deloitte-2025-ontime-qualification/qualification.json",
+            "sha256": "06f8150a88a9196ecc0c51816d9230116fe8be2285034857cdbb6b9fc39cffa4",
+            "qualified_at_utc": "2026-09-27T11:26:44.774115Z",
+            "validation_status": "qualified",
+            "archive_count": 12,
+            "source_rows": 7001619,
+            "scoped_rows": 398824,
+            "unique_scoped_identities": 398824,
+            "exact_duplicate_rows": 0,
+            "conflicting_identity_keys": 0,
+            "coverage_result": "all 12 months and every calendar date present for ANC, LAX, SFO and SNA"
+          }
+        }
+      ],
+      "latest_complete_annual_period": "CY2025",
+      "latest_partial_period": "CY2026 through 2026-07",
+      "publication_revision_marker": {
+        "type": "BTS release history",
+        "value": "2026-09-21: 7/2026 added"
+      },
+      "selected_period_revision_comparison": {
+        "status": "initial_content_identity_established",
+        "basis": "All twelve selected-period archives were retrieved from their official URLs and hash-bound in qualification manifest sha256:06f8150a88a9196ecc0c51816d9230116fe8be2285034857cdbb6b9fc39cffa4. The release page observed 7/2026 as latest and listed no selected CY2025 revision after acquisition. No earlier complete CY2025 candidate manifest exists for a same-period before/after hash comparison."
+      },
+      "accepted_snapshot": {
+        "snapshot_id": "ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b",
+        "content_hash": "sha256:1fe2d4bddfaa5f744a7bb09df80f0c5d0e893a8ee7e4a507575eaa375aac1231",
+        "hash_subject": "accepted Parquet payload",
+        "period": "CY2024",
+        "relation_to_selected_period": "historical_only; no CY2025 candidate snapshot is accepted"
+      },
+      "candidate_qualification_reference": {
+        "path": "/private/tmp/deloitte-2025-ontime-qualification/qualification.json",
+        "sha256": "06f8150a88a9196ecc0c51816d9230116fe8be2285034857cdbb6b9fc39cffa4",
+        "status": "qualified",
+        "archive_count": 12,
+        "validated_months": [
+          "2025-01",
+          "2025-02",
+          "2025-03",
+          "2025-04",
+          "2025-05",
+          "2025-06",
+          "2025-07",
+          "2025-08",
+          "2025-09",
+          "2025-10",
+          "2025-11",
+          "2025-12"
+        ]
+      },
+      "outcome": "current_for_scope",
+      "outcome_reason": "The exact twelve-archive CY2025 source population was freshly acquired and qualified, and the official release page shows only a newer partial CY2026 period. This source result does not accept or publish a candidate snapshot."
+    },
+    {
+      "workflow": "new_england_commercial_service_screen",
+      "source_population": "FAA preliminary CY2025 commercial-service enplanements; New England region cohort",
+      "selected_period_class": "complete_annual",
+      "selected_period": "CY2025 preliminary",
+      "official_sources": [
+        {
+          "publisher": "Federal Aviation Administration",
+          "method": "GET",
+          "request_url": "https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger",
+          "transport_result": "success",
+          "response_bytes": 113557,
+          "response_sha256": "5ff4e689805c472e112609e57a1d3cfc72ad5e602724a0019c79f9390fd658c5",
+          "observed_result": "Page last updated 2026-09-24 and lists preliminary CY2025 commercial-service enplanements; no CY2026 enplanement publication is listed."
+        },
+        {
+          "publisher": "Federal Aviation Administration",
+          "method": "GET",
+          "request_url": "https://www.faa.gov/airports/planning_capacity/passenger_allcargo_stats/passenger/arp-cy2025-commercial-service-enplanements-preliminary.pdf",
+          "transport_result": "success",
+          "response_bytes": 1708683,
+          "response_sha256": "e88218c048d512e3e702922768df8c82961d8b81faaa4e359c0360f20cc1f583"
+        }
+      ],
+      "latest_complete_annual_period": "CY2025 preliminary",
+      "latest_partial_period": null,
+      "publication_revision_marker": {
+        "type": "source content hash and landing-page update date",
+        "value": "sha256:e88218c048d512e3e702922768df8c82961d8b81faaa4e359c0360f20cc1f583; page updated 2026-09-24"
+      },
+      "selected_period_revision_comparison": {
+        "status": "unchanged",
+        "basis": "The freshly retrieved PDF hash equals the candidate qualification hash."
+      },
+      "accepted_snapshot": {
+        "snapshot_id": "faa-3aed36dd6b33ba6e6c0a272926de2a9dda05630f4ee64450959e0e6443e4c3d4",
+        "content_hash": "sha256:458273de65b91eb0e7c26cc372616f812320b2dad163909edefd89c13cdff251",
+        "period": "CY2023-CY2024 final; 22-airport New England cohort",
+        "relation_to_selected_period": "historical_only; no preliminary CY2025 candidate snapshot is accepted"
+      },
+      "candidate_qualification_reference": {
+        "path": "backend/docs/evidence/recent-source-qualification-20260927.json",
+        "supporting_manifest_sha256": "f40bb603c100bf3e9b8d38cb687d736dfc3df200f221d2c92fb59e9de99df567"
+      },
+      "outcome": "current_for_scope",
+      "outcome_reason": "The exact preliminary CY2025 PDF still matches the qualified candidate and the official index lists no newer annual or partial enplanement period. Preliminary status remains mandatory."
+    },
+    {
+      "workflow": "aip_award_context",
+      "source_population": "FAA FY2025 AIP Grant Detail Report; exact New England airport LocID matching",
+      "selected_period_class": "complete_annual",
+      "selected_period": "FY2025",
+      "official_sources": [
+        {
+          "publisher": "Federal Aviation Administration",
+          "method": "GET",
+          "request_url": "https://www.faa.gov/airports/aip/grant_histories",
+          "transport_result": "success",
+          "response_bytes": 128069,
+          "response_sha256": "0855f9787517b85770ac59db77623c2cbb2e6b79ec53e4ceec6e37bc204bf13d",
+          "observed_result": "The history page lists an FY2025 all-grants summary and a separate 2026 AIP Grants page."
+        },
+        {
+          "publisher": "Federal Aviation Administration",
+          "method": "GET",
+          "request_url": "https://www.faa.gov/sites/faa.gov/files/2025-11/FY_2025_AIP_Grants.xlsx",
+          "transport_result": "success",
+          "response_bytes": 430906,
+          "response_sha256": "1c16930f818879bc144d5d531c85f4dc1c3e992b08ceb937dadddc4a7484adcb"
+        },
+        {
+          "publisher": "Federal Aviation Administration",
+          "method": "GET",
+          "request_url": "https://www.faa.gov/airports/aip/2026_aip_grants",
+          "transport_result": "success",
+          "response_bytes": 111643,
+          "response_sha256": "0a662f469735abe4db156cf5e74a2bd197586afb25b8a55fd4af58f7d69cec5a",
+          "observed_result": "FY2026 announcement #7 is dated 2026-09-25; the page is an in-year sequence of announcements."
+        }
+      ],
+      "latest_complete_annual_period": "FY2025",
+      "latest_partial_period": "FY2026 through announcement #7 dated 2026-09-25",
+      "publication_revision_marker": {
+        "type": "selected workbook content hash",
+        "value": "sha256:1c16930f818879bc144d5d531c85f4dc1c3e992b08ceb937dadddc4a7484adcb"
+      },
+      "selected_period_revision_comparison": {
+        "status": "unchanged",
+        "basis": "The freshly retrieved FY2025 workbook hash equals the candidate qualification hash."
+      },
+      "accepted_snapshot": {
+        "snapshot_id": null,
+        "content_hash": null,
+        "period": null,
+        "relation_to_selected_period": "No accepted AIP application snapshot or bundle reference is present."
+      },
+      "candidate_qualification_reference": {
+        "path": "backend/docs/evidence/recent-source-qualification-20260927.json",
+        "supporting_manifest_sha256": "860d7aaffd6597e1a6acc413799b8e3cda87d5535713311f11e8d2d7815f8c5a"
+      },
+      "outcome": "current_for_scope",
+      "outcome_reason": "The exact FY2025 workbook still matches the qualified candidate. FY2026 award announcements are partial and do not supersede the completed FY2025 comparison. No AIP snapshot is admitted."
+    }
+  ],
+  "overall_outcome": "current_for_scope",
+  "overall_reason": "Every selected CY2025/FY2025 source population has a current_for_scope release comparison. This result covers source release status only; no candidate snapshot or bundle is accepted and paid model admission remains unproven.",
+  "limitations": [
+    "No accepted CY2025/FY2025 bundle manifest or accepted pointer exists, so candidate accepted snapshot IDs and hashes are null or explicitly historical.",
+    "BTS release information proves publication timing and advertised latest periods, not selected-period byte identity by itself.",
+    "The complete FGJ manifest establishes the first CY2025 candidate content identity; it cannot prove equality to an earlier complete CY2025 candidate because none exists.",
+    "No network call was made to a paid model or credentialed service."
+  ]
+}

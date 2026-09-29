@@ -6,5 +6,5 @@ __pycache__/
 *.py[cod]
 
 # Local backend environment and disposable API probe output
-backend/.env
-/backend/data/raw/
+app/backend/.env
+/app/backend/data/raw/

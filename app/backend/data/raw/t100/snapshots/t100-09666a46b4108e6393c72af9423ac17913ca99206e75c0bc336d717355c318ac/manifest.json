@@ -1,0 +1,238 @@
+{
+  "archives": [
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 52541,
+      "filename": "deloitte-t100-alaska-2023-fullgrain.zip",
+      "sha256": "28006a1578d864c62cdf281ec2e1957741c54aff73674cf66e67e81faebce542",
+      "state": "AK",
+      "year": 2023,
+      "zip_bytes": 565872
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 74692,
+      "filename": "deloitte-t100-california-2023-fullgrain.zip",
+      "sha256": "59137e86d53197a0da3ea9d76c3f51a027f27dc33c5c88fa6fbe6632f5506468",
+      "state": "CA",
+      "year": 2023,
+      "zip_bytes": 986411
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 4526,
+      "filename": "deloitte-t100-connecticut-2023-fullgrain.zip",
+      "sha256": "1998197ac494419053cef4bd09d998904bb7cb4a9c2b3fe7fb2b88c34e2f7a98",
+      "state": "CT",
+      "year": 2023,
+      "zip_bytes": 52267
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 15894,
+      "filename": "deloitte-t100-massachusetts-2023-fullgrain.zip",
+      "sha256": "e9384213417e3df406e77bd6063e000f4d1f42afb65f4923be8bb5902464687b",
+      "state": "MA",
+      "year": 2023,
+      "zip_bytes": 198455
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 2555,
+      "filename": "deloitte-t100-maine-2023-fullgrain.zip",
+      "sha256": "9b6f3956d215534233bbe8f9deea7f50a14a89351014ba56cf9ac0c9949f3249",
+      "state": "ME",
+      "year": 2023,
+      "zip_bytes": 32160
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 1485,
+      "filename": "deloitte-t100-new-hampshire-2023-fullgrain.zip",
+      "sha256": "1645ea7a21bf4f71f76ac0f3b4be1162f25ec0287d846744d3f5d36e01edb653",
+      "state": "NH",
+      "year": 2023,
+      "zip_bytes": 17607
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 2519,
+      "filename": "deloitte-t100-rhode-island-2023-fullgrain.zip",
+      "sha256": "3ed3828343cd0deb4570ca29c00f3a0f40cf79deef7b1470df964ccdd660889e",
+      "state": "RI",
+      "year": 2023,
+      "zip_bytes": 30557
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 1118,
+      "filename": "deloitte-t100-vermont-2023-fullgrain.zip",
+      "sha256": "f21f88fbf7d7a8a7be229df8bb2b0e1f8c7522d255a0488678baadde425803d1",
+      "state": "VT",
+      "year": 2023,
+      "zip_bytes": 13564
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 54759,
+      "filename": "deloitte-t100-alaska-2024-fullgrain.zip",
+      "sha256": "98b07e096577a7a23aa0e11a8a176db090b7de04094dc96456b55f7b805e1b92",
+      "state": "AK",
+      "year": 2024,
+      "zip_bytes": 589484
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 77193,
+      "filename": "deloitte-t100-california-2024-fullgrain.zip",
+      "sha256": "38368bbfe9d811beabcc882ce66f4b0d6fe06ff582ac1b0eb48f2a41bc86baef",
+      "state": "CA",
+      "year": 2024,
+      "zip_bytes": 1021860
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 5064,
+      "filename": "deloitte-t100-connecticut-2024-fullgrain.zip",
+      "sha256": "2f857138640dcfb0a74ff818ea4c0f9b5ec2d766ac1a656ab83a3e2997e0e558",
+      "state": "CT",
+      "year": 2024,
+      "zip_bytes": 57669
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 17116,
+      "filename": "deloitte-t100-massachusetts-2024-fullgrain.zip",
+      "sha256": "0849df3c15c305fb03408b893f497a0e09e308e854aa14025d4b8fc604299242",
+      "state": "MA",
+      "year": 2024,
+      "zip_bytes": 212165
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 2912,
+      "filename": "deloitte-t100-maine-2024-fullgrain.zip",
+      "sha256": "ff1e7732241b541b858b653195b9aa030a49dd6e7fca9558cbb710df9a51006a",
+      "state": "ME",
+      "year": 2024,
+      "zip_bytes": 36243
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 1542,
+      "filename": "deloitte-t100-new-hampshire-2024-fullgrain.zip",
+      "sha256": "f8044a53d06ff10780233381dd15bd8d614bace46b94e69f3bbc49d7c41dcb7d",
+      "state": "NH",
+      "year": 2024,
+      "zip_bytes": 18514
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 2636,
+      "filename": "deloitte-t100-rhode-island-2024-fullgrain.zip",
+      "sha256": "d37c0c2614d7cbd33ccabc4ba67a84310577c0fe8e6a599cc36d5c8e67ce1475",
+      "state": "RI",
+      "year": 2024,
+      "zip_bytes": 31529
+    },
+    {
+      "csv_member": "T_T100_SEGMENT_ALL_CARRIER.csv",
+      "csv_rows": 1279,
+      "filename": "deloitte-t100-vermont-2024-fullgrain.zip",
+      "sha256": "1d4781ebaf535faf28408aac65d5e296cd701daa9b04531004d71e1bae68e4c2",
+      "state": "VT",
+      "year": 2024,
+      "zip_bytes": 15562
+    }
+  ],
+  "coverage_cells": 52,
+  "eligible_rows": {
+    "2023": 29039,
+    "2024": 31428
+  },
+  "eligible_source_family_counts": {
+    "2023-DF": 40,
+    "2023-DU": 23416,
+    "2023-IF": 3321,
+    "2023-IU": 2262,
+    "2024-DF": 49,
+    "2024-DU": 25091,
+    "2024-IF": 3645,
+    "2024-IU": 2643
+  },
+  "exact_overlap_rows": {
+    "2023": 2023,
+    "2024": 2097
+  },
+  "imported_at_utc": "2026-09-26T21:03:39.601391Z",
+  "input_rows": {
+    "2023": 155330,
+    "2024": 162501
+  },
+  "missing_months": {
+    "PVC-2024": [
+      12
+    ]
+  },
+  "parquet_file": "data.parquet",
+  "parquet_sha256": "1c023467175d599cbbb642e5ca5d22e711134178dc07cb77d8c9e3a3f7f6f8d5",
+  "population": {
+    "classes": [
+      "A",
+      "C",
+      "E",
+      "F"
+    ],
+    "direction": "origin",
+    "origins": [
+      "ACK",
+      "ANC",
+      "AUG",
+      "BDL",
+      "BGR",
+      "BHB",
+      "BID",
+      "BOS",
+      "BTV",
+      "HVN",
+      "HYA",
+      "LAX",
+      "LEB",
+      "MHT",
+      "MVY",
+      "ORH",
+      "PQI",
+      "PSM",
+      "PVC",
+      "PVD",
+      "PWM",
+      "RKD",
+      "RUT",
+      "SFO",
+      "SNA",
+      "WST"
+    ],
+    "seats": "> 0"
+  },
+  "raw_class_counts_at_origins": {
+    "2023-F": 29122,
+    "2023-G": 3893,
+    "2023-L": 4098,
+    "2023-P": 2113,
+    "2024-F": 31516,
+    "2024-G": 4027,
+    "2024-L": 3819,
+    "2024-P": 2310
+  },
+  "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+  "source": {
+    "name": "BTS T-100 Segment All Carriers",
+    "table": "FMG",
+    "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG"
+  },
+  "unique_rows": {
+    "2023": 153307,
+    "2024": 160404
+  },
+  "validation_status": "accepted"
+}

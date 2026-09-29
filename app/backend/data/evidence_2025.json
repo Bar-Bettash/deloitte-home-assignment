@@ -1,0 +1,367 @@
+{
+  "checked_at": "2026-09-27",
+  "traffic_snapshot": "BTS T100 2024–2025 candidate; 2025 FAA preliminary cohort of 23 airports; 22 assessable, excluding PVC for incomplete annual traffic coverage.",
+  "scope": {
+    "bundle_id": "annual-2025-r1",
+    "baseline_year": 2024,
+    "comparison_year": 2025,
+    "cohort": [
+      "BOS",
+      "BDL",
+      "PVD",
+      "PWM",
+      "HVN",
+      "BTV",
+      "MHT",
+      "BGR",
+      "ACK",
+      "ORH",
+      "PSM",
+      "MVY",
+      "HYA",
+      "PQI",
+      "BID",
+      "WST",
+      "BHB",
+      "LEB",
+      "RKD",
+      "PVC",
+      "RUT",
+      "AUG",
+      "EWB"
+    ],
+    "source_refs": [
+      {
+        "source": "datasf",
+        "snapshot_id": "datasf-eb1c8fd94a9664f9e6856b84d46ec755c4e3383f0ebe0a351946658cd0415e5b",
+        "manifest_sha256": "e9a0ac23b1994124b64f5e7997f6c0b656c56f041462a1d9289b7e0330a86087",
+        "content_sha256": "73bc342560dc5b555fa957e95dc8f454bddca680ed04e8e8ff99c1287b2de659",
+        "years": [
+          2024,
+          2025
+        ]
+      },
+      {
+        "source": "t100",
+        "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e",
+        "manifest_sha256": "3c248a0c106e18f223b94e043876e097d629321127537138c08b7fb7b2997fdb",
+        "content_sha256": "fdcbdedcf73cb9792a1c6892cd1c7c368a61af59190cad8fbd317735ad8e6ca7",
+        "years": [
+          2024,
+          2025
+        ]
+      },
+      {
+        "source": "ontime",
+        "snapshot_id": "ontime-04fee95d838f70541e6cb219b230101f67524a4021309e9b9d2246cb0a3514ba",
+        "manifest_sha256": "069c07bb307fc6bf1ef8a053174457919541ce9e2a726348d9866b98e833c9dd",
+        "content_sha256": "29a013865c8d2d2b77052430592525b9f9233d3ed003b8a18cc11dbf76806e98",
+        "years": [
+          2025
+        ]
+      },
+      {
+        "source": "faa",
+        "snapshot_id": "faa-834930a0ccb14b84c2d401533b091ca4af04ae2a8367494a925af98c47079179",
+        "manifest_sha256": "5d650f6c068ca07fedca45260109142a95c7aaf070442f62c3706cd003100dfc",
+        "content_sha256": "e88218c048d512e3e702922768df8c82961d8b81faaa4e359c0360f20cc1f583",
+        "years": [
+          2025
+        ]
+      },
+      {
+        "source": "aip",
+        "snapshot_id": "aip-bd7aa3c7883882987eb79250d86e226053211ff2cd72bc311ad2f02c584623b5",
+        "manifest_sha256": "b977344183ebf38e9ff8fe79039148f09cf322724887947a27feaef4c0be7670",
+        "content_sha256": "1c16930f818879bc144d5d531c85f4dc1c3e992b08ceb937dadddc4a7484adcb",
+        "years": [
+          2025
+        ]
+      }
+    ]
+  },
+  "aip_funding_context": {
+    "snapshot_id": "aip-bd7aa3c7883882987eb79250d86e226053211ff2cd72bc311ad2f02c584623b5",
+    "fiscal_year": 2025,
+    "total_grant_count": 3707,
+    "new_england_award_count": 66,
+    "new_england_total_usd": "259112386.00",
+    "interpretation": "funding_context_only"
+  },
+  "sources": [
+    {
+      "source_id": "hvn_project",
+      "publisher": "Tweed-New Haven Airport",
+      "title": "The New HVN",
+      "url": "https://flytweed.com/about/the-new-hvn/",
+      "source_date": null,
+      "checked_at": "2026-09-27",
+      "historical": false,
+      "date_note": "Design status Summer 2025; undated live project page."
+    },
+    {
+      "source_id": "hvn_2026_update",
+      "publisher": "Tweed-New Haven Airport",
+      "title": "Court Upholds FAA Review and HVN Project Moves Forward",
+      "url": "https://flytweed.com/news/court-upholds-faa-review-and-hvn-project-moves-forward/",
+      "source_date": "2026-07-22",
+      "checked_at": "2026-09-27",
+      "historical": false,
+      "date_note": "Dated airport news update."
+    },
+    {
+      "source_id": "bgr_report_2025",
+      "publisher": "Bangor International Airport",
+      "title": "2025 Annual Report",
+      "url": "https://flybangor.com/wp-content/uploads/2026/02/Annual-Report-2025-Final.pdf",
+      "source_date": null,
+      "checked_at": "2026-09-27",
+      "historical": true,
+      "date_note": "Report year 2025; exact publication day unavailable; hosted under 2026/02."
+    },
+    {
+      "source_id": "bgr_project",
+      "publisher": "Bangor International Airport",
+      "title": "Ticket to a Better BGR",
+      "url": "https://flybangor.com/ticket-to-a-better-bgr/",
+      "source_date": null,
+      "checked_at": "2026-09-27",
+      "historical": false,
+      "date_note": "Undated live airport project page."
+    },
+    {
+      "source_id": "pwm_2025_completion",
+      "publisher": "Portland International Jetport",
+      "title": "Jetport Sets All-Time Record for Passenger Traffic in 2025",
+      "url": "https://portlandjetport.org/news/jetport-sets-all-time-record-for-passenger-traffic-in-2025",
+      "source_date": "2026-02-12",
+      "checked_at": "2026-09-27",
+      "historical": false,
+      "date_note": "Dated airport release reports completed July 2025 work."
+    },
+    {
+      "source_id": "pwm_survey_2025",
+      "publisher": "Portland International Jetport",
+      "title": "Jetport Recognized As Best Airport In North America For Customer Experience",
+      "url": "https://portlandjetport.org/news/jetport-recognized-as-best-airport-in-north-america-for-customer-experience",
+      "source_date": "2026-02-26",
+      "checked_at": "2026-09-27",
+      "historical": false,
+      "date_note": "Awards based on 2025 passenger surveys; not a capacity measurement."
+    },
+    {
+      "source_id": "sfo_t3_current",
+      "publisher": "San Francisco International Airport",
+      "title": "Terminal 3 Construction",
+      "url": "https://www.flysfo.com/it/node/15471",
+      "source_date": null,
+      "checked_at": "2026-09-27",
+      "historical": false,
+      "date_note": "Undated live airport construction page."
+    },
+    {
+      "source_id": "sfo_cip_2025",
+      "publisher": "San Francisco International Airport / Capital Planning Committee",
+      "title": "FY2025/26–FY2034/35 CIP Update",
+      "url": "https://onesanfrancisco.org/sites/default/files/2025-11/Agenda%20Item%206%20-%20SFO%20FY%2025-26%20CIP%20Update%20to%20the%20CPC_1.pdf",
+      "source_date": "2025-11-17",
+      "checked_at": "2026-09-27",
+      "historical": true,
+      "date_note": "T3 progress data as of August 2025, not September 2026."
+    }
+  ],
+  "airports": [
+    {
+      "airport": "HVN",
+      "status": "unknown",
+      "traffic_signal": "2025 screen score 74.761904762, rank 1; traffic pressure only.",
+      "unresolved_constraint": "No current measured residual terminal processing constraint with a demonstrated throughput link was established by this bounded review.",
+      "proposed_intervention": null,
+      "observations": [
+        {
+          "source_id": "hvn_project",
+          "locator": "Project Overview and opening design paragraph",
+          "fact": "Proposed 84,000-square-foot East Terminal at 60% design; design remains subject to change.",
+          "bearing": "context"
+        },
+        {
+          "source_id": "hvn_2026_update",
+          "locator": "Remaining approvals paragraphs",
+          "fact": "Federal environmental decision remains in place; additional state and local approvals remain required.",
+          "bearing": "context"
+        }
+      ],
+      "counterevidence": [
+        "The July 2026 update confirms state/local approvals remain required; the proposed terminal is not treated as completed.",
+        "Planning, growth and construction records cannot establish a residual terminal bottleneck or quantify latent demand."
+      ],
+      "next_diligence": [
+        "Obtain current peak-hour gate and holdroom utilization and passenger-processing/queue measurements.",
+        "Verify latest project completion and superseding capital plans before recommending expansion.",
+        "Separate terminal capacity from scheduling, staffing, security and temporary construction effects."
+      ],
+      "limitations": [
+        "Traffic-pressure metrics are screening heuristics, not causal capacity measures or profitability estimates.",
+        "Official source publication dates and observation dates differ; forecasts are not completion receipts."
+      ],
+      "project_status_reviews": [
+        {
+          "source_ids": [
+            "hvn_project",
+            "hvn_2026_update"
+          ],
+          "checked_at": "2026-09-27",
+          "outcome": "planned",
+          "summary": "The July 2026 update confirms state/local approvals remain required; the proposed terminal is not treated as completed."
+        }
+      ]
+    },
+    {
+      "airport": "BGR",
+      "status": "unknown",
+      "traffic_signal": "2025 screen score 72.857142857, tied rank 2; traffic pressure only.",
+      "unresolved_constraint": "No current measured residual terminal processing constraint with a demonstrated throughput link was established by this bounded review.",
+      "proposed_intervention": null,
+      "observations": [
+        {
+          "source_id": "bgr_report_2025",
+          "locator": "Printed page 6 / PDF page index 5, Terminal Expansion and Checkpoint Expansion and Relocation",
+          "fact": "Reports a $14.5 million terminal project forecast to finish spring/early summer 2026, plus checkpoint relocation/design. Forecast is not proof of completion.",
+          "bearing": "context"
+        },
+        {
+          "source_id": "bgr_project",
+          "locator": "Terminal Connector Project and Security Checkpoint Expansion",
+          "fact": "Describes connector and Gate 6 waiting-area construction and a larger checkpoint. Definitive completion remains unresolved after the older forecast date.",
+          "bearing": "context"
+        }
+      ],
+      "counterevidence": [
+        "The older spring/summer 2026 completion forecast has passed, but the undated live project page still describes construction. Definitive completion was not established.",
+        "Planning, growth and construction records cannot establish a residual terminal bottleneck or quantify latent demand."
+      ],
+      "next_diligence": [
+        "Obtain current peak-hour gate and holdroom utilization and passenger-processing/queue measurements.",
+        "Verify latest project completion and superseding capital plans before recommending expansion.",
+        "Separate terminal capacity from scheduling, staffing, security and temporary construction effects."
+      ],
+      "limitations": [
+        "Traffic-pressure metrics are screening heuristics, not causal capacity measures or profitability estimates.",
+        "Official source publication dates and observation dates differ; forecasts are not completion receipts."
+      ],
+      "project_status_reviews": [
+        {
+          "source_ids": [
+            "bgr_report_2025",
+            "bgr_project"
+          ],
+          "checked_at": "2026-09-27",
+          "outcome": "unresolved",
+          "summary": "The older spring/summer 2026 completion forecast has passed, but the undated live project page still describes construction. Definitive completion was not established."
+        }
+      ]
+    },
+    {
+      "airport": "PWM",
+      "status": "unknown",
+      "traffic_signal": "2025 screen score 72.857142857, tied rank 2; traffic pressure only.",
+      "unresolved_constraint": "No current measured residual terminal processing constraint with a demonstrated throughput link was established by this bounded review.",
+      "proposed_intervention": null,
+      "observations": [
+        {
+          "source_id": "pwm_2025_completion",
+          "locator": "Expanded Passenger Amenities Added in 2025",
+          "fact": "Confirms July 2025 ribbon-cutting for a $21.6 million concourse addition, three boarding bridges and accessibility facilities.",
+          "bearing": "context"
+        },
+        {
+          "source_id": "pwm_survey_2025",
+          "locator": "Opening award list and concluding improvements paragraph",
+          "fact": "Reports customer-experience awards and service investments. This is countercontext, not proof of spare capacity.",
+          "bearing": "context"
+        }
+      ],
+      "counterevidence": [
+        "Official February 2026 release confirms July 2025 concourse addition completion, superseding older project context. Current residual capacity constraint remains unestablished.",
+        "Planning, growth and construction records cannot establish a residual terminal bottleneck or quantify latent demand."
+      ],
+      "next_diligence": [
+        "Obtain current peak-hour gate and holdroom utilization and passenger-processing/queue measurements.",
+        "Verify latest project completion and superseding capital plans before recommending expansion.",
+        "Separate terminal capacity from scheduling, staffing, security and temporary construction effects."
+      ],
+      "limitations": [
+        "Traffic-pressure metrics are screening heuristics, not causal capacity measures or profitability estimates.",
+        "Official source publication dates and observation dates differ; forecasts are not completion receipts."
+      ],
+      "project_status_reviews": [
+        {
+          "source_ids": [
+            "pwm_2025_completion",
+            "pwm_survey_2025"
+          ],
+          "checked_at": "2026-09-27",
+          "outcome": "completed",
+          "summary": "Official February 2026 release confirms July 2025 concourse addition completion, superseding older project context. Current residual capacity constraint remains unestablished."
+        }
+      ]
+    },
+    {
+      "airport": "SFO",
+      "status": "unknown",
+      "traffic_signal": "2024–2025 DataSF enplanements and T100 traffic growth plus 2025 operational proxies; distinct populations, not a measured capacity deficit.",
+      "unresolved_constraint": "No current measured residual terminal processing constraint with a demonstrated throughput link was established by this bounded review.",
+      "proposed_intervention": null,
+      "observations": [
+        {
+          "source_id": "sfo_t3_current",
+          "locator": "Terminal 3 West Modernization Project, Travel Alerts, AirTrain",
+          "fact": "Describes construction-related closures and rerouting; T3 AirTrain station expected to reopen with the new facility in 2027.",
+          "bearing": "context"
+        },
+        {
+          "source_id": "sfo_cip_2025",
+          "locator": "PDF indices 13 and 14 / printed slides 14 and 15",
+          "fact": "Terminal 1 final phase opened June 2024; Terminal 3 modernization was in construction with forecast completion 2029.",
+          "bearing": "context"
+        }
+      ],
+      "counterevidence": [
+        "The live T3 page describes construction impacts. The 2025 CIP also records completed Terminal 1 work; T3 progress figures are as of August 2025.",
+        "Planning, growth and construction records cannot establish a residual terminal bottleneck or quantify latent demand."
+      ],
+      "next_diligence": [
+        "Obtain current peak-hour gate and holdroom utilization and passenger-processing/queue measurements.",
+        "Verify latest project completion and superseding capital plans before recommending expansion.",
+        "Separate terminal capacity from scheduling, staffing, security and temporary construction effects."
+      ],
+      "limitations": [
+        "Traffic-pressure metrics are screening heuristics, not causal capacity measures or profitability estimates.",
+        "Official source publication dates and observation dates differ; forecasts are not completion receipts."
+      ],
+      "project_status_reviews": [
+        {
+          "source_ids": [
+            "sfo_t3_current",
+            "sfo_cip_2025"
+          ],
+          "checked_at": "2026-09-27",
+          "outcome": "ongoing",
+          "summary": "The live T3 page describes construction impacts. The 2025 CIP also records completed Terminal 1 work; T3 progress figures are as of August 2025."
+        }
+      ]
+    }
+  ],
+  "sfo_business_outcomes": [
+    {
+      "outcome": "profitability",
+      "status": "not_identifiable",
+      "reason": "Qualified passenger and seat series do not supply capital cost, operating cost, fares, revenue, unconstrained demand, or causal attribution needed to estimate project profitability."
+    },
+    {
+      "outcome": "quantitative_unmet_demand",
+      "status": "not_identifiable",
+      "reason": "Transported passenger counts and supplied seats cannot identify rejected bookings or passengers who would travel absent a constraint; an unconstrained-demand source and causal evidence are missing."
+    }
+  ]
+}
