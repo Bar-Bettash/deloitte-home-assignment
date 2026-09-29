@@ -39,6 +39,12 @@ class HealthResponse(BaseModel):
 
 
 logger = logging.getLogger(__name__)
+# Uvicorn and Vercel configure only their own loggers; give the app package an
+# INFO handler once so the per-call model metadata line is actually emitted.
+_app_logger = logging.getLogger("app")
+if not _app_logger.handlers:
+    _app_logger.setLevel(logging.INFO)
+    _app_logger.addHandler(logging.StreamHandler())
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "testserver"})
 _ALWAYS_OPEN = frozenset({("GET", "/health"), ("HEAD", "/health")})
@@ -126,7 +132,8 @@ class HostGuard:
         request = Request(scope)
         host_header = request.headers.get("host", "")
         hostname = request_hostname(host_header)
-        if hostname is None or hostname not in LOOPBACK_HOSTS | hosting.allowed_hosts:
+        allowed = hosting.allowed_hosts if hosting.hosted else LOOPBACK_HOSTS
+        if hostname is None or hostname not in allowed:
             await _guard_error(400, "invalid_request", "Use this application from its own address.")(
                 scope, receive, send)
             return

@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from app import main
 from app.main import app
@@ -101,6 +103,17 @@ def test_unlisted_host_is_rejected(hosted):
     assert http.get("/").status_code == 400
     assert _post_query(http, PRESET, origin="http://attacker.example.net").status_code == 400
     assert http.get("/health").status_code == 200
+
+
+@pytest.mark.parametrize("base_url", ["http://localhost", "http://testserver", "http://127.0.0.1"])
+def test_loopback_hosts_are_rejected_when_hosted(hosted, base_url):
+    http = TestClient(main.app, base_url=base_url)
+    assert http.get("/").status_code == 400
+    assert http.get("/health").status_code == 200
+
+
+def test_app_logger_emits_info():
+    assert logging.getLogger("app.main").isEnabledFor(logging.INFO)
 
 
 def test_malformed_host_header_is_rejected(hosted):

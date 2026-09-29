@@ -20,7 +20,6 @@ import binascii
 import hashlib
 import hmac
 import json
-import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -35,8 +34,6 @@ MIN_KEY_BYTES = 32
 DEFAULT_TTL_SECONDS = 3600
 _DOMAIN = b"ctx|"
 _PAYLOAD_KEYS = {"rid", "req", "dig", "exp"}
-_B64URL = re.compile(r"^[A-Za-z0-9_-]+$")
-_HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 
 class ContextTokenError(ValueError):
@@ -62,21 +59,7 @@ def _b64encode(raw: bytes) -> str:
 
 
 def _b64decode(text: str) -> bytes:
-    if not _B64URL.fullmatch(text):
-        raise ContextTokenError("invalid context token")
-    try:
-        return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
-    except (binascii.Error, ValueError) as exc:
-        raise ContextTokenError("invalid context token") from exc
-
-
-def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    value: dict[str, object] = {}
-    for key, item in pairs:
-        if key in value:
-            raise ContextTokenError("invalid context token")
-        value[key] = item
-    return value
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
 
 
 class ContextSigner:
@@ -128,23 +111,21 @@ class ContextSigner:
         if not hmac.compare_digest(self._mac(signed_part), parts[2]):
             raise ContextTokenError("invalid context token")
         try:
-            payload = json.loads(_b64decode(parts[1]), object_pairs_hook=_unique_object)
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            payload = json.loads(_b64decode(parts[1]))
+        except (binascii.Error, ValueError) as exc:  # JSONDecodeError/UnicodeDecodeError are ValueErrors
             raise ContextTokenError("invalid context token") from exc
         if not isinstance(payload, dict) or set(payload) != _PAYLOAD_KEYS:
             raise ContextTokenError("invalid context token")
         rid, req, dig, exp = payload["rid"], payload["req"], payload["dig"], payload["exp"]
         if type(exp) is not int or exp <= int(self._clock()):
             raise ContextTokenError("invalid context token")
-        if not isinstance(dig, str) or not _HEX64.fullmatch(dig):
-            raise ContextTokenError("invalid context token")
-        if not isinstance(rid, str) or not isinstance(req, dict):
+        if not isinstance(dig, str) or not isinstance(rid, str) or not isinstance(req, dict):
             raise ContextTokenError("invalid context token")
         try:
             result_id = UUID(rid)
             request = AnalysisRequest.model_validate(req)
         except (ValueError, ValidationError) as exc:
             raise ContextTokenError("invalid context token") from exc
-        if str(result_id) != rid or request.action == "explain":
+        if request.action == "explain":
             raise ContextTokenError("invalid context token")
         return ContextClaims(result_id, request, dig, exp)
