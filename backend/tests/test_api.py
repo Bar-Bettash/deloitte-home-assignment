@@ -19,7 +19,7 @@ from app.calculations.traffic import MetricResult, calculate_traffic_batch
 from app.contracts import MAX_REQUEST_BYTES
 from app.dispatch import DispatchFailure
 from app.model_adapter import ModelAdapterError, ModelInterpretation, ModelUsage
-from app.settings import Settings
+from app.settings import Settings, load_hosting
 from app.sources.bundle import DEFAULT_DATA_ROOT as BUNDLE_DATA_ROOT
 from app.sources.bundle import load_bundle
 from fastapi.testclient import TestClient
@@ -36,10 +36,15 @@ SFO_REQUEST = {
 
 
 @pytest.fixture(autouse=True)
-def reset_session_store():
-    main.session_store.clear()
+def reset_query_slots():
+    main.query_slots.reset()
     yield
-    main.session_store.clear()
+    main.query_slots.reset()
+
+
+def context_claims(http_client):
+    """Verify the client's context cookie exactly as the server would."""
+    return main._context_signer(load_hosting({})).verify(http_client.cookies.get(main.CONTEXT_COOKIE))
 
 
 def admitted_settings(**overrides):
@@ -516,7 +521,7 @@ def test_unexpected_failure_is_sanitized(monkeypatch):
 
 def test_free_text_is_model_disabled_and_does_not_replace_last_result(monkeypatch):
     result = client.post("/api/query", json=SFO_REQUEST).json()
-    token = client.cookies.get(main.SESSION_COOKIE)
+    token = client.cookies.get(main.CONTEXT_COOKIE)
 
     def no_dispatch(*_args, **_kwargs):
         raise AssertionError("free text must not call the deterministic dispatcher or a model")
@@ -526,7 +531,8 @@ def test_free_text_is_model_disabled_and_does_not_replace_last_result(monkeypatc
 
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "ai_unavailable"
-    assert main.session_store.latest(token).result_id == UUID(result["result_id"])
+    assert client.cookies.get(main.CONTEXT_COOKIE) == token
+    assert context_claims(client).result_id == UUID(result["result_id"])
 
 
 def test_admitted_free_text_dispatches_validated_analysis_and_stores_request(monkeypatch):
@@ -542,8 +548,9 @@ def test_admitted_free_text_dispatches_validated_analysis_and_stores_request(mon
     response = client.post("/api/query", json={"message": "How did SFO enplanements change?"})
     assert response.status_code == 200, response.text
     assert len(calls) == 1 and calls[0][1] is None
-    token = client.cookies.get(main.SESSION_COOKIE)
-    assert main.session_store.validate_request_context(token, UUID(response.json()["result_id"])).metric == "sfo_enplaned_trend"
+    claims = context_claims(client)
+    assert claims.result_id == UUID(response.json()["result_id"])
+    assert claims.request.metric == "sfo_enplaned_trend"
 
 
 def test_independent_question_after_prior_result_has_no_context(monkeypatch):
@@ -579,13 +586,12 @@ def test_old_prompt_hash_cannot_admit_changed_adapter(monkeypatch):
     assert response.json()["error"]["code"] == "ai_unavailable"
 
 
-def test_followup_passes_only_owned_stored_request_and_stale_id_keeps_cookie(monkeypatch):
+def test_followup_passes_only_signed_request_and_stale_id_keeps_cookie(monkeypatch):
     first = client.post("/api/query", json={"analysis": {
         "action": "rank", "region": "new_england", "metric": "passengers", "year": 2024,
     }})
     assert first.status_code == 200
     first_id = first.json()["result_id"]
-    token = client.cookies.get(main.SESSION_COOKIE)
     monkeypatch.setattr(main, "load_settings", admitted_settings)
     contexts = []
 
@@ -599,12 +605,13 @@ def test_followup_passes_only_owned_stored_request_and_stale_id_keeps_cookie(mon
     assert second.status_code == 200, second.text
     assert second.json()["scope"]["metric"] == "passenger_growth"
     assert contexts == [{"action": "rank", "region": "new_england", "metric": "passengers", "year": 2024}]
+    token = client.cookies.get(main.CONTEXT_COOKIE)
     stale = client.post("/api/query", json={"message": "And again", "context_result_id": first_id})
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "result_mismatch"
-    assert client.cookies.get(main.SESSION_COOKIE) == token
+    assert client.cookies.get(main.CONTEXT_COOKIE) == token
     assert len(contexts) == 1
-    assert main.session_store.latest(token).result_id == UUID(second.json()["result_id"])
+    assert context_claims(client).result_id == UUID(second.json()["result_id"])
 
 
 def test_foreign_context_never_calls_model(monkeypatch):
@@ -621,28 +628,87 @@ def test_foreign_context_never_calls_model(monkeypatch):
     assert response.json()["error"]["code"] == "session_expired"
 
 
-def test_context_without_stored_request_fails_before_model(monkeypatch):
+@pytest.mark.parametrize("cookie", ["", "garbage", "v1.e30.AAAA"])
+def test_invalid_context_cookie_fails_before_model_and_is_cleared(monkeypatch, cookie):
     first = client.post("/api/query", json=SFO_REQUEST)
-    result_id = UUID(first.json()["result_id"])
-    token = client.cookies.get(main.SESSION_COOKIE)
-    main.session_store.save_success(token, main.AnalysisResult.model_validate_json(first.text))
+    result_id = first.json()["result_id"]
     monkeypatch.setattr(main, "load_settings", admitted_settings)
 
     async def fail(*_args, **_kwargs):
-        raise AssertionError("missing stored request reached model")
+        raise AssertionError("invalid context reached model")
 
     monkeypatch.setattr(main, "interpret_message", fail)
-    response = client.post("/api/query", json={"message": "Show more", "context_result_id": str(result_id)})
+    monkeypatch.setattr(main, "dispatch_analysis", fail)
+    other = TestClient(main.app)
+    other.cookies.set(main.CONTEXT_COOKIE, cookie, domain="testserver.local")
+    for body in ({"message": "Show more", "context_result_id": result_id},
+                 {"analysis": {"action": "explain"}, "context_result_id": result_id}):
+        response = other.post("/api/query", json=body)
+        assert response.status_code == 409
+        assert response.json()["error"]["code"] == "session_expired"
+        assert main.CONTEXT_COOKIE in response.headers["set-cookie"]
+        assert "max-age=0" in response.headers["set-cookie"].lower()
+
+
+def test_tampered_context_cookie_is_rejected():
+    first = client.post("/api/query", json=SFO_REQUEST)
+    token = client.cookies.get(main.CONTEXT_COOKIE)
+    version, payload, mac = token.split(".")
+    forged = TestClient(main.app)
+    forged.cookies.set(main.CONTEXT_COOKIE, f"{version}.{payload}.{'B' if mac[0] == 'A' else 'A'}{mac[1:]}", domain="testserver.local")
+    response = forged.post("/api/query", json={
+        "analysis": {"action": "explain"}, "context_result_id": first.json()["result_id"],
+    })
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "session_expired"
+
+
+def test_independent_request_ignores_bad_cookie_and_issues_fresh_token():
+    other = TestClient(main.app)
+    other.cookies.set(main.CONTEXT_COOKIE, "garbage", domain="testserver.local")
+    response = other.post("/api/query", json=SFO_REQUEST)
+    assert response.status_code == 200, response.text
+    assert context_claims(other).result_id == UUID(response.json()["result_id"])
+
+
+def test_explain_detects_digest_drift_as_result_mismatch(monkeypatch):
+    first = client.post("/api/query", json=SFO_REQUEST)
+    assert first.status_code == 200
+    real_dispatch = main.dispatch_analysis
+
+    def drifted(analysis, request_id, *, previous=None):
+        result = real_dispatch(analysis, request_id, previous=previous)
+        if analysis.action == "explain":
+            return result
+        return result.model_copy(update={"summary": "source data changed"})
+
+    monkeypatch.setattr(main, "dispatch_analysis", drifted)
+    response = client.post("/api/query", json={
+        "analysis": {"action": "explain"}, "context_result_id": first.json()["result_id"],
+    })
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "result_mismatch"
-    assert client.cookies.get(main.SESSION_COOKIE) == token
-    assert main.session_store.latest(token).result_id == result_id
+    assert "reproduced" in response.json()["error"]["message"]
+
+
+def test_explain_via_cookie_on_fresh_verifier_with_same_key(monkeypatch):
+    """A second instance holding only the signing key can serve the follow-up."""
+    monkeypatch.setattr(main, "_LOCAL_SIGNING_KEY", b"s" * 32)
+    first = client.post("/api/query", json=SFO_REQUEST)
+    token = client.cookies.get(main.CONTEXT_COOKIE)
+    assert main.ContextSigner(b"s" * 32).verify(token).result_id == UUID(first.json()["result_id"])
+    monkeypatch.setattr(main, "_LOCAL_SIGNING_KEY", b"t" * 32)
+    rejected = client.post("/api/query", json={
+        "analysis": {"action": "explain"}, "context_result_id": first.json()["result_id"],
+    })
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["code"] == "session_expired"
 
 
 def test_free_text_explain_keeps_latest_result(monkeypatch):
     first = client.post("/api/query", json=SFO_REQUEST)
     result_id = UUID(first.json()["result_id"])
-    token = client.cookies.get(main.SESSION_COOKIE)
+    token = client.cookies.get(main.CONTEXT_COOKIE)
     monkeypatch.setattr(main, "load_settings", admitted_settings)
 
     async def interpret(_message, *, settings, context):
@@ -653,7 +719,8 @@ def test_free_text_explain_keeps_latest_result(monkeypatch):
     response = client.post("/api/query", json={"message": "Explain that", "context_result_id": str(result_id)})
     assert response.status_code == 200
     assert response.json()["result_id"] == str(result_id)
-    assert main.session_store.latest(token).result_id == result_id
+    assert response.json()["rows"] == first.json()["rows"]
+    assert client.cookies.get(main.CONTEXT_COOKIE) == token
 
 
 @pytest.mark.parametrize("kind,expected", [
@@ -662,7 +729,6 @@ def test_free_text_explain_keeps_latest_result(monkeypatch):
 ])
 def test_model_safe_outcome_is_422_and_preserves_prior_result(monkeypatch, kind, expected):
     first = client.post("/api/query", json=SFO_REQUEST)
-    token = client.cookies.get(main.SESSION_COOKIE)
     monkeypatch.setattr(main, "load_settings", admitted_settings)
 
     async def interpret(_message, *, settings, context):
@@ -673,12 +739,11 @@ def test_model_safe_outcome_is_422_and_preserves_prior_result(monkeypatch, kind,
     assert response.status_code == 422
     assert response.json()["error"]["code"] == expected
     assert "provider-controlled" not in response.text
-    assert main.session_store.latest(token).result_id == UUID(first.json()["result_id"])
+    assert context_claims(client).result_id == UUID(first.json()["result_id"])
 
 
 def test_model_timeout_preserves_prior_result(monkeypatch):
     first = client.post("/api/query", json=SFO_REQUEST)
-    token = client.cookies.get(main.SESSION_COOKIE)
     called = []
 
     async def interpret(*_args, **_kwargs):
@@ -691,7 +756,7 @@ def test_model_timeout_preserves_prior_result(monkeypatch):
     assert timed_out.status_code == 504
     assert timed_out.json()["error"]["code"] == "query_timeout"
     assert len(called) == 1
-    assert main.session_store.latest(token).result_id == UUID(first.json()["result_id"])
+    assert context_claims(client).result_id == UUID(first.json()["result_id"])
 
 
 def test_structured_preset_never_calls_model_even_when_admitted(monkeypatch):
@@ -705,29 +770,34 @@ def test_structured_preset_never_calls_model_even_when_admitted(monkeypatch):
     assert response.status_code == 200
 
 
-def test_cookie_is_opaque_and_explain_is_read_only():
+def test_cookie_is_signed_http_only_and_explain_does_not_replace_it():
     first = client.post("/api/query", json=SFO_REQUEST)
     assert first.status_code == 200
     original = first.json()
-    token = client.cookies.get(main.SESSION_COOKIE)
-    assert token and len(token) >= 40
-    assert "httponly" in first.headers["set-cookie"].lower()
-    assert "samesite=strict" in first.headers["set-cookie"].lower()
+    token = client.cookies.get(main.CONTEXT_COOKIE)
+    assert token and token.startswith("v1.")
+    set_cookie = first.headers["set-cookie"].lower()
+    assert "httponly" in set_cookie
+    assert "samesite=strict" in set_cookie
+    assert "max-age=3600" in set_cookie
+    assert "secure" not in set_cookie
 
     explain = client.post(
         "/api/query",
         json={"analysis": {"action": "explain"}, "context_result_id": original["result_id"]},
     )
     assert explain.status_code == 200
+    assert "set-cookie" not in explain.headers
     explained = explain.json()
     assert explained["result_id"] == original["result_id"]
     assert explained["request_id"] != original["request_id"]
     assert explained["scope"] == original["scope"]
     assert explained["rows"] == original["rows"]
-    assert main.session_store.latest(token).summary == original["summary"]
+    assert explained["summary"] != original["summary"]
+    assert client.cookies.get(main.CONTEXT_COOKIE) == token
 
 
-def test_saved_historical_explain_does_not_resolve_promoted_bundle_or_reload_sources(monkeypatch):
+def test_saved_historical_explain_recomputes_pinned_period_without_model(monkeypatch):
     first = client.post(
         "/api/query",
         json={"analysis": {
@@ -738,11 +808,9 @@ def test_saved_historical_explain_does_not_resolve_promoted_bundle_or_reload_sou
     original = first.json()
 
     def forbidden(*_args, **_kwargs):
-        raise AssertionError("saved-result explanation reopened resolution or a source")
+        raise AssertionError("explanation must not call a model or reopen the bundle registry")
 
-    monkeypatch.setattr(dispatch, "_resolve_request", forbidden)
-    monkeypatch.setattr(dispatch, "calculate_traffic_batch", forbidden)
-    monkeypatch.setattr(dispatch, "load_evidence", forbidden)
+    monkeypatch.setattr(dispatch, "_read_accepted_bundle", forbidden)
     monkeypatch.setattr(main, "interpret_message", forbidden)
     explained = client.post(
         "/api/query",
@@ -759,7 +827,7 @@ def test_saved_historical_explain_does_not_resolve_promoted_bundle_or_reload_sou
     assert payload["evidence"] == original["evidence"]
 
 
-def test_context_reference_is_session_bound_and_stale_ids_conflict():
+def test_context_reference_is_cookie_bound_and_stale_ids_conflict():
     first = client.post("/api/query", json=SFO_REQUEST)
     result_id = first.json()["result_id"]
     foreign = TestClient(main.app)
@@ -775,7 +843,7 @@ def test_context_reference_is_session_bound_and_stale_ids_conflict():
     )
     assert stale.status_code == 409
     assert stale.json()["error"]["code"] == "result_mismatch"
-    assert main.session_store.latest(client.cookies.get(main.SESSION_COOKIE)).result_id == UUID(second["result_id"])
+    assert context_claims(client).result_id == UUID(second["result_id"])
 
 
 def test_real_t100_metric_route_returns_typed_source_lineage():
@@ -1015,7 +1083,6 @@ def test_timeout_keeps_previous_result_and_holds_busy_slot_until_worker_finishes
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as async_client:
             original_response = await async_client.post("/api/query", json=SFO_REQUEST)
             original = original_response.json()
-            token = async_client.cookies.get(main.SESSION_COOKIE)
             monkeypatch.setattr(main, "QUERY_DEADLINE_SECONDS", 0.01)
             monkeypatch.setattr(main, "dispatch_analysis", slow)
             timed_out = await async_client.post(
@@ -1023,7 +1090,7 @@ def test_timeout_keeps_previous_result_and_holds_busy_slot_until_worker_finishes
             )
             assert timed_out.status_code == 504
             assert timed_out.json()["error"]["code"] == "query_timeout"
-            assert main.session_store.latest(token).result_id == UUID(original["result_id"])
+            assert context_claims(async_client).result_id == UUID(original["result_id"])
             busy = await async_client.post(
                 "/api/query", json={"analysis": {"action": "metric", "airports": ["PVD"], "metric": "passengers", "year": 2024}},
             )
@@ -1035,9 +1102,9 @@ def test_timeout_keeps_previous_result_and_holds_busy_slot_until_worker_finishes
     finally:
         work_gate.set()
     deadline = time.monotonic() + 2
-    while main.session_store.query_busy and time.monotonic() < deadline:
+    while main.query_slots.active and time.monotonic() < deadline:
         threading.Event().wait(0.01)
-    assert not main.session_store.query_busy
+    assert main.query_slots.active == 0
 
 
 def test_cancelled_request_keeps_busy_slot_until_worker_finishes_without_saving_late_result(monkeypatch):
@@ -1050,7 +1117,6 @@ def test_cancelled_request_keeps_busy_slot_until_worker_finishes_without_saving_
             original_response = await async_client.post("/api/query", json=SFO_REQUEST)
             assert original_response.status_code == 200
             original = main.AnalysisResult.model_validate_json(original_response.text)
-            token = async_client.cookies.get(main.SESSION_COOKIE)
 
             def slow(_analysis, request_id, *, previous=None):
                 worker_started.set()
@@ -1069,8 +1135,8 @@ def test_cancelled_request_keeps_busy_slot_until_worker_finishes_without_saving_
             with pytest.raises(asyncio.CancelledError):
                 await pending
 
-            assert main.session_store.query_busy
-            assert main.session_store.latest(token).result_id == original.result_id
+            assert main.query_slots.active == 1
+            assert context_claims(async_client).result_id == original.result_id
             busy = await async_client.post(
                 "/api/query",
                 json={"analysis": {"action": "metric", "airports": ["PVD"], "metric": "passengers", "year": 2024}},
@@ -1080,10 +1146,10 @@ def test_cancelled_request_keeps_busy_slot_until_worker_finishes_without_saving_
 
             work_gate.set()
             deadline = time.monotonic() + 2
-            while main.session_store.query_busy and time.monotonic() < deadline:
+            while main.query_slots.active and time.monotonic() < deadline:
                 await asyncio.sleep(0.01)
-            assert not main.session_store.query_busy
-            assert main.session_store.latest(token).result_id == original.result_id
+            assert main.query_slots.active == 0
+            assert context_claims(async_client).result_id == original.result_id
 
     try:
         asyncio.run(run_cancelled_request())
