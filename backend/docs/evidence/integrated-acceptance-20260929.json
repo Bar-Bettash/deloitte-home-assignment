@@ -1,0 +1,5056 @@
+{
+ "bundle_offline_verification": {
+  "artifacts": [
+   {
+    "data_file": "data.parquet",
+    "data_sha_actual": "73bc342560dc5b555fa957e95dc8f454bddca680ed04e8e8ff99c1287b2de659",
+    "data_sha_expected": "73bc342560dc5b555fa957e95dc8f454bddca680ed04e8e8ff99c1287b2de659",
+    "manifest_sha_actual": "e9a0ac23b1994124b64f5e7997f6c0b656c56f041462a1d9289b7e0330a86087",
+    "manifest_sha_expected": "e9a0ac23b1994124b64f5e7997f6c0b656c56f041462a1d9289b7e0330a86087",
+    "manifest_snapshot_id_ok": true,
+    "ok": true,
+    "snapshot_id": "datasf-eb1c8fd94a9664f9e6856b84d46ec755c4e3383f0ebe0a351946658cd0415e5b",
+    "source": "datasf"
+   },
+   {
+    "data_file": "data.parquet",
+    "data_sha_actual": "fdcbdedcf73cb9792a1c6892cd1c7c368a61af59190cad8fbd317735ad8e6ca7",
+    "data_sha_expected": "fdcbdedcf73cb9792a1c6892cd1c7c368a61af59190cad8fbd317735ad8e6ca7",
+    "manifest_sha_actual": "3c248a0c106e18f223b94e043876e097d629321127537138c08b7fb7b2997fdb",
+    "manifest_sha_expected": "3c248a0c106e18f223b94e043876e097d629321127537138c08b7fb7b2997fdb",
+    "manifest_snapshot_id_ok": true,
+    "ok": true,
+    "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e",
+    "source": "t100"
+   },
+   {
+    "data_file": "data.parquet",
+    "data_sha_actual": "29a013865c8d2d2b77052430592525b9f9233d3ed003b8a18cc11dbf76806e98",
+    "data_sha_expected": "29a013865c8d2d2b77052430592525b9f9233d3ed003b8a18cc11dbf76806e98",
+    "manifest_sha_actual": "069c07bb307fc6bf1ef8a053174457919541ce9e2a726348d9866b98e833c9dd",
+    "manifest_sha_expected": "069c07bb307fc6bf1ef8a053174457919541ce9e2a726348d9866b98e833c9dd",
+    "manifest_snapshot_id_ok": true,
+    "ok": true,
+    "snapshot_id": "ontime-04fee95d838f70541e6cb219b230101f67524a4021309e9b9d2246cb0a3514ba",
+    "source": "ontime"
+   },
+   {
+    "data_file": "source.pdf",
+    "data_sha_actual": "e88218c048d512e3e702922768df8c82961d8b81faaa4e359c0360f20cc1f583",
+    "data_sha_expected": "e88218c048d512e3e702922768df8c82961d8b81faaa4e359c0360f20cc1f583",
+    "manifest_sha_actual": "5d650f6c068ca07fedca45260109142a95c7aaf070442f62c3706cd003100dfc",
+    "manifest_sha_expected": "5d650f6c068ca07fedca45260109142a95c7aaf070442f62c3706cd003100dfc",
+    "manifest_snapshot_id_ok": true,
+    "ok": true,
+    "snapshot_id": "faa-834930a0ccb14b84c2d401533b091ca4af04ae2a8367494a925af98c47079179",
+    "source": "faa"
+   },
+   {
+    "data_file": "source.xlsx",
+    "data_sha_actual": "1c16930f818879bc144d5d531c85f4dc1c3e992b08ceb937dadddc4a7484adcb",
+    "data_sha_expected": "1c16930f818879bc144d5d531c85f4dc1c3e992b08ceb937dadddc4a7484adcb",
+    "manifest_sha_actual": "b977344183ebf38e9ff8fe79039148f09cf322724887947a27feaef4c0be7670",
+    "manifest_sha_expected": "b977344183ebf38e9ff8fe79039148f09cf322724887947a27feaef4c0be7670",
+    "manifest_snapshot_id_ok": true,
+    "ok": true,
+    "snapshot_id": "aip-bd7aa3c7883882987eb79250d86e226053211ff2cd72bc311ad2f02c584623b5",
+    "source": "aip"
+   },
+   {
+    "actual": "493397be71ec971d722157185c87aa2de3ccb811237ea2e2ac1a2d433398b5f6",
+    "expected": "493397be71ec971d722157185c87aa2de3ccb811237ea2e2ac1a2d433398b5f6",
+    "ok": true,
+    "path": "evidence_2025.json",
+    "source": "evidence"
+   }
+  ],
+  "load_bundle": {
+   "bundle_id": "annual-2025-r1",
+   "cohort_n": 23,
+   "has_EWB": true,
+   "has_PVC": true,
+   "manifest_sha256": "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548",
+   "years": [
+    2024,
+    2025
+   ]
+  },
+  "load_evidence": "pass",
+  "promote_bundle_on_copy": {
+   "registry_unchanged": true,
+   "returned_changed": false
+  },
+  "qualification_binding": "pass",
+  "reconciliation_receipt_validate": "pass",
+  "registry": {
+   "default": "annual-2025-r1",
+   "match": true,
+   "registry_sha": "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548",
+   "resolved_default": "annual-2025-r1",
+   "resolved_default_sha": "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548",
+   "resolved_explicit_sha": "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548"
+  },
+  "source_admission_receipt_validate": "pass"
+ },
+ "checked_on": "2026-09-29",
+ "comparisons_vs_recent_api_verification": {
+  "anc_long_haul__default vs anc_long_haul__explicit_2025_bundle": [],
+  "anc_long_haul__explicit_2025_bundle vs evidence:anc_long_haul": [],
+  "explicit_historical_2024 vs evidence:explicit_historical_2024": [],
+  "lax_sna_operations__default vs lax_sna_operations__explicit_2025_bundle": [],
+  "lax_sna_operations__explicit_2025_bundle vs evidence:lax_sna_operations": [],
+  "new_england_screen__default vs new_england_screen__explicit_2025_bundle": [],
+  "new_england_screen__explicit_2025_bundle vs evidence:new_england_screen": [],
+  "omitted_year_default vs evidence:omitted_year_default": [],
+  "saved_explain rows/sources == ANC base": [],
+  "sfo_pressure__default vs sfo_pressure__explicit_2025_bundle": [],
+  "sfo_pressure__explicit_2025_bundle vs evidence:sfo_pressure": []
+ },
+ "execution": "Real uvicorn server (python -m uvicorn app.main:app) on 127.0.0.1, clean environment (no model variables), driven over real HTTP by httpx with trust_env=False, Origin header matching the server origin and a per-client cookie jar. No session cookie values are recorded.",
+ "http_calls": [
+  {
+   "content_type": "text/html; charset=utf-8",
+   "expected_status": 200,
+   "name": "ui_index",
+   "request": "GET /",
+   "status_code": 200,
+   "status_ok": true
+  },
+  {
+   "body": {
+    "status": "ok"
+   },
+   "expected_status": 200,
+   "name": "health",
+   "request": "GET /health",
+   "status_code": 200,
+   "status_ok": true
+  },
+  {
+   "evidence_claims": [
+    "Status unknown; Proposed 84,000-square-foot East Terminal at 60% design; design remains subject to change.",
+    "Status unknown; Federal environmental decision remains in place; additional state and local approvals remain required.",
+    "Status unknown; Reports a $14.5 million terminal project forecast to finish spring/early summer 2026, plus checkpoint relocation/design. Forecast is not proof of completion.",
+    "Status unknown; Describes connector and Gate 6 waiting-area construction and a larger checkpoint. Definitive completion remains unresolved after the older forecast date.",
+    "Status unknown; Confirms July 2025 ribbon-cutting for a $21.6 million concourse addition, three boarding bridges and accessibility facilities.",
+    "Status unknown; Reports customer-experience awards and service investments. This is countercontext, not proof of spare capacity."
+   ],
+   "evidence_source_ids": [
+    "hvn_project",
+    "hvn_2026_update",
+    "bgr_report_2025",
+    "bgr_project",
+    "pwm_2025_completion",
+    "pwm_survey_2025"
+   ],
+   "exclusions": [
+    "PVC: 2024 coverage is incomplete (missing months: 12)"
+   ],
+   "expected_status": 200,
+   "limitations": [
+    "Screen scores are heuristic traffic pressure, not terminal capacity or investment success.",
+    "Traffic-pressure metrics are screening heuristics, not causal capacity measures or profitability estimates.",
+    "Official source publication dates and observation dates differ; forecasts are not completion receipts."
+   ],
+   "name": "new_england_screen__explicit_2025_bundle",
+   "request": {
+    "analysis": {
+     "action": "rank",
+     "bundle_id": "annual-2025-r1",
+     "metric": "screen_score",
+     "region": "new_england",
+     "year": 2025
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "partial",
+   "row_count": 22,
+   "rows": [
+    {
+     "airport": "HVN",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 25.342217826426097
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 737565
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 74.76190476190476
+      },
+      "seat_occupancy": {
+       "denominator": 970305,
+       "numerator": 737565,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 76.01372764233926
+      }
+     },
+     "rank": 1
+    },
+    {
+     "airport": "BGR",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 16.792186838338953
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 435768
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 72.85714285714286
+      },
+      "seat_occupancy": {
+       "denominator": 543502,
+       "numerator": 435768,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 80.17780983326648
+      }
+     },
+     "rank": 2
+    },
+    {
+     "airport": "PWM",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 5.240513540858324
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 1285656
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 72.85714285714286
+      },
+      "seat_occupancy": {
+       "denominator": 1559508,
+       "numerator": 1285656,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 82.43984641309952
+      }
+     },
+     "rank": 2
+    },
+    {
+     "airport": "BOS",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -0.780493091944408
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 21128285
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 71.9047619047619
+      },
+      "seat_occupancy": {
+       "denominator": 25873121,
+       "numerator": 21128285,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 81.6611378271682
+      }
+     },
+     "rank": 4
+    },
+    {
+     "airport": "PVD",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 6.575851430657655
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 2113478
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 70.95238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 2705290,
+       "numerator": 2113478,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 78.12389799245183
+      }
+     },
+     "rank": 5
+    },
+    {
+     "airport": "PSM",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 46.736315584093084
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 82727
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 70.0
+      },
+      "seat_occupancy": {
+       "denominator": 108616,
+       "numerator": 82727,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 76.16465345805406
+      }
+     },
+     "rank": 6
+    },
+    {
+     "airport": "BDL",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -0.3262534790404602
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 3283623
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 69.52380952380952
+      },
+      "seat_occupancy": {
+       "denominator": 4083471,
+       "numerator": 3283623,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 80.41254609130321
+      }
+     },
+     "rank": 7
+    },
+    {
+     "airport": "BTV",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 5.709856973848906
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 708570
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 69.04761904761905
+      },
+      "seat_occupancy": {
+       "denominator": 871127,
+       "numerator": 708570,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 81.33946026239572
+      }
+     },
+     "rank": 8
+    },
+    {
+     "airport": "MHT",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 8.259585156632596
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 685294
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 64.76190476190476
+      },
+      "seat_occupancy": {
+       "denominator": 901551,
+       "numerator": 685294,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 76.01278241608073
+      }
+     },
+     "rank": 9
+    },
+    {
+     "airport": "BID",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 63.67478866235704
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 19749
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 55.714285714285715
+      },
+      "seat_occupancy": {
+       "denominator": 42694,
+       "numerator": 19749,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 46.25708530472666
+      }
+     },
+     "rank": 10
+    },
+    {
+     "airport": "MVY",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 6.756538485432068
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 85923
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 51.42857142857143
+      },
+      "seat_occupancy": {
+       "denominator": 138987,
+       "numerator": 85923,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 61.82088972349932
+      }
+     },
+     "rank": 11
+    },
+    {
+     "airport": "WST",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 60.734348286249286
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 19743
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 50.95238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 42850,
+       "numerator": 19743,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 46.07467911318553
+      }
+     },
+     "rank": 12
+    },
+    {
+     "airport": "HYA",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 33.18605206591832
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 33459
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 48.095238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 77488,
+       "numerator": 33459,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 43.179589097666735
+      }
+     },
+     "rank": 13
+    },
+    {
+     "airport": "ACK",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -1.0494052693541185
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 146247
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 45.714285714285715
+      },
+      "seat_occupancy": {
+       "denominator": 229743,
+       "numerator": 146247,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 63.65678170825662
+      }
+     },
+     "rank": 14
+    },
+    {
+     "airport": "ORH",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -5.816717519335841
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 106186
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 41.904761904761905
+      },
+      "seat_occupancy": {
+       "denominator": 160428,
+       "numerator": 106186,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 66.18919390630064
+      }
+     },
+     "rank": 15
+    },
+    {
+     "airport": "RUT",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 9.376401973979362
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 4876
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 40.95238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 8973,
+       "numerator": 4876,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 54.34080017831272
+      }
+     },
+     "rank": 16
+    },
+    {
+     "airport": "EWB",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 53.536895674300254
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 3017
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 36.19047619047619
+      },
+      "seat_occupancy": {
+       "denominator": 7920,
+       "numerator": 3017,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 38.093434343434346
+      }
+     },
+     "rank": 17
+    },
+    {
+     "airport": "PQI",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -1.0690485005553498
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 21377
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 29.523809523809526
+      },
+      "seat_occupancy": {
+       "denominator": 41100,
+       "numerator": 21377,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 52.01216545012166
+      }
+     },
+     "rank": 18
+    },
+    {
+     "airport": "BHB",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -12.452507598784194
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 9217
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 27.142857142857142
+      },
+      "seat_occupancy": {
+       "denominator": 14589,
+       "numerator": 9217,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 63.177736650901366
+      }
+     },
+     "rank": 19
+    },
+    {
+     "airport": "RKD",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -13.102681672919273
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 6254
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 18.095238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 11520,
+       "numerator": 6254,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 54.28819444444444
+      }
+     },
+     "rank": 20
+    },
+    {
+     "airport": "LEB",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -15.177559501322252
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 8981
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 14.761904761904763
+      },
+      "seat_occupancy": {
+       "denominator": 18206,
+       "numerator": 8981,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 49.32989124464462
+      }
+     },
+     "rank": 21
+    },
+    {
+     "airport": "AUG",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -17.650462962962962
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 4269
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 2.857142857142857
+      },
+      "seat_occupancy": {
+       "denominator": 10143,
+       "numerator": 4269,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 42.08813960366756
+      }
+     },
+     "rank": 22
+    }
+   ],
+   "scope": {
+    "airports": [
+     "ACK",
+     "AUG",
+     "BDL",
+     "BGR",
+     "BHB",
+     "BID",
+     "BOS",
+     "BTV",
+     "EWB",
+     "HVN",
+     "HYA",
+     "LEB",
+     "MHT",
+     "MVY",
+     "ORH",
+     "PQI",
+     "PSM",
+     "PVC",
+     "PVD",
+     "PWM",
+     "RKD",
+     "RUT",
+     "WST"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "screen_score",
+    "population": "New England airports normalized against the frozen eligible 2025 cohort",
+    "threshold_miles": null,
+    "year": 2025
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    },
+    {
+     "id": "hvn_project",
+     "period": "undated",
+     "snapshot_id": "curated-hvn_project"
+    },
+    {
+     "id": "hvn_2026_update",
+     "period": "2026-07-22",
+     "snapshot_id": "curated-hvn_2026_update"
+    },
+    {
+     "id": "bgr_report_2025",
+     "period": "undated",
+     "snapshot_id": "curated-bgr_report_2025"
+    },
+    {
+     "id": "bgr_project",
+     "period": "undated",
+     "snapshot_id": "curated-bgr_project"
+    },
+    {
+     "id": "pwm_2025_completion",
+     "period": "2026-02-12",
+     "snapshot_id": "curated-pwm_2025_completion"
+    },
+    {
+     "id": "pwm_survey_2025",
+     "period": "2026-02-26",
+     "snapshot_id": "curated-pwm_survey_2025"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Ranked 22 assessable airports by screen_score; scores are normalized against the frozen full eligible cohort."
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "Domestic reporting-carrier scheduled departures at origin; not all airlines or international traffic",
+    "Delay and taxi means exclude cancelled/diverted flights; operational indicators do not prove terminal causation.",
+    "LAX 2025 on-time coverage: observed months 01,02,03,04,05,06,07,08,09,10,11,12; missing months none; reporting carriers AA, AS, B6, DL, F9, G4, HA, MQ, NK, OO, UA, WN; valid scheduled records 190472; invalid rows 0.",
+    "SNA 2025 on-time coverage: observed months 01,02,03,04,05,06,07,08,09,10,11,12; missing months none; reporting carriers AA, AS, DL, F9, G4, NK, OO, UA, WN; valid scheduled records 44997; invalid rows 0."
+   ],
+   "name": "lax_sna_operations__explicit_2025_bundle",
+   "request": {
+    "analysis": {
+     "action": "compare",
+     "airports": [
+      "LAX",
+      "SNA"
+     ],
+     "bundle_id": "annual-2025-r1",
+     "metric": "congestion",
+     "year": 2025
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 2,
+   "rows": [
+    {
+     "airport": "LAX",
+     "metrics": {
+      "cancellation_rate": {
+       "comparison_direction": "lower",
+       "denominator": 190472,
+       "eligible_count": 190472,
+       "numerator": 1315,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.6903901885841488
+      },
+      "departure_delay_minutes": {
+       "comparison_direction": "lower",
+       "denominator": 188578,
+       "eligible_count": 188578,
+       "numerator": 2602393.0,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 13.800088027235415
+      },
+      "diversion_rate": {
+       "comparison_direction": "higher",
+       "denominator": 190472,
+       "eligible_count": 190472,
+       "numerator": 579,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.3039816875971271
+      },
+      "taxi_out_minutes": {
+       "comparison_direction": "higher",
+       "denominator": 188578,
+       "eligible_count": 188578,
+       "numerator": 3342809.0,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 17.726399686071545
+      }
+     },
+     "rank": null
+    },
+    {
+     "airport": "SNA",
+     "metrics": {
+      "cancellation_rate": {
+       "comparison_direction": "higher",
+       "denominator": 44997,
+       "eligible_count": 44997,
+       "numerator": 471,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 1.0467364490966065
+      },
+      "departure_delay_minutes": {
+       "comparison_direction": "higher",
+       "denominator": 44395,
+       "eligible_count": 44395,
+       "numerator": 673564.0,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 15.172068926680932
+      },
+      "diversion_rate": {
+       "comparison_direction": "lower",
+       "denominator": 44997,
+       "eligible_count": 44997,
+       "numerator": 131,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.29113051981243193
+      },
+      "taxi_out_minutes": {
+       "comparison_direction": "lower",
+       "denominator": 44395,
+       "eligible_count": 44395,
+       "numerator": 712687.0,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 16.053316814956638
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "LAX",
+     "SNA"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "congestion",
+    "population": "Domestic reporting-carrier scheduled departures at origin; 2025 only",
+    "threshold_miles": null,
+    "year": 2025
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "ontime-93a752a176debb909834",
+     "period": "2025",
+     "snapshot_id": "ontime-04fee95d838f70541e6cb219b230101f67524a4021309e9b9d2246cb0a3514ba"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Mixed picture: indicators favor LAX and SNA across 4 comparable operational measures."
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."
+   ],
+   "name": "anc_long_haul__explicit_2025_bundle",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "bundle_id": "annual-2025-r1",
+     "metric": "long_haul_share",
+     "threshold_miles": 3000,
+     "year": 2025
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "ANC",
+     "metrics": {
+      "long_haul_share": {
+       "denominator": 36040,
+       "lower_percent": 2.771920088790233,
+       "numerator": 999,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "unknown_distance_departures": 0,
+       "upper_percent": 2.771920088790233,
+       "value": 2.771920088790233
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "ANC"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "long_haul_share",
+    "population": "BTS T-100 scheduled passenger origin traffic; 2024 and 2025 where applicable",
+    "threshold_miles": 3000.0,
+    "year": 2025
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Long-haul share uses performed departures at or above 3000 miles."
+  },
+  {
+   "evidence_claims": [
+    "Status unknown; Describes construction-related closures and rerouting; T3 AirTrain station expected to reopen with the new facility in 2027.",
+    "Status unknown; Terminal 1 final phase opened June 2024; Terminal 3 modernization was in construction with forecast completion 2029."
+   ],
+   "evidence_source_ids": [
+    "sfo_t3_current",
+    "sfo_cip_2025"
+   ],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "These transported-passenger, supplied-seat and operational indicators do not identify unmet demand, terminal saturation, or the cause of any observed pressure.",
+    "Profitability and quantitative unmet demand are not_identifiable.",
+    "Traffic-pressure metrics are screening heuristics, not causal capacity measures or profitability estimates.",
+    "Official source publication dates and observation dates differ; forecasts are not completion receipts."
+   ],
+   "name": "sfo_pressure__explicit_2025_bundle",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "SFO"
+     ],
+     "bundle_id": "annual-2025-r1",
+     "metric": "sfo_pressure",
+     "year": 2025
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "SFO",
+     "metrics": {
+      "cancellation_rate": {
+       "denominator": 144495,
+       "eligible_count": 144495,
+       "numerator": 1080,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.747430706944877
+      },
+      "departure_delay_minutes": {
+       "denominator": 142973,
+       "eligible_count": 142973,
+       "numerator": 2032426.0,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 14.215453267400138
+      },
+      "departures": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 187325
+      },
+      "diversion_rate": {
+       "denominator": 144495,
+       "eligible_count": 144495,
+       "numerator": 442,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.30589293747188484
+      },
+      "passenger_growth": {
+       "denominator": 25288609,
+       "numerator": 1188993,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 4.701693952403629
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 26477602
+      },
+      "seat_occupancy": {
+       "denominator": 32169113,
+       "numerator": 26477602,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 82.30752896419618
+      },
+      "seats": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 32169113
+      },
+      "sfo_enplaned_trend": {
+       "source_ids": [
+        "datasf-c647cd19b7e499067ce5"
+       ],
+       "status": "ok",
+       "value": 27250806
+      },
+      "sfo_pressure": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -1.224669159417413
+      },
+      "taxi_out_minutes": {
+       "denominator": 142973,
+       "eligible_count": 142973,
+       "numerator": 3030586.0,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 21.1969113049317
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "SFO"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "sfo_pressure",
+    "population": "SFO Enplaned passengers combined Domestic and International; T-100 and on-time populations separately identified",
+    "threshold_miles": null,
+    "year": 2025
+   },
+   "series_count": 24,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "datasf-c647cd19b7e499067ce5",
+     "period": "2024-2025",
+     "snapshot_id": "datasf-eb1c8fd94a9664f9e6856b84d46ec755c4e3383f0ebe0a351946658cd0415e5b"
+    },
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    },
+    {
+     "id": "bts_ontime-93a752a176debb909834",
+     "period": "2025",
+     "snapshot_id": "ontime-04fee95d838f70541e6cb219b230101f67524a4021309e9b9d2246cb0a3514ba"
+    },
+    {
+     "id": "sfo_t3_current",
+     "period": "undated",
+     "snapshot_id": "curated-sfo_t3_current"
+    },
+    {
+     "id": "sfo_cip_2025",
+     "period": "2025-11-17",
+     "snapshot_id": "curated-sfo_cip_2025"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable."
+  },
+  {
+   "evidence_claims": [
+    "Status unknown; Proposed 84,000-square-foot East Terminal at 60% design; design remains subject to change.",
+    "Status unknown; Federal environmental decision remains in place; additional state and local approvals remain required.",
+    "Status unknown; Reports a $14.5 million terminal project forecast to finish spring/early summer 2026, plus checkpoint relocation/design. Forecast is not proof of completion.",
+    "Status unknown; Describes connector and Gate 6 waiting-area construction and a larger checkpoint. Definitive completion remains unresolved after the older forecast date.",
+    "Status unknown; Confirms July 2025 ribbon-cutting for a $21.6 million concourse addition, three boarding bridges and accessibility facilities.",
+    "Status unknown; Reports customer-experience awards and service investments. This is countercontext, not proof of spare capacity."
+   ],
+   "evidence_source_ids": [
+    "hvn_project",
+    "hvn_2026_update",
+    "bgr_report_2025",
+    "bgr_project",
+    "pwm_2025_completion",
+    "pwm_survey_2025"
+   ],
+   "exclusions": [
+    "PVC: 2024 coverage is incomplete (missing months: 12)"
+   ],
+   "expected_status": 200,
+   "limitations": [
+    "Screen scores are heuristic traffic pressure, not terminal capacity or investment success.",
+    "Traffic-pressure metrics are screening heuristics, not causal capacity measures or profitability estimates.",
+    "Official source publication dates and observation dates differ; forecasts are not completion receipts."
+   ],
+   "name": "new_england_screen__default",
+   "request": {
+    "analysis": {
+     "action": "rank",
+     "metric": "screen_score",
+     "region": "new_england"
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "partial",
+   "row_count": 22,
+   "rows": [
+    {
+     "airport": "HVN",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 25.342217826426097
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 737565
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 74.76190476190476
+      },
+      "seat_occupancy": {
+       "denominator": 970305,
+       "numerator": 737565,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 76.01372764233926
+      }
+     },
+     "rank": 1
+    },
+    {
+     "airport": "BGR",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 16.792186838338953
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 435768
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 72.85714285714286
+      },
+      "seat_occupancy": {
+       "denominator": 543502,
+       "numerator": 435768,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 80.17780983326648
+      }
+     },
+     "rank": 2
+    },
+    {
+     "airport": "PWM",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 5.240513540858324
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 1285656
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 72.85714285714286
+      },
+      "seat_occupancy": {
+       "denominator": 1559508,
+       "numerator": 1285656,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 82.43984641309952
+      }
+     },
+     "rank": 2
+    },
+    {
+     "airport": "BOS",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -0.780493091944408
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 21128285
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 71.9047619047619
+      },
+      "seat_occupancy": {
+       "denominator": 25873121,
+       "numerator": 21128285,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 81.6611378271682
+      }
+     },
+     "rank": 4
+    },
+    {
+     "airport": "PVD",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 6.575851430657655
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 2113478
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 70.95238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 2705290,
+       "numerator": 2113478,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 78.12389799245183
+      }
+     },
+     "rank": 5
+    },
+    {
+     "airport": "PSM",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 46.736315584093084
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 82727
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 70.0
+      },
+      "seat_occupancy": {
+       "denominator": 108616,
+       "numerator": 82727,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 76.16465345805406
+      }
+     },
+     "rank": 6
+    },
+    {
+     "airport": "BDL",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -0.3262534790404602
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 3283623
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 69.52380952380952
+      },
+      "seat_occupancy": {
+       "denominator": 4083471,
+       "numerator": 3283623,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 80.41254609130321
+      }
+     },
+     "rank": 7
+    },
+    {
+     "airport": "BTV",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 5.709856973848906
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 708570
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 69.04761904761905
+      },
+      "seat_occupancy": {
+       "denominator": 871127,
+       "numerator": 708570,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 81.33946026239572
+      }
+     },
+     "rank": 8
+    },
+    {
+     "airport": "MHT",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 8.259585156632596
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 685294
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 64.76190476190476
+      },
+      "seat_occupancy": {
+       "denominator": 901551,
+       "numerator": 685294,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 76.01278241608073
+      }
+     },
+     "rank": 9
+    },
+    {
+     "airport": "BID",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 63.67478866235704
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 19749
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 55.714285714285715
+      },
+      "seat_occupancy": {
+       "denominator": 42694,
+       "numerator": 19749,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 46.25708530472666
+      }
+     },
+     "rank": 10
+    },
+    {
+     "airport": "MVY",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 6.756538485432068
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 85923
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 51.42857142857143
+      },
+      "seat_occupancy": {
+       "denominator": 138987,
+       "numerator": 85923,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 61.82088972349932
+      }
+     },
+     "rank": 11
+    },
+    {
+     "airport": "WST",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 60.734348286249286
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 19743
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 50.95238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 42850,
+       "numerator": 19743,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 46.07467911318553
+      }
+     },
+     "rank": 12
+    },
+    {
+     "airport": "HYA",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 33.18605206591832
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 33459
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 48.095238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 77488,
+       "numerator": 33459,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 43.179589097666735
+      }
+     },
+     "rank": 13
+    },
+    {
+     "airport": "ACK",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -1.0494052693541185
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 146247
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 45.714285714285715
+      },
+      "seat_occupancy": {
+       "denominator": 229743,
+       "numerator": 146247,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 63.65678170825662
+      }
+     },
+     "rank": 14
+    },
+    {
+     "airport": "ORH",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -5.816717519335841
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 106186
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 41.904761904761905
+      },
+      "seat_occupancy": {
+       "denominator": 160428,
+       "numerator": 106186,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 66.18919390630064
+      }
+     },
+     "rank": 15
+    },
+    {
+     "airport": "RUT",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 9.376401973979362
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 4876
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 40.95238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 8973,
+       "numerator": 4876,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 54.34080017831272
+      }
+     },
+     "rank": 16
+    },
+    {
+     "airport": "EWB",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 53.536895674300254
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 3017
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 36.19047619047619
+      },
+      "seat_occupancy": {
+       "denominator": 7920,
+       "numerator": 3017,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 38.093434343434346
+      }
+     },
+     "rank": 17
+    },
+    {
+     "airport": "PQI",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -1.0690485005553498
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 21377
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 29.523809523809526
+      },
+      "seat_occupancy": {
+       "denominator": 41100,
+       "numerator": 21377,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 52.01216545012166
+      }
+     },
+     "rank": 18
+    },
+    {
+     "airport": "BHB",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -12.452507598784194
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 9217
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 27.142857142857142
+      },
+      "seat_occupancy": {
+       "denominator": 14589,
+       "numerator": 9217,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 63.177736650901366
+      }
+     },
+     "rank": 19
+    },
+    {
+     "airport": "RKD",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -13.102681672919273
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 6254
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 18.095238095238095
+      },
+      "seat_occupancy": {
+       "denominator": 11520,
+       "numerator": 6254,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 54.28819444444444
+      }
+     },
+     "rank": 20
+    },
+    {
+     "airport": "LEB",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -15.177559501322252
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 8981
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 14.761904761904763
+      },
+      "seat_occupancy": {
+       "denominator": 18206,
+       "numerator": 8981,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 49.32989124464462
+      }
+     },
+     "rank": 21
+    },
+    {
+     "airport": "AUG",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -17.650462962962962
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 4269
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 2.857142857142857
+      },
+      "seat_occupancy": {
+       "denominator": 10143,
+       "numerator": 4269,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 42.08813960366756
+      }
+     },
+     "rank": 22
+    }
+   ],
+   "scope": {
+    "airports": [
+     "ACK",
+     "AUG",
+     "BDL",
+     "BGR",
+     "BHB",
+     "BID",
+     "BOS",
+     "BTV",
+     "EWB",
+     "HVN",
+     "HYA",
+     "LEB",
+     "MHT",
+     "MVY",
+     "ORH",
+     "PQI",
+     "PSM",
+     "PVC",
+     "PVD",
+     "PWM",
+     "RKD",
+     "RUT",
+     "WST"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "screen_score",
+    "population": "New England airports normalized against the frozen eligible 2025 cohort",
+    "threshold_miles": null,
+    "year": 2025
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    },
+    {
+     "id": "hvn_project",
+     "period": "undated",
+     "snapshot_id": "curated-hvn_project"
+    },
+    {
+     "id": "hvn_2026_update",
+     "period": "2026-07-22",
+     "snapshot_id": "curated-hvn_2026_update"
+    },
+    {
+     "id": "bgr_report_2025",
+     "period": "undated",
+     "snapshot_id": "curated-bgr_report_2025"
+    },
+    {
+     "id": "bgr_project",
+     "period": "undated",
+     "snapshot_id": "curated-bgr_project"
+    },
+    {
+     "id": "pwm_2025_completion",
+     "period": "2026-02-12",
+     "snapshot_id": "curated-pwm_2025_completion"
+    },
+    {
+     "id": "pwm_survey_2025",
+     "period": "2026-02-26",
+     "snapshot_id": "curated-pwm_survey_2025"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Ranked 22 assessable airports by screen_score; scores are normalized against the frozen full eligible cohort."
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "Domestic reporting-carrier scheduled departures at origin; not all airlines or international traffic",
+    "Delay and taxi means exclude cancelled/diverted flights; operational indicators do not prove terminal causation.",
+    "LAX 2025 on-time coverage: observed months 01,02,03,04,05,06,07,08,09,10,11,12; missing months none; reporting carriers AA, AS, B6, DL, F9, G4, HA, MQ, NK, OO, UA, WN; valid scheduled records 190472; invalid rows 0.",
+    "SNA 2025 on-time coverage: observed months 01,02,03,04,05,06,07,08,09,10,11,12; missing months none; reporting carriers AA, AS, DL, F9, G4, NK, OO, UA, WN; valid scheduled records 44997; invalid rows 0."
+   ],
+   "name": "lax_sna_operations__default",
+   "request": {
+    "analysis": {
+     "action": "compare",
+     "airports": [
+      "LAX",
+      "SNA"
+     ],
+     "metric": "congestion"
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 2,
+   "rows": [
+    {
+     "airport": "LAX",
+     "metrics": {
+      "cancellation_rate": {
+       "comparison_direction": "lower",
+       "denominator": 190472,
+       "eligible_count": 190472,
+       "numerator": 1315,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.6903901885841488
+      },
+      "departure_delay_minutes": {
+       "comparison_direction": "lower",
+       "denominator": 188578,
+       "eligible_count": 188578,
+       "numerator": 2602393.0,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 13.800088027235415
+      },
+      "diversion_rate": {
+       "comparison_direction": "higher",
+       "denominator": 190472,
+       "eligible_count": 190472,
+       "numerator": 579,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.3039816875971271
+      },
+      "taxi_out_minutes": {
+       "comparison_direction": "higher",
+       "denominator": 188578,
+       "eligible_count": 188578,
+       "numerator": 3342809.0,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 17.726399686071545
+      }
+     },
+     "rank": null
+    },
+    {
+     "airport": "SNA",
+     "metrics": {
+      "cancellation_rate": {
+       "comparison_direction": "higher",
+       "denominator": 44997,
+       "eligible_count": 44997,
+       "numerator": 471,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 1.0467364490966065
+      },
+      "departure_delay_minutes": {
+       "comparison_direction": "higher",
+       "denominator": 44395,
+       "eligible_count": 44395,
+       "numerator": 673564.0,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 15.172068926680932
+      },
+      "diversion_rate": {
+       "comparison_direction": "lower",
+       "denominator": 44997,
+       "eligible_count": 44997,
+       "numerator": 131,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.29113051981243193
+      },
+      "taxi_out_minutes": {
+       "comparison_direction": "lower",
+       "denominator": 44395,
+       "eligible_count": 44395,
+       "numerator": 712687.0,
+       "source_ids": [
+        "ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 16.053316814956638
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "LAX",
+     "SNA"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "congestion",
+    "population": "Domestic reporting-carrier scheduled departures at origin; 2025 only",
+    "threshold_miles": null,
+    "year": 2025
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "ontime-93a752a176debb909834",
+     "period": "2025",
+     "snapshot_id": "ontime-04fee95d838f70541e6cb219b230101f67524a4021309e9b9d2246cb0a3514ba"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Mixed picture: indicators favor LAX and SNA across 4 comparable operational measures."
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."
+   ],
+   "name": "anc_long_haul__default",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "metric": "long_haul_share",
+     "threshold_miles": 3000
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "ANC",
+     "metrics": {
+      "long_haul_share": {
+       "denominator": 36040,
+       "lower_percent": 2.771920088790233,
+       "numerator": 999,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "unknown_distance_departures": 0,
+       "upper_percent": 2.771920088790233,
+       "value": 2.771920088790233
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "ANC"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "long_haul_share",
+    "population": "BTS T-100 scheduled passenger origin traffic; 2024 and 2025 where applicable",
+    "threshold_miles": 3000.0,
+    "year": 2025
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Long-haul share uses performed departures at or above 3000 miles."
+  },
+  {
+   "evidence_claims": [
+    "Status unknown; Describes construction-related closures and rerouting; T3 AirTrain station expected to reopen with the new facility in 2027.",
+    "Status unknown; Terminal 1 final phase opened June 2024; Terminal 3 modernization was in construction with forecast completion 2029."
+   ],
+   "evidence_source_ids": [
+    "sfo_t3_current",
+    "sfo_cip_2025"
+   ],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "These transported-passenger, supplied-seat and operational indicators do not identify unmet demand, terminal saturation, or the cause of any observed pressure.",
+    "Profitability and quantitative unmet demand are not_identifiable.",
+    "Traffic-pressure metrics are screening heuristics, not causal capacity measures or profitability estimates.",
+    "Official source publication dates and observation dates differ; forecasts are not completion receipts."
+   ],
+   "name": "sfo_pressure__default",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "SFO"
+     ],
+     "metric": "sfo_pressure"
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "SFO",
+     "metrics": {
+      "cancellation_rate": {
+       "denominator": 144495,
+       "eligible_count": 144495,
+       "numerator": 1080,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.747430706944877
+      },
+      "departure_delay_minutes": {
+       "denominator": 142973,
+       "eligible_count": 142973,
+       "numerator": 2032426.0,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 14.215453267400138
+      },
+      "departures": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 187325
+      },
+      "diversion_rate": {
+       "denominator": 144495,
+       "eligible_count": 144495,
+       "numerator": 442,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.30589293747188484
+      },
+      "passenger_growth": {
+       "denominator": 25288609,
+       "numerator": 1188993,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 4.701693952403629
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 26477602
+      },
+      "seat_occupancy": {
+       "denominator": 32169113,
+       "numerator": 26477602,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 82.30752896419618
+      },
+      "seats": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 32169113
+      },
+      "sfo_enplaned_trend": {
+       "source_ids": [
+        "datasf-c647cd19b7e499067ce5"
+       ],
+       "status": "ok",
+       "value": 27250806
+      },
+      "sfo_pressure": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -1.224669159417413
+      },
+      "taxi_out_minutes": {
+       "denominator": 142973,
+       "eligible_count": 142973,
+       "numerator": 3030586.0,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 21.1969113049317
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "SFO"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "sfo_pressure",
+    "population": "SFO Enplaned passengers combined Domestic and International; T-100 and on-time populations separately identified",
+    "threshold_miles": null,
+    "year": 2025
+   },
+   "series_count": 24,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "datasf-c647cd19b7e499067ce5",
+     "period": "2024-2025",
+     "snapshot_id": "datasf-eb1c8fd94a9664f9e6856b84d46ec755c4e3383f0ebe0a351946658cd0415e5b"
+    },
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    },
+    {
+     "id": "bts_ontime-93a752a176debb909834",
+     "period": "2025",
+     "snapshot_id": "ontime-04fee95d838f70541e6cb219b230101f67524a4021309e9b9d2246cb0a3514ba"
+    },
+    {
+     "id": "sfo_t3_current",
+     "period": "undated",
+     "snapshot_id": "curated-sfo_t3_current"
+    },
+    {
+     "id": "sfo_cip_2025",
+     "period": "2025-11-17",
+     "snapshot_id": "curated-sfo_cip_2025"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable."
+  },
+  {
+   "evidence_claims": [
+    "Status unknown; The plan's 2017-based PAL forecast lists 1.9 million annual enplanements at the 2017 baseline and 2.6, 3.0, and 3.7 million at PAL 1\u20133. It says forecast aircraft operations were not projected to exceed 60% of annual service volume during its planning period and therefore major airfield capacity improvements were not recommended.",
+    "Status unknown; The airport says its SAMP sets direction for future capital improvements, lists safety and sustainability projects, and says timing can vary with approval, design, and funding availability.",
+    "Status unknown; The City reports that the terminal expansion and renovation was completed in 2012; the statement describes approximately 300,000 square feet and 14 passenger gates at that time.",
+    "Status unknown; Massport describes a seven-gate Terminal E modernization phased as four Phase I gates and three Phase II gates; the report labels Phase I completed and Phase II deferred as of December 2024."
+   ],
+   "evidence_source_ids": [
+    "pvd_master_plan_2021_s5",
+    "pwm_samp_2018",
+    "pwm_bond_statement_2019",
+    "bos_edr_2023_2024"
+   ],
+   "exclusions": [
+    "PVC: 2024 coverage is incomplete (missing months: 12)"
+   ],
+   "expected_status": null,
+   "limitations": [
+    "Screen scores are heuristic traffic pressure, not terminal capacity or investment success.",
+    "The screen score is a relative traffic heuristic, not a capacity measure, causal finding, investment-success probability, or profitability estimate.",
+    "Reviewed PVD plan evidence is historical and airfield-focused; no current terminal bottleneck is verified.",
+    "The 2018 planning material is a development framework and its project timing is conditional.",
+    "The 2019 terminal description is historical; gate count and floor area do not measure current throughput or utilization.",
+    "The screen score is not a terminal capacity, latent-demand, or profitability measure.",
+    "Project status is dated to December 2024 and may have changed since the report.",
+    "A high traffic-pressure screen score does not identify a terminal constraint or establish that additional gates would solve one."
+   ],
+   "name": "new_england_screen__historical_2024",
+   "request": {
+    "analysis": {
+     "action": "rank",
+     "metric": "screen_score",
+     "region": "new_england",
+     "year": 2024
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "partial",
+   "row_count": 21,
+   "rows": [
+    {
+     "airport": "PVD",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 14.553002903865139
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 1983074
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 87.0
+      },
+      "seat_occupancy": {
+       "denominator": 2471989,
+       "numerator": 1983074,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 80.22179710346607
+      }
+     },
+     "rank": 1
+    },
+    {
+     "airport": "PWM",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 9.683681082726316
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 1221636
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 83.5
+      },
+      "seat_occupancy": {
+       "denominator": 1465886,
+       "numerator": 1221636,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 83.33772203295482
+      }
+     },
+     "rank": 2
+    },
+    {
+     "airport": "BOS",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 6.577803145079383
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 21294487
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 80.5
+      },
+      "seat_occupancy": {
+       "denominator": 25618825,
+       "numerator": 21294487,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 83.12046707840817
+      }
+     },
+     "rank": 3
+    },
+    {
+     "airport": "HVN",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 20.145414007276827
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 588441
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 78.5
+      },
+      "seat_occupancy": {
+       "denominator": 746045,
+       "numerator": 588441,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 78.8747327574074
+      }
+     },
+     "rank": 4
+    },
+    {
+     "airport": "BDL",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 5.4143398554443865
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 3294371
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 71.5
+      },
+      "seat_occupancy": {
+       "denominator": 3980368,
+       "numerator": 3294371,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 82.76548801517849
+      }
+     },
+     "rank": 5
+    },
+    {
+     "airport": "PSM",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 13.256594146125876
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 56378
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 68.5
+      },
+      "seat_occupancy": {
+       "denominator": 70849,
+       "numerator": 56378,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 79.57487049923076
+      }
+     },
+     "rank": 6
+    },
+    {
+     "airport": "BGR",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 6.339063818144509
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 373114
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 65.0
+      },
+      "seat_occupancy": {
+       "denominator": 457827,
+       "numerator": 373114,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 81.4967225611421
+      }
+     },
+     "rank": 7
+    },
+    {
+     "airport": "ACK",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 12.23005193937369
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 147798
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 63.5
+      },
+      "seat_occupancy": {
+       "denominator": 224634,
+       "numerator": 147798,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 65.79502657656454
+      }
+     },
+     "rank": 8
+    },
+    {
+     "airport": "BTV",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 3.1614993343644913
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 670297
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 60.5
+      },
+      "seat_occupancy": {
+       "denominator": 839522,
+       "numerator": 670297,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 79.84269620093339
+      }
+     },
+     "rank": 9
+    },
+    {
+     "airport": "ORH",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 7.833272758574516
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 112744
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 57.5
+      },
+      "seat_occupancy": {
+       "denominator": 164569,
+       "numerator": 112744,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 68.50864986722894
+      }
+     },
+     "rank": 10
+    },
+    {
+     "airport": "PQI",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 12.226030954606834
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 21608
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 52.5
+      },
+      "seat_occupancy": {
+       "denominator": 32900,
+       "numerator": 21608,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 65.67781155015197
+      }
+     },
+     "rank": 11
+    },
+    {
+     "airport": "HYA",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 48.11626672955604
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 25122
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 52.0
+      },
+      "seat_occupancy": {
+       "denominator": 59078,
+       "numerator": 25122,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 42.52344358305968
+      }
+     },
+     "rank": 12
+    },
+    {
+     "airport": "MHT",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": -1.807458792359407
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 633010
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 46.5
+      },
+      "seat_occupancy": {
+       "denominator": 805229,
+       "numerator": 633010,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 78.6124195725688
+      }
+     },
+     "rank": 13
+    },
+    {
+     "airport": "BHB",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 7.769474869485106
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 10528
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 45.0
+      },
+      "seat_occupancy": {
+       "denominator": 15183,
+       "numerator": 10528,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 69.34071000461041
+      }
+     },
+     "rank": 14
+    },
+    {
+     "airport": "MVY",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": -0.38368710935082617
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 80485
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 33.5
+      },
+      "seat_occupancy": {
+       "denominator": 127037,
+       "numerator": 80485,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 63.3555578296087
+      }
+     },
+     "rank": 15
+    },
+    {
+     "airport": "RKD",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 5.869373345101501
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 7197
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 30.0
+      },
+      "seat_occupancy": {
+       "denominator": 12114,
+       "numerator": 7197,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 59.41059930658742
+      }
+     },
+     "rank": 16
+    },
+    {
+     "airport": "WST",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 1.6299851067350655
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 12283
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 24.0
+      },
+      "seat_occupancy": {
+       "denominator": 25471,
+       "numerator": 12283,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 48.223469828432336
+      }
+     },
+     "rank": 17
+    },
+    {
+     "airport": "LEB",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 0.5126257831782799
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 10588
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 23.5
+      },
+      "seat_occupancy": {
+       "denominator": 18873,
+       "numerator": 10588,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 56.1013087479468
+      }
+     },
+     "rank": 18
+    },
+    {
+     "airport": "AUG",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": -2.003780718336484
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 5184
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 10.0
+      },
+      "seat_occupancy": {
+       "denominator": 10683,
+       "numerator": 5184,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 48.5256950294861
+      }
+     },
+     "rank": 19
+    },
+    {
+     "airport": "BID",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": -17.744904219783216
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 12066
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 9.0
+      },
+      "seat_occupancy": {
+       "denominator": 25193,
+       "numerator": 12066,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 47.89425634104712
+      }
+     },
+     "rank": 20
+    },
+    {
+     "airport": "RUT",
+     "metrics": {
+      "passenger_growth": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": -12.878639828024234
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 4458
+      },
+      "screen_score": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 8.0
+      },
+      "seat_occupancy": {
+       "denominator": 8046,
+       "numerator": 4458,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 55.40641312453393
+      }
+     },
+     "rank": 21
+    }
+   ],
+   "scope": {
+    "airports": [
+     "ACK",
+     "AUG",
+     "BDL",
+     "BGR",
+     "BHB",
+     "BID",
+     "BOS",
+     "BTV",
+     "HVN",
+     "HYA",
+     "LEB",
+     "MHT",
+     "MVY",
+     "ORH",
+     "PQI",
+     "PSM",
+     "PVC",
+     "PVD",
+     "PWM",
+     "RKD",
+     "RUT",
+     "WST"
+    ],
+    "baseline_year": null,
+    "bundle_id": null,
+    "comparison_year": null,
+    "metric": "screen_score",
+    "population": "New England airports normalized against the frozen eligible 2024 cohort",
+    "threshold_miles": null,
+    "year": 2024
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-e046736d0936743c3f6d",
+     "period": "2023-2024",
+     "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac"
+    },
+    {
+     "id": "pvd_master_plan_2021_s5",
+     "period": "2021-05-01",
+     "snapshot_id": "curated-pvd_master_plan_2021_s5"
+    },
+    {
+     "id": "pwm_samp_2018",
+     "period": "2018-11-16",
+     "snapshot_id": "curated-pwm_samp_2018"
+    },
+    {
+     "id": "pwm_bond_statement_2019",
+     "period": "2019-11-14",
+     "snapshot_id": "curated-pwm_bond_statement_2019"
+    },
+    {
+     "id": "bos_edr_2023_2024",
+     "period": "2025-10-01",
+     "snapshot_id": "curated-bos_edr_2023_2024"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Ranked 21 assessable airports by screen_score; scores are normalized against the frozen full eligible cohort."
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": null,
+   "limitations": [
+    "Domestic reporting-carrier scheduled departures at origin; not all airlines or international traffic",
+    "Delay and taxi means exclude cancelled/diverted flights; operational indicators do not prove terminal causation.",
+    "LAX 2024 on-time coverage: observed months 01,02,03,04,05,06,07,08,09,10,11,12; missing months none; reporting carriers AA, AS, B6, DL, F9, G4, HA, MQ, NK, OO, UA, WN; valid scheduled records 194053; invalid rows 0.",
+    "SNA 2024 on-time coverage: observed months 01,02,03,04,05,06,07,08,09,10,11,12; missing months none; reporting carriers AA, AS, DL, F9, G4, NK, OO, UA, WN; valid scheduled records 43519; invalid rows 0."
+   ],
+   "name": "lax_sna_operations__historical_2024",
+   "request": {
+    "analysis": {
+     "action": "compare",
+     "airports": [
+      "LAX",
+      "SNA"
+     ],
+     "metric": "congestion",
+     "year": 2024
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 2,
+   "rows": [
+    {
+     "airport": "LAX",
+     "metrics": {
+      "cancellation_rate": {
+       "comparison_direction": "lower",
+       "denominator": 194053,
+       "eligible_count": 194053,
+       "numerator": 1581,
+       "source_ids": [
+        "ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 0.8147258738592034
+      },
+      "departure_delay_minutes": {
+       "comparison_direction": "lower",
+       "denominator": 191903,
+       "eligible_count": 191903,
+       "numerator": 2592589.0,
+       "source_ids": [
+        "ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 13.509893018868908
+      },
+      "diversion_rate": {
+       "comparison_direction": "lower",
+       "denominator": 194053,
+       "eligible_count": 194053,
+       "numerator": 569,
+       "source_ids": [
+        "ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 0.2932188628879739
+      },
+      "taxi_out_minutes": {
+       "comparison_direction": "higher",
+       "denominator": 191903,
+       "eligible_count": 191903,
+       "numerator": 3581017.0,
+       "source_ids": [
+        "ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 18.660557677576694
+      }
+     },
+     "rank": null
+    },
+    {
+     "airport": "SNA",
+     "metrics": {
+      "cancellation_rate": {
+       "comparison_direction": "higher",
+       "denominator": 43519,
+       "eligible_count": 43519,
+       "numerator": 404,
+       "source_ids": [
+        "ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 0.9283301546450975
+      },
+      "departure_delay_minutes": {
+       "comparison_direction": "higher",
+       "denominator": 42985,
+       "eligible_count": 42985,
+       "numerator": 616630.0,
+       "source_ids": [
+        "ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 14.3452367104804
+      },
+      "diversion_rate": {
+       "comparison_direction": "higher",
+       "denominator": 43519,
+       "eligible_count": 43519,
+       "numerator": 130,
+       "source_ids": [
+        "ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 0.29872009926698684
+      },
+      "taxi_out_minutes": {
+       "comparison_direction": "lower",
+       "denominator": 42985,
+       "eligible_count": 42985,
+       "numerator": 663586.0,
+       "source_ids": [
+        "ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 15.437617773641968
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "LAX",
+     "SNA"
+    ],
+    "baseline_year": null,
+    "bundle_id": null,
+    "comparison_year": null,
+    "metric": "congestion",
+    "population": "Domestic reporting-carrier scheduled departures at origin; 2024 only",
+    "threshold_miles": null,
+    "year": 2024
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "ontime-cceee68e94d79e332f37",
+     "period": "2024",
+     "snapshot_id": "ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Mixed picture: indicators favor LAX and SNA across 4 comparable operational measures."
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": null,
+   "limitations": [
+    "The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."
+   ],
+   "name": "anc_long_haul__historical_2024",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "metric": "long_haul_share",
+     "threshold_miles": 3000,
+     "year": 2024
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "ANC",
+     "metrics": {
+      "long_haul_share": {
+       "denominator": 40017,
+       "lower_percent": 2.373991053802134,
+       "numerator": 950,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "unknown_distance_departures": 0,
+       "upper_percent": 2.373991053802134,
+       "value": 2.373991053802134
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "ANC"
+    ],
+    "baseline_year": null,
+    "bundle_id": null,
+    "comparison_year": null,
+    "metric": "long_haul_share",
+    "population": "BTS T-100 scheduled passenger origin traffic; 2023 and 2024 where applicable",
+    "threshold_miles": 3000.0,
+    "year": 2024
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-e046736d0936743c3f6d",
+     "period": "2023-2024",
+     "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Long-haul share uses performed departures at or above 3000 miles."
+  },
+  {
+   "evidence_claims": [
+    "Status unknown; SFO's 2023 financing statement says its recommended Airport Development Plan was completed in 2016, framed potential long-term development for up to approximately 71 million annual passengers, and was not included in Ascent Phase 1 or the then-current CIP.",
+    "Status unknown; SFO currently describes active Terminal 3 West modernization, construction-related passenger routing and curbside impacts, and a Terminal 3 AirTrain station closed pending the new facility expected in 2027."
+   ],
+   "evidence_source_ids": [
+    "sfo_cip_statement_2023",
+    "sfo_t3_project_page"
+   ],
+   "exclusions": [],
+   "expected_status": null,
+   "limitations": [
+    "These transported-passenger, supplied-seat and operational indicators do not identify unmet demand, terminal saturation, or the cause of any observed pressure.",
+    "Profitability and quantitative unmet demand are not_identifiable.",
+    "The 2023 financing statement is historical and is not proof of the current CIP or project status.",
+    "The live Terminal 3 project page is undated; its observed status is checked as of 2026-09-27 and should be refreshed before future decisions.",
+    "Precise quantitative unmet demand and profitability remain not_identifiable from the qualified data and reviewed evidence."
+   ],
+   "name": "sfo_pressure__historical_2024",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "SFO"
+     ],
+     "metric": "sfo_pressure",
+     "year": 2024
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "SFO",
+     "metrics": {
+      "cancellation_rate": {
+       "denominator": 134978,
+       "eligible_count": 134978,
+       "numerator": 1793,
+       "source_ids": [
+        "bts_ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 1.3283646223829069
+      },
+      "departure_delay_minutes": {
+       "denominator": 132846,
+       "eligible_count": 132846,
+       "numerator": 2307533.0,
+       "source_ids": [
+        "bts_ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 17.36998479442362
+      },
+      "departures": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 174804
+      },
+      "diversion_rate": {
+       "denominator": 134978,
+       "eligible_count": 134978,
+       "numerator": 339,
+       "source_ids": [
+        "bts_ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 0.2511520395916372
+      },
+      "passenger_growth": {
+       "denominator": 24325814,
+       "numerator": 962795,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 3.9579148307226224
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 25288609
+      },
+      "seat_occupancy": {
+       "denominator": 30369317,
+       "numerator": 25288609,
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 83.27025925541888
+      },
+      "seats": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 30369317
+      },
+      "sfo_enplaned_trend": {
+       "source_ids": [
+        "datasf-a7952fc3c1649f96aaa0"
+       ],
+       "status": "ok",
+       "value": 26054586
+      },
+      "sfo_pressure": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": -0.03657706976654129
+      },
+      "taxi_out_minutes": {
+       "denominator": 132846,
+       "eligible_count": 132846,
+       "numerator": 2669752.0,
+       "source_ids": [
+        "bts_ontime-cceee68e94d79e332f37"
+       ],
+       "status": "ok",
+       "value": 20.096593047588936
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "SFO"
+    ],
+    "baseline_year": null,
+    "bundle_id": null,
+    "comparison_year": null,
+    "metric": "sfo_pressure",
+    "population": "SFO Enplaned passengers combined Domestic and International; T-100 and on-time populations separately identified",
+    "threshold_miles": null,
+    "year": 2024
+   },
+   "series_count": 24,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "datasf-a7952fc3c1649f96aaa0",
+     "period": "2023-2024",
+     "snapshot_id": "datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf"
+    },
+    {
+     "id": "t100-e046736d0936743c3f6d",
+     "period": "2023-2024",
+     "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac"
+    },
+    {
+     "id": "bts_ontime-cceee68e94d79e332f37",
+     "period": "2024",
+     "snapshot_id": "ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b"
+    },
+    {
+     "id": "sfo_cip_statement_2023",
+     "period": "2023-02-01",
+     "snapshot_id": "curated-sfo_cip_statement_2023"
+    },
+    {
+     "id": "sfo_t3_project_page",
+     "period": "undated",
+     "snapshot_id": "curated-sfo_t3_project_page"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable."
+  },
+  {
+   "error": {
+    "code": "unsupported_scope",
+    "message": "This workflow requires the bundle comparison year."
+   },
+   "expected_status": null,
+   "name": "new_england_screen__bundle_2024",
+   "request": {
+    "analysis": {
+     "action": "rank",
+     "bundle_id": "annual-2025-r1",
+     "metric": "screen_score",
+     "region": "new_england",
+     "year": 2024
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "unsupported_scope",
+    "message": "This workflow requires the bundle comparison year."
+   },
+   "expected_status": null,
+   "name": "lax_sna_operations__bundle_2024",
+   "request": {
+    "analysis": {
+     "action": "compare",
+     "airports": [
+      "LAX",
+      "SNA"
+     ],
+     "bundle_id": "annual-2025-r1",
+     "metric": "congestion",
+     "year": 2024
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": null,
+   "limitations": [
+    "The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."
+   ],
+   "name": "anc_long_haul__bundle_2024",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "bundle_id": "annual-2025-r1",
+     "metric": "long_haul_share",
+     "threshold_miles": 3000,
+     "year": 2024
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "ANC",
+     "metrics": {
+      "long_haul_share": {
+       "denominator": 40017,
+       "lower_percent": 2.373991053802134,
+       "numerator": 950,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "unknown_distance_departures": 0,
+       "upper_percent": 2.373991053802134,
+       "value": 2.373991053802134
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "ANC"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "long_haul_share",
+    "population": "BTS T-100 scheduled passenger origin traffic; 2024 and 2025 where applicable",
+    "threshold_miles": 3000.0,
+    "year": 2024
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Long-haul share uses performed departures at or above 3000 miles."
+  },
+  {
+   "error": {
+    "code": "unsupported_scope",
+    "message": "This workflow requires the bundle comparison year."
+   },
+   "expected_status": null,
+   "name": "sfo_pressure__bundle_2024",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "SFO"
+     ],
+     "bundle_id": "annual-2025-r1",
+     "metric": "sfo_pressure",
+     "year": 2024
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "T-100 measures reported transported traffic and supplied seats; it does not identify unmet demand."
+   ],
+   "name": "omitted_year_default",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "PVD"
+     ],
+     "metric": "passengers"
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "PVD",
+     "metrics": {
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 2113478
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "PVD"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "passengers",
+    "population": "BTS T-100 scheduled passenger origin traffic; 2024 and 2025 where applicable",
+    "threshold_miles": null,
+    "year": 2025
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "passengers for PVD in 2025."
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "T-100 measures reported transported traffic and supplied seats; it does not identify unmet demand."
+   ],
+   "name": "explicit_historical_2024",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "PVD"
+     ],
+     "metric": "passengers",
+     "year": 2024
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "PVD",
+     "metrics": {
+      "passengers": {
+       "source_ids": [
+        "t100-e046736d0936743c3f6d"
+       ],
+       "status": "ok",
+       "value": 1983074
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "PVD"
+    ],
+    "baseline_year": null,
+    "bundle_id": null,
+    "comparison_year": null,
+    "metric": "passengers",
+    "population": "BTS T-100 scheduled passenger origin traffic; 2023 and 2024 where applicable",
+    "threshold_miles": null,
+    "year": 2024
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-e046736d0936743c3f6d",
+     "period": "2023-2024",
+     "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "passengers for PVD in 2024."
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."
+   ],
+   "name": "anc_long_haul__for_explain",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "metric": "long_haul_share",
+     "threshold_miles": 3000
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "ANC",
+     "metrics": {
+      "long_haul_share": {
+       "denominator": 36040,
+       "lower_percent": 2.771920088790233,
+       "numerator": 999,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "unknown_distance_departures": 0,
+       "upper_percent": 2.771920088790233,
+       "value": 2.771920088790233
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "ANC"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "long_haul_share",
+    "population": "BTS T-100 scheduled passenger origin traffic; 2024 and 2025 where applicable",
+    "threshold_miles": 3000.0,
+    "year": 2025
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "Long-haul share uses performed departures at or above 3000 miles."
+  },
+  {
+   "evidence_claims": [],
+   "evidence_source_ids": [],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."
+   ],
+   "name": "saved_explain",
+   "request": {
+    "analysis": {
+     "action": "explain"
+    },
+    "context_result_id": "00dd33c9-4be0-4b85-a43e-9f29a271e39f"
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "ANC",
+     "metrics": {
+      "long_haul_share": {
+       "denominator": 36040,
+       "lower_percent": 2.771920088790233,
+       "numerator": 999,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "unknown_distance_departures": 0,
+       "upper_percent": 2.771920088790233,
+       "value": 2.771920088790233
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "ANC"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "long_haul_share",
+    "population": "BTS T-100 scheduled passenger origin traffic; 2024 and 2025 where applicable",
+    "threshold_miles": 3000.0,
+    "year": 2025
+   },
+   "series_count": 0,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "ANC: long_haul_share 2.77192 percent. Limitations: The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."
+  },
+  {
+   "error": {
+    "code": "invalid_request",
+    "message": "Use this local application from its own origin."
+   },
+   "expected_status": 400,
+   "name": "err_bad_origin",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "metric": "long_haul_share",
+     "threshold_miles": 3000
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://evil.example"
+   },
+   "set_cookie_present": false,
+   "status_code": 400,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "invalid_request",
+    "message": "Use this local application from its own origin."
+   },
+   "expected_status": 400,
+   "name": "err_bad_host",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "metric": "long_haul_share",
+     "threshold_miles": 3000
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Host": "evil.example",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 400,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "invalid_request",
+    "message": "Use this local application from its own origin."
+   },
+   "expected_status": 400,
+   "name": "err_origin_port_mismatch",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "metric": "long_haul_share",
+     "threshold_miles": 3000
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:1"
+   },
+   "set_cookie_present": false,
+   "status_code": 400,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "unsupported_media_type",
+    "message": "Send this request as JSON."
+   },
+   "expected_status": 415,
+   "name": "err_wrong_content_type",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "metric": "long_haul_share",
+     "threshold_miles": 3000
+    }
+   },
+   "request_headers": {
+    "Content-Type": "text/plain",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 415,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "invalid_json",
+    "message": "Request JSON is invalid."
+   },
+   "expected_status": 400,
+   "name": "err_invalid_json",
+   "request": {
+    "_raw_body": "{not json"
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 400,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "invalid_request",
+    "message": "Request fields or analysis scope are invalid."
+   },
+   "expected_status": 422,
+   "name": "err_invalid_request_unknown_field",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "bogus": 1,
+     "metric": "long_haul_share",
+     "threshold_miles": 3000
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "invalid_request",
+    "message": "Request fields or analysis scope are invalid."
+   },
+   "expected_status": 422,
+   "name": "err_invalid_request_both_modes",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "metric": "long_haul_share",
+     "threshold_miles": 3000
+    },
+    "message": "hi"
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "invalid_request",
+    "message": "Request fields or analysis scope are invalid."
+   },
+   "expected_status": 422,
+   "name": "err_invalid_request_neither_mode",
+   "request": {},
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "invalid_request",
+    "message": "Request fields or analysis scope are invalid."
+   },
+   "expected_status": 422,
+   "name": "err_explain_without_context",
+   "request": {
+    "analysis": {
+     "action": "explain"
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "invalid_request",
+    "message": "Request fields or analysis scope are invalid."
+   },
+   "expected_status": 422,
+   "name": "err_out_of_scope_airport",
+   "request": {
+    "analysis": {
+     "action": "compare",
+     "airports": [
+      "JFK",
+      "SNA"
+     ],
+     "metric": "congestion"
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "unsupported_scope",
+    "message": "The requested year is outside the bundle period."
+   },
+   "expected_status": 422,
+   "name": "err_year_outside_bundle",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "bundle_id": "annual-2025-r1",
+     "metric": "long_haul_share",
+     "threshold_miles": 3000,
+     "year": 2023
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "unsupported_scope",
+    "message": "The requested bundle is not accepted."
+   },
+   "expected_status": 422,
+   "name": "err_unaccepted_bundle",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "ANC"
+     ],
+     "bundle_id": "annual-2099-r9",
+     "metric": "long_haul_share",
+     "threshold_miles": 3000
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "result_mismatch",
+    "message": "That result is no longer current. Start a new analysis."
+   },
+   "expected_status": 409,
+   "name": "err_context_random_uuid",
+   "request": {
+    "analysis": {
+     "action": "explain"
+    },
+    "context_result_id": "f2666977-6766-403d-ab65-85cfbdcab15c"
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 409,
+   "status_ok": true
+  },
+  {
+   "evidence_claims": [
+    "Status unknown; Describes construction-related closures and rerouting; T3 AirTrain station expected to reopen with the new facility in 2027.",
+    "Status unknown; Terminal 1 final phase opened June 2024; Terminal 3 modernization was in construction with forecast completion 2029."
+   ],
+   "evidence_source_ids": [
+    "sfo_t3_current",
+    "sfo_cip_2025"
+   ],
+   "exclusions": [],
+   "expected_status": 200,
+   "limitations": [
+    "These transported-passenger, supplied-seat and operational indicators do not identify unmet demand, terminal saturation, or the cause of any observed pressure.",
+    "Profitability and quantitative unmet demand are not_identifiable.",
+    "Traffic-pressure metrics are screening heuristics, not causal capacity measures or profitability estimates.",
+    "Official source publication dates and observation dates differ; forecasts are not completion receipts."
+   ],
+   "name": "sfo_pressure__newer_result",
+   "request": {
+    "analysis": {
+     "action": "metric",
+     "airports": [
+      "SFO"
+     ],
+     "metric": "sfo_pressure"
+    }
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "result_status": "ok",
+   "row_count": 1,
+   "rows": [
+    {
+     "airport": "SFO",
+     "metrics": {
+      "cancellation_rate": {
+       "denominator": 144495,
+       "eligible_count": 144495,
+       "numerator": 1080,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.747430706944877
+      },
+      "departure_delay_minutes": {
+       "denominator": 142973,
+       "eligible_count": 142973,
+       "numerator": 2032426.0,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 14.215453267400138
+      },
+      "departures": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 187325
+      },
+      "diversion_rate": {
+       "denominator": 144495,
+       "eligible_count": 144495,
+       "numerator": 442,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 0.30589293747188484
+      },
+      "passenger_growth": {
+       "denominator": 25288609,
+       "numerator": 1188993,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 4.701693952403629
+      },
+      "passengers": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 26477602
+      },
+      "seat_occupancy": {
+       "denominator": 32169113,
+       "numerator": 26477602,
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 82.30752896419618
+      },
+      "seats": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": 32169113
+      },
+      "sfo_enplaned_trend": {
+       "source_ids": [
+        "datasf-c647cd19b7e499067ce5"
+       ],
+       "status": "ok",
+       "value": 27250806
+      },
+      "sfo_pressure": {
+       "source_ids": [
+        "t100-db5d86dd3af352f0a645"
+       ],
+       "status": "ok",
+       "value": -1.224669159417413
+      },
+      "taxi_out_minutes": {
+       "denominator": 142973,
+       "eligible_count": 142973,
+       "numerator": 3030586.0,
+       "source_ids": [
+        "bts_ontime-93a752a176debb909834"
+       ],
+       "status": "ok",
+       "value": 21.1969113049317
+      }
+     },
+     "rank": null
+    }
+   ],
+   "scope": {
+    "airports": [
+     "SFO"
+    ],
+    "baseline_year": 2024,
+    "bundle_id": "annual-2025-r1",
+    "comparison_year": 2025,
+    "metric": "sfo_pressure",
+    "population": "SFO Enplaned passengers combined Domestic and International; T-100 and on-time populations separately identified",
+    "threshold_miles": null,
+    "year": 2025
+   },
+   "series_count": 24,
+   "set_cookie_present": true,
+   "sources": [
+    {
+     "id": "datasf-c647cd19b7e499067ce5",
+     "period": "2024-2025",
+     "snapshot_id": "datasf-eb1c8fd94a9664f9e6856b84d46ec755c4e3383f0ebe0a351946658cd0415e5b"
+    },
+    {
+     "id": "t100-db5d86dd3af352f0a645",
+     "period": "2024-2025",
+     "snapshot_id": "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+    },
+    {
+     "id": "bts_ontime-93a752a176debb909834",
+     "period": "2025",
+     "snapshot_id": "ontime-04fee95d838f70541e6cb219b230101f67524a4021309e9b9d2246cb0a3514ba"
+    },
+    {
+     "id": "sfo_t3_current",
+     "period": "undated",
+     "snapshot_id": "curated-sfo_t3_current"
+    },
+    {
+     "id": "sfo_cip_2025",
+     "period": "2025-11-17",
+     "snapshot_id": "curated-sfo_cip_2025"
+    }
+   ],
+   "status_code": 200,
+   "status_ok": true,
+   "summary": "SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable."
+  },
+  {
+   "error": {
+    "code": "result_mismatch",
+    "message": "That result is no longer current. Start a new analysis."
+   },
+   "expected_status": 409,
+   "name": "err_context_stale_id",
+   "request": {
+    "analysis": {
+     "action": "explain"
+    },
+    "context_result_id": "00dd33c9-4be0-4b85-a43e-9f29a271e39f"
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 409,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "session_expired",
+    "message": "Your session expired. Start a new analysis."
+   },
+   "expected_status": 409,
+   "name": "err_context_no_session_cookie",
+   "request": {
+    "analysis": {
+     "action": "explain"
+    },
+    "context_result_id": "00dd33c9-4be0-4b85-a43e-9f29a271e39f"
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": true,
+   "status_code": 409,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "ai_unavailable",
+    "message": "AI interpretation is unavailable. Try a preset or choose a supported analysis."
+   },
+   "expected_status": 503,
+   "name": "free_text_message",
+   "request": {
+    "message": "Which New England airport has the most traffic pressure?"
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 503,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "invalid_request",
+    "message": "Request fields or analysis scope are invalid."
+   },
+   "expected_status": 422,
+   "name": "free_text_blank",
+   "request": {
+    "message": "   "
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 422,
+   "status_ok": true
+  },
+  {
+   "error": {
+    "code": "result_mismatch",
+    "message": "That result is no longer current. Start a new analysis."
+   },
+   "expected_status": 409,
+   "name": "free_text_followup_stale",
+   "request": {
+    "context_result_id": "00dd33c9-4be0-4b85-a43e-9f29a271e39f",
+    "message": "why?"
+   },
+   "request_headers": {
+    "Content-Type": "application/json",
+    "Origin": "http://127.0.0.1:33783"
+   },
+   "set_cookie_present": false,
+   "status_code": 409,
+   "status_ok": true
+  }
+ ],
+ "live_source_recheck": "NOT PERFORMED - outbound access to official source hosts is blocked by policy (403) in this environment",
+ "model_calls": 0,
+ "revision": "104acfcb5c424a0f830aa735cc41b34aa0563846",
+ "saved_explain_top_level_keys_match_evidence": true,
+ "schema_version": 1,
+ "server": {
+  "host": "127.0.0.1",
+  "port": 33783,
+  "stopped_by": "kill <recorded PID>"
+ },
+ "summary": {
+  "figure_discrepancies_vs_recent_api_verification": 0,
+  "http_calls": 41,
+  "status_as_expected": 41
+ }
+}
