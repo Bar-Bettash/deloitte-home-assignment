@@ -364,9 +364,9 @@ def test_bounded_long_haul_explanation_uses_saved_bounds_without_reload(monkeypa
     explained = dispatch.dispatch_analysis(
         main.AnalysisRequest(action="explain"), uuid4(), previous=previous
     )
-    assert "between 70 and 100 percent" in explained.summary
+    assert "between 70% and 100%" in explained.summary
     assert "3 departures have unknown distance" in explained.summary
-    assert "unavailable" not in explained.summary.split(".", 1)[0]
+    assert "unavailable" not in explained.summary.split(". ", 1)[0]
 
 
 @pytest.mark.parametrize(
@@ -1238,6 +1238,50 @@ def test_cancelled_request_keeps_busy_slot_until_worker_finishes_without_saving_
         asyncio.run(run_cancelled_request())
     finally:
         work_gate.set()
+
+
+@pytest.mark.parametrize("year", [2024, 2025])
+def test_explain_ranked_cohort_names_every_airport_with_readable_numbers(year):
+    previous = dispatch.dispatch_analysis(
+        main.AnalysisRequest(action="rank", region="new_england", metric="screen_score", year=year), uuid4()
+    )
+    explained = dispatch.dispatch_analysis(main.AnalysisRequest(action="explain"), uuid4(), previous=previous)
+
+    assert len(explained.summary) <= 2000
+    assert all(f" {row.airport} " in explained.summary for row in previous.rows)
+    assert "more airports" not in explained.summary
+    assert "e+" not in explained.summary
+    boston = next(row for row in previous.rows if row.airport == "BOS")
+    passengers = next(metric.value for metric in boston.metrics if metric.key == "passengers")
+    assert f"{passengers:,}" in explained.summary
+
+
+def test_explain_summary_keeps_whole_sentences_and_counts_omitted_airports():
+    lines = [f"A{index:02d}: " + "x" * 190 + "." for index in range(23)]
+    summary = dispatch._fit_summary(lines, ["Limitation: kept whole."])
+
+    assert len(summary) <= 2000
+    kept = [line for line in lines if line in summary]
+    assert summary.startswith(" ".join(kept))
+    assert f"And {len(lines) - len(kept)} more airports (see rows)." in summary
+    assert summary.endswith("Further evidence and limitations are listed in the result.")
+
+
+@pytest.mark.parametrize(
+    "value, unit, expected",
+    [
+        (21128285, "count", "21,128,285"),
+        (4.591234, "percent", "4.59%"),
+        (70.0, "percent", "70%"),
+        (-1.2246, "percentage_points", "-1.22 pp"),
+        (0.5, "percentage_points", "+0.5 pp"),
+        (-0.001, "percent", "0%"),
+        (14.2154, "minutes", "14.2 min"),
+        (74.7619, "score", "74.76"),
+    ],
+)
+def test_explain_number_formatting(value, unit, expected):
+    assert dispatch._format_value(value, unit) == expected
 
 
 @pytest.mark.parametrize("year", [2024, 2025])

@@ -706,29 +706,78 @@ def _sfo_pressure(
                    limitations=[pressure.limitation, "Profitability and quantitative unmet demand are not_identifiable.", *evidence_limits])
 
 
+_SUMMARY_LIMIT = 2000
+
+
 def _explain(request: AnalysisRequest, previous: AnalysisResult, request_id: UUID) -> AnalysisResult:
     selected = request.airports or previous.scope.airports
     if not set(selected) <= set(previous.scope.airports):
         raise DispatchFailure("unsupported_scope", 422, "Choose only airports in the referenced result.")
-    lines = []
-    for row in previous.rows:
-        if row.airport not in selected:
+    rows = [row for row in previous.rows if row.airport in selected]
+    keys = {tuple(metric.key for metric in row.metrics) for row in rows}
+    if len(rows) > 1 and len(keys) == 1:
+        header = "; ".join(key.replace("_", " ") for key in next(iter(keys)))
+        lines = [f"Per airport ({header}):"]
+        lines += [
+            f"{row.airport} " + ", ".join(_explain_metric(metric, labelled=False) for metric in row.metrics) + ";"
+            for row in rows
+        ]
+        lines[-1] = lines[-1][:-1] + "."
+    else:
+        lines = [
+            f"{row.airport}: " + "; ".join(_explain_metric(metric) for metric in row.metrics) + "."
+            for row in rows
+        ]
+    notes = [*(f"Reviewed evidence: {_sentence(item.claim)}" for item in previous.evidence),
+             *(f"Limitation: {_sentence(item)}" for item in previous.limitations)]
+    return previous.model_copy(
+        update={"request_id": request_id, "summary": _fit_summary(lines, notes)}, deep=True
+    )
+
+
+def _fit_summary(lines: list[str], notes: list[str]) -> str:
+    """Join whole airport lines, then whole notes, never cutting a sentence mid-way."""
+    closing = "Further evidence and limitations are listed in the result."
+    budget = _SUMMARY_LIMIT - (len(closing) + 1 if notes else 0)
+    parts: list[str] = []
+    used = 0
+    for index, line in enumerate(lines):
+        more = f"And {len(lines) - index} more airports (see rows)."
+        if used + len(line) + (len(more) + 2 if index < len(lines) - 1 else 1) > budget:
+            parts.append(more)
+            return " ".join([*parts, closing] if notes else parts)
+        parts.append(line)
+        used += len(line) + 1
+    omitted = False
+    for note in notes:
+        if used + len(note) + 1 > budget:
+            omitted = True
             continue
-        rendered = ", ".join(_explain_metric(metric) for metric in row.metrics)
-        lines.append(f"{row.airport}: {rendered}.")
-    evidence_notes = " ".join(item.claim for item in previous.evidence)
-    limitations = " ".join(previous.limitations)
-    summary = " ".join(lines)
-    if evidence_notes:
-        summary += f" Reviewed evidence: {evidence_notes}"
-    if limitations:
-        summary += f" Limitations: {limitations}"
-    return previous.model_copy(update={"request_id": request_id, "summary": summary[:2000]}, deep=True)
+        parts.append(note)
+        used += len(note) + 1
+    return " ".join([*parts, closing] if omitted else parts)
 
 
-def _explain_metric(metric: MetricValue) -> str:
+def _format_value(value: float | int, unit: str) -> str:
+    if unit == "count":
+        return f"{int(value):,}"
+    if unit == "minutes":
+        return f"{value:,.1f} min"
+    rounded = round(value, 2)
+    text = f"{abs(rounded):,.2f}".rstrip("0").rstrip(".")
+    sign = "-" if rounded < 0 else ("+" if unit == "percentage_points" and rounded > 0 else "")
+    suffix = {"percent": "%", "percentage_points": " pp"}.get(unit, "")
+    return f"{sign}{text}{suffix}"
+
+
+def _sentence(text: str) -> str:
+    return text if text.endswith((".", "!", "?")) else f"{text}."
+
+
+def _explain_metric(metric: MetricValue, *, labelled: bool = True) -> str:
+    label = metric.key.replace("_", " ") if labelled else ""
     if metric.value is not None:
-        return f"{metric.key} {metric.value:g} {metric.unit}"
+        return f"{label} {_format_value(metric.value, metric.unit)}".strip()
     if (
         metric.key == "long_haul_share"
         and metric.status == "ok"
@@ -737,10 +786,10 @@ def _explain_metric(metric: MetricValue) -> str:
     ):
         unknown = metric.unknown_distance_departures or 0
         return (
-            f"long_haul_share between {metric.lower_percent:g} and "
-            f"{metric.upper_percent:g} percent ({unknown} departures have unknown distance)"
-        )
-    return f"{metric.key} unavailable"
+            f"{label} between {_format_value(metric.lower_percent, 'percent')} and "
+            f"{_format_value(metric.upper_percent, 'percent')} ({unknown:,} departures have unknown distance)"
+        ).strip()
+    return f"{label} unavailable".strip()
 
 
 def _result(request, request_id, rows, sources, status, summary, *, series=None, evidence=None,
