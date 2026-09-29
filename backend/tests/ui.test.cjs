@@ -456,7 +456,8 @@ test('result admission mirrors supported scope, metric/unit, rank and ratio-pair
     ['metric/unit mismatch', value => { value.rows[0].metrics[0].unit = 'count'; }],
     ['fractional rank', value => { value.rows[0].rank = 1.5; }],
     ['rank below range', value => { value.rows[0].rank = 0; }],
-    ['rank above range', value => { value.rows[0].rank = 23; }],
+    // The accepted 2025 New England cohort has 23 airports (EWB added), so rank 23 is now valid.
+    ['rank above range', value => { value.rows[0].rank = 24; }],
     ['unpaired ratio counts', value => { value.rows[0].metrics[0].denominator = null; }],
     ['nonfinite ratio counts', value => { value.rows[0].metrics[0].numerator = Infinity; }],
     ['successful ratio without counts', value => { value.rows[0].metrics[0].numerator = null; value.rows[0].metrics[0].denominator = null; }],
@@ -1089,4 +1090,174 @@ test('evidence rendering keeps resolved source names and unknown reference ident
   assert.match(text, /Reviewed source · 2024-03/);
   assert.match(text, /Source ID: unresolved-id/);
   assert.match(text, /Fallback claim/);
+});
+
+const NE_2025 = 'ACK AUG BDL BGR BHB BID BOS BTV EWB HVN HYA LEB MHT MVY ORH PQI PSM PVC PVD PWM RKD RUT WST'.split(' ');
+function bundleResult() {
+  const sources = [{ id: 't100', name: 'BTS T-100', url: 'https://example.test', snapshot_id: 'snap', period: '2024-2025', retrieved_at: null }];
+  return { result_id: 'result-2025', request_id: 'request-2025', status: 'ok',
+    scope: { airports: NE_2025.slice(), year: 2025, bundle_id: 'annual-2025-r1', baseline_year: 2024, comparison_year: 2025,
+      metric: 'screen_score', threshold_miles: null, population: 'New England airports normalized against the frozen eligible 2025 cohort' },
+    summary: 'Screening summary', rows: NE_2025.map((airport, index) => ({ airport, rank: index + 1,
+      metrics: [{ key: 'screen_score', value: 100 - index, unit: 'score', status: 'ok', source_ids: ['t100'] }] })),
+    series: [{ period: '202501', value: 5, unit: 'count', status: 'ok' }], sources, evidence: [], exclusions: [], limitations: [] };
+}
+const errorEnvelope = (code, message) => ({ success: false, error: { code, message, request_id: '123e4567-e89b-42d3-a456-426614174000' } });
+
+test('2025 bundle result with 23 New England rows including EWB is admitted and shows its period', () => {
+  const ui = setup(async () => success(bundleResult()));
+  ui.context.payload = bundleResult();
+  const admitted = ui.run('validateResult(payload)');
+  assert.equal(admitted.rows.length, 23);
+  assert.ok(admitted.rows.some(row => row.airport === 'EWB'));
+  ui.run('renderResult(validateResult(payload), false)');
+  const scopeHeading = ui.nodes.get('#result').children[0];
+  const period = scopeHeading.children.find(child => child.className === 'result-period');
+  assert.equal(period.textContent, 'Period · CY2024 → CY2025 · showing 2025 · Bundle annual-2025-r1');
+  assert.ok(ui.run('supportedAirports.has("EWB") && newEnglandAirports.has("EWB")'));
+  const html = fs.readFileSync(path.join(__dirname, '../app/static/index.html'), 'utf8');
+  assert.match(html, /<option>EWB<\/option>/);
+  assert.match(html, /<option value="2025" selected>2025 \(vs 2024, accepted bundle\)<\/option>/);
+  assert.match(html, /CY2024→CY2025 accepted bundle; 2023–2024 historical/);
+  assert.doesNotMatch(html, /2023–2024 historical coverage ·/);
+});
+
+test('historical result without bundle fields shows a historical period and stays admitted', () => {
+  const ui = setup(); ui.context.payload = result();
+  ui.run('renderResult(validateResult(payload), false)');
+  const scopeHeading = ui.nodes.get('#result').children[0];
+  assert.equal(scopeHeading.children.find(child => child.className === 'result-period').textContent, 'Period · 2024 historical data');
+  ui.context.nulls = result();
+  Object.assign(ui.context.nulls.scope, { bundle_id: null, baseline_year: null, comparison_year: null });
+  assert.doesNotThrow(() => ui.run('validateResult(nulls)'));
+});
+
+test('result admission enforces resolved bundle scope invariants', () => {
+  const invalid = [
+    ['2025 without bundle', value => { delete value.scope.bundle_id; delete value.scope.baseline_year; delete value.scope.comparison_year; }],
+    ['partial bundle fields', value => { value.scope.baseline_year = null; }],
+    ['bundle id wrong type', value => { value.scope.bundle_id = 7; }],
+    ['bundle id bad pattern', value => { value.scope.bundle_id = '../x'; }],
+    ['baseline not before comparison', value => { value.scope.baseline_year = 2025; }],
+    ['year outside bundle', value => { value.scope.year = 2023; }],
+    ['fractional baseline', value => { value.scope.baseline_year = 2024.5; }],
+    ['unsupported year', value => { value.scope.year = 2026; value.scope.comparison_year = 2026; }],
+    ['24 rows', value => { value.scope.airports.push('ANC'); value.rows.push({ airport: 'ANC', rank: null, metrics: value.rows[0].metrics }); }],
+  ];
+  for (const [name, mutate] of invalid) {
+    const ui = setup();
+    ui.context.fixture = bundleResult(); mutate(ui.context.fixture);
+    assert.throws(() => ui.run('validateResult(fixture)'), undefined, name);
+  }
+  const ui = setup();
+  ui.context.fixture = bundleResult(); ui.context.fixture.scope.year = 2024;
+  assert.doesNotThrow(() => ui.run('validateResult(fixture)'), 'baseline year inside a bundle is valid');
+});
+
+test('all presets omit year so the server default period applies', async () => {
+  const bodies = [];
+  const ui = setup(async (_url, options) => { bodies.push(JSON.parse(options.body)); return success(bundleResult()); });
+  const names = Array.from(ui.run('Object.keys(demos)'));
+  assert.deepEqual(names, ['new-england', 'lax-sna', 'anc-long-haul', 'sfo-pressure', 'sfo-trend', 'bos-pvd', 'growth']);
+  for (const name of names) {
+    ui.context.name = name;
+    await ui.run('runPreset(demos[name])');
+    assert.equal(ui.nodes.get('#year').value, '2025', `${name}: year selector shows the default period`);
+  }
+  assert.equal(bodies.length, names.length);
+  for (const body of bodies) {
+    assert.ok(!('year' in body.analysis), JSON.stringify(body));
+    assert.ok(!('bundle_id' in body.analysis), JSON.stringify(body));
+  }
+});
+
+test('scope form omits year for 2025 and sends explicit historical years', async () => {
+  const bodies = [];
+  const ui = setup(async (_url, options) => { bodies.push(JSON.parse(options.body)); return success(result()); });
+  for (const [year, expected] of [['2025', undefined], ['2024', 2024], ['2023', 2023]]) {
+    ui.nodes.get('#action').value = 'metric';
+    ui.nodes.get('#airports').value = 'PVD';
+    ui.nodes.get('#metric').value = 'passengers';
+    ui.nodes.get('#year').value = year;
+    ui.nodes.get('#scope-form').listeners.submit({ preventDefault() {} });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(bodies.at(-1).analysis.year, expected, year);
+  }
+  assert.equal(bodies.length, 3);
+});
+
+test('year validation mirrors the contract for 2025, 2024 and 2023', () => {
+  const ui = setup(async () => { throw new Error('validation only'); });
+  const valid = [
+    { action: 'rank', region: 'new_england', metric: 'screen_score' },
+    { action: 'rank', region: 'new_england', metric: 'screen_score', year: 2025 },
+    { action: 'rank', airports: ['EWB', 'BOS'], metric: 'passenger_growth', year: 2025 },
+    { action: 'compare', airports: ['LAX', 'SNA'], metric: 'congestion', year: 2025 },
+    { action: 'compare', airports: ['LAX', 'SNA'], metric: 'congestion', year: 2024 },
+    { action: 'metric', airports: ['SFO'], metric: 'sfo_pressure', year: 2025 },
+    { action: 'metric', airports: ['SFO'], metric: 'sfo_enplaned_trend', year: 2024 },
+    { action: 'metric', airports: ['ANC'], metric: 'long_haul_share', year: 2023, threshold_miles: 3000 },
+    { action: 'compare', airports: ['BOS', 'PVD'], metric: 'passenger_growth', year: 2024 },
+  ];
+  for (const analysis of valid) {
+    ui.context.analysis = analysis;
+    assert.equal(ui.run('validateAnalysisScope(analysis).length'), 0, JSON.stringify(analysis));
+  }
+  const invalid = [
+    { action: 'rank', region: 'new_england', metric: 'screen_score', year: 2023 },
+    { action: 'compare', airports: ['BOS', 'PVD'], metric: 'passenger_growth', year: 2023 },
+    { action: 'compare', airports: ['LAX', 'SNA'], metric: 'congestion', year: 2023 },
+    { action: 'metric', airports: ['LAX'], metric: 'taxi_out_minutes', year: 2023 },
+    { action: 'metric', airports: ['SFO'], metric: 'sfo_pressure', year: 2023 },
+    { action: 'metric', airports: ['PVD'], metric: 'passengers', year: 2026 },
+    { action: 'metric', airports: ['PVD'], metric: 'passengers', year: 2022 },
+  ];
+  for (const analysis of invalid) {
+    ui.context.analysis = analysis;
+    const errors = Array.from(ui.run('validateAnalysisScope(analysis)'));
+    assert.ok(errors.some(error => error.field === 'year'), JSON.stringify(analysis));
+  }
+});
+
+test('access_required redirects to the sign-in page without retrying', async () => {
+  const assigned = [];
+  let calls = 0;
+  const ui = setup(async () => { calls++; return { ok: false, status: 401, json: async () => errorEnvelope('access_required', 'Sign in to continue.') }; });
+  ui.window.location = { assign: url => assigned.push(url) };
+  await ui.run('runPreset(demos["new-england"])');
+  assert.equal(calls, 1);
+  assert.deepEqual(assigned, ['/login']);
+  assert.equal(ui.run('busy'), false);
+  ui.context.envelope = errorEnvelope('access_denied', 'Access code not recognised.');
+  assert.equal(ui.run('parseErrorResponse(envelope)').code, 'access_denied');
+});
+
+test('budget_exhausted is no longer a declared error code', () => {
+  const ui = setup();
+  ui.context.envelope = errorEnvelope('budget_exhausted', 'Budget exhausted.');
+  assert.equal(ui.run('parseErrorResponse(envelope)'), null);
+  assert.equal(ui.run('errorCodes.has("budget_exhausted")'), false);
+  assert.ok(ui.run('errorCodes.has("access_required")'));
+});
+
+test('ai_unavailable keeps the server message and says presets still work', async () => {
+  const ui = setup(async () => ({ ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') }));
+  ui.nodes.get('#question').value = 'Which airport is busiest?';
+  ui.nodes.get('#chat-form').listeners.submit({ preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  const text = ui.nodes.get('#feedback').textContent;
+  assert.match(text, /^AI interpretation is unavailable\. /);
+  assert.match(text, /Presets and Adjust scope still work/);
+});
+
+test('login page is self-contained, labeled and posts the access code as JSON', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../app/login.html'), 'utf8');
+  assert.doesNotMatch(html, /\son[a-z]+=/i, 'no inline event-handler attributes');
+  assert.doesNotMatch(html, /<(?:link|img)\b|\bsrc=|https?:\/\//i, 'no external assets');
+  assert.match(html, /<label for="code">Access code<\/label>/);
+  assert.match(html, /<input id="code"[^>]*type="password"[^>]*autocomplete="current-password"[^>]*maxlength="256"/);
+  assert.match(html, /id="login-error" role="alert"/);
+  assert.match(html, /fetch\("\/api\/access", \{\s*method: "POST",\s*headers: \{ "Content-Type": "application\/json" \},\s*credentials: "same-origin",\s*body: JSON\.stringify\(\{ code \}\)/);
+  assert.match(html, /response\.status === 204\) \{ window\.location\.assign\("\/"\)/);
+  assert.match(html, /response\.status === 401\) showError\("Access code not recognised\."\)/);
 });
