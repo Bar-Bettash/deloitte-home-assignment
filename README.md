@@ -175,7 +175,7 @@ The design keeps AI where it adds value, which is understanding loosely worded q
 - **Differences between data sources.** T-100 covers scheduled passenger service with seats reported. On-Time data covers domestic flights by reporting carriers only. Figures from different sources are never combined into one ratio.
 - **Incomplete data.** Incomplete airport-years are excluded, and the reason is shown. Missing data is never replaced with an estimate.
 - **Terminal evidence** is a small, curated review. Every claim is labelled "Status unknown".
-- **Freshness.** The packaged data was checked against the official sources on 2026-09-27. The answers are about the past; they are not forecasts.
+- **Freshness.** The accepted bundle was source-checked on 2026-09-27. By 2026-09-29, FAA had replaced its preliminary CY2025 commercial-service file with the final edition (dated 2026-09-24); the relevant 23-airport New England cohort and CY2025 enplanements were unchanged, so the screening results are unaffected ([FAA impact check](docs/evidence/faa-final-cy2025-impact-20260929.md)). The application continues to use the frozen accepted snapshot for reproducibility. The answers are about the past; they are not forecasts.
 - **In the UI.** Every result shows the period compared, the data sources, notes on data coverage and the reason for any exclusion.
 - **Not implemented.** Voice input, an optional extra in the brief.
 
@@ -183,8 +183,8 @@ The design keeps AI where it adds value, which is understanding loosely worded q
 
 | Claim | Status |
 |---|---|
-| Four workflows, follow-ups and error paths | Locally tested: 722 Python and 102 UI tests. Every figure was recomputed independently. 23,474 API cases ran with no server errors. ([evidence](docs/evidence/)) |
-| Packaged data matches the official sources | Checked against the live sources on 2026-09-27 ([activation review](docs/evidence/recent-data-activation-review.md)) |
+| Four workflows, follow-ups and error paths | Locally tested: 724 Python tests (2 need raw inputs that exist only on the author's machine and skip elsewhere) and 102 UI tests. Every figure was recomputed independently. 23,474 API cases ran with no server errors. ([evidence](docs/evidence/)) |
+| Packaged data matches the official sources | Source-checked on 2026-09-27 ([activation review](docs/evidence/recent-data-activation-review.md)). The 2026-09-29 recheck blocked on FAA's final CY2025 file, which leaves the New England cohort and figures unchanged ([FAA impact check](docs/evidence/faa-final-cy2025-impact-20260929.md)). The app serves the frozen accepted snapshot. |
 | Free-text model | Implemented and tested offline. Not yet tested against the live API, so free text returns `503 ai_unavailable` until the model is admitted. |
 | Hosted deployment | Packaged for Vercel and checked offline. Not deployed yet ([package check](docs/evidence/vercel-package-check.md)). |
 

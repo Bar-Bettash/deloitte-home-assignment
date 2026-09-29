@@ -33,7 +33,7 @@ Open <http://127.0.0.1:8000/>. The presets, the "Adjust scope" controls and "Exp
 Run these commands from the repository root:
 
 ```sh
-PYTHONPATH=app/backend python -m pytest app/backend/tests -q   # 722 passed, 2 skipped
+PYTHONPATH=app/backend python -m pytest app/backend/tests -q   # 724 passed (722 passed, 2 skipped without the author's local raw inputs)
 node --test app/frontend/tests/*.cjs                           # 102 passed
 ruff check app/backend --ignore EXE002,SIM905                  # optional; ruff is not in the requirements
 ```
