@@ -1,21 +1,21 @@
 # Backend architecture and implementation notes
 
-This file describes the code in this repository. [docs/DESIGN.md](../../docs/DESIGN.md) is the short assignment deliverable, covering methodology, tradeoffs and AI use. [API/UI map](../../docs/API_UI_MAP.md) is the wire contract. [ADR 001](adr/001-local-demo.md) records the original local-only decision. That ADR's in-memory session and loopback-only parts have since been replaced by the signed context cookie and the hosted mode described below.
+This file describes the code in this repository. Module paths below are relative to `app/backend/`; the UI lives in `app/frontend/`. The [root README](../README.md) is the short assignment deliverable, covering methodology, tradeoffs and AI use. [API/UI map](API_UI_MAP.md) is the wire contract. [ADR 001](adr/001-local-demo.md) records the original local-only decision. That ADR's in-memory session and loopback-only parts have since been replaced by the signed context cookie and the hosted mode described below.
 
 ## Run locally
 
-Use Python 3.11 or 3.12. `pyproject.toml` allows `>=3.11,<3.13`, and `.python-version` pins 3.12, which is the Vercel target. Run these commands from the repository root:
+Use Python 3.11 or 3.12. `pyproject.toml` allows `>=3.11,<3.13`, and `app/.python-version` pins 3.12, which is the Vercel target. Run these commands from the repository root:
 
 ```sh
 python3 -m venv .venv && source .venv/bin/activate
-python -m pip install -r backend/requirements-dev.txt
-python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+python -m pip install -r app/backend/requirements-dev.txt
+python -m uvicorn app.main:app --app-dir app/backend --host 127.0.0.1 --port 8000
 ```
 
-- `backend/requirements.txt` holds the runtime pins only: duckdb, fastapi, httpx, pydantic and uvicorn.
+- `app/backend/requirements.txt` holds the runtime pins only: duckdb, fastapi, httpx, pydantic and uvicorn.
 - `requirements-dev.txt` adds pytest.
-- The UI has no build step. Node is needed only for `backend/tests/*.cjs`.
-- A loopback run needs no environment variables. See [backend/.env.example](../.env.example) for the variables that exist.
+- The UI has no build step. Node is needed only for `app/frontend/tests/*.cjs`.
+- A loopback run needs no environment variables. See [app/backend/.env.example](../app/backend/.env.example) for the variables that exist.
 
 ## Components and request flow
 
@@ -54,7 +54,7 @@ The design has no agent loop, no SQL generation, no database server, no queue an
 
 | Route | Behavior |
 |---|---|
-| `GET /` and `/static/*` | The analyst screen and its assets. Both sit behind the HostGuard. |
+| `GET /` and `/static/*` | The analyst screen and its assets, served from `app/frontend/`. Both sit behind the HostGuard. |
 | `GET /health` and `HEAD /health` | Liveness only. Always open, with no data or model check. |
 | `POST /api/query` | Exactly one of `message` (free text) or `analysis` (structured), plus an optional `context_result_id` |
 
@@ -202,9 +202,9 @@ The source commands under `app/sources/` (`datasf`, `faa`, `aip`, `t100`, `ontim
 Run from the repository root:
 
 ```sh
-PYTHONPATH=backend python -m pytest backend/tests -q
-node --test backend/tests/*.cjs
-ruff check backend --ignore EXE002,SIM905
+PYTHONPATH=app/backend python -m pytest app/backend/tests -q
+node --test app/frontend/tests/*.cjs
+ruff check app/backend --ignore EXE002,SIM905
 ```
 
 **Results.**

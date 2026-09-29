@@ -2,15 +2,15 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "builds": [
     {
-      "src": "index.py",
+      "src": "backend/index.py",
       "use": "@vercel/python",
       "config": {
         "maxDuration": 60,
-        "includeFiles": ["app/**", "data/**"]
+        "includeFiles": ["backend/app/**", "backend/data/**", "frontend/**"]
       }
     }
   ],
   "routes": [
-    { "src": "/(.*)", "dest": "/index.py" }
+    { "src": "/(.*)", "dest": "/backend/index.py" }
   ]
 }

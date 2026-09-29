@@ -29,7 +29,7 @@ from app.sources.t100 import T100Error, verify_t100_snapshot
 
 DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
 DEFAULT_QUALIFICATION = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[3]
     / "docs/evidence/recent-source-qualification-20260927.json"
 )
 RELEASE_URL = "https://www.transtats.bts.gov/releaseinfo.asp"

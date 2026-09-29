@@ -45,7 +45,7 @@ _app_logger = logging.getLogger("app")
 if not _app_logger.handlers:
     _app_logger.setLevel(logging.INFO)
     _app_logger.addHandler(logging.StreamHandler())
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "testserver"})
 _ALWAYS_OPEN = frozenset({("GET", "/health"), ("HEAD", "/health")})
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})

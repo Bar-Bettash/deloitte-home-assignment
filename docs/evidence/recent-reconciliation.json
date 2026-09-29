@@ -1,7 +1,7 @@
 {
   "bundle_id": "annual-2025-r1",
   "bundle_manifest_sha256": "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548",
-  "checked_at_utc": "2026-09-29T09:50:30.306404Z",
+  "checked_at_utc": "2026-09-29T11:46:25.864255Z",
   "code_sha256": {
     "app/calculations/comparison.py": "d102981a31c82b9e6d0a5841b5f94cb7f8487bf5123fd74c2f0acb10d8a2c541",
     "app/calculations/long_haul.py": "b6e8df0415f799b7998191b98b6a5139f45fa672cb6342c321af4bca44d0c2e1",
@@ -12,7 +12,7 @@
     "app/contracts.py": "9ec09c3723392f4b0db0fe1273dc1bf097f0f13f7df5d7cb86a54b81e7f43f85",
     "app/dispatch.py": "61319a426adf7a8a6e3d752a26dffb02a8c598c2a277b9170b77eb1cc2a9bc1f",
     "app/evidence.py": "6680ed12af45c83387f7daff51603b451b26fa1d53943f6d4b401f5094be1971",
-    "scripts/reconcile_recent.py": "31a0ca7078b102828d078199def7bd60989b611fe24d0463034dba2f5e2b4ed4"
+    "scripts/reconcile_recent.py": "abbeb6358c5490db0c380c69db037a8ebaa50fc6fd3b924b1d2cf32cc3a4e315"
   },
   "cohort": [
     "BOS",

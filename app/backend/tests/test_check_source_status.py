@@ -12,7 +12,7 @@ from scripts import check_source_status
 
 DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
 QUALIFICATION_PATH = (
-    Path(__file__).resolve().parents[1]
+    Path(__file__).resolve().parents[3]
     / "docs/evidence/recent-source-qualification-20260927.json"
 )
 NOW = datetime(2026, 9, 27, 18, tzinfo=timezone.utc)

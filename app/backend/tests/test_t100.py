@@ -194,7 +194,7 @@ def test_verify_only_checks_saved_hash_identity_and_qualification(tmp_path, monk
         "missing_months": {"PVC-2024": [12], "PVC-2025": [1, 2, 3, 4, 12]},
     }
     (final / "manifest.json").write_text(json.dumps(manifest))
-    qualification = Path(__file__).parents[1] / "docs/evidence/recent-source-qualification-20260927.json"
+    qualification = Path(__file__).parents[3] / "docs/evidence/recent-source-qualification-20260927.json"
     monkeypatch.setattr(t100, "_verify_parquet", lambda path, rows: None)
     monkeypatch.setattr(t100, "_verify_recent_parquet", lambda path: None)
 
@@ -242,7 +242,7 @@ def test_verify_only_rejects_rehashed_parquet_with_corrupted_years(tmp_path) -> 
         "missing_months": {"PVC-2024": [12], "PVC-2025": [1, 2, 3, 4, 12]},
     }
     (final / "manifest.json").write_text(json.dumps(manifest))
-    qualification = Path(__file__).parents[1] / "docs/evidence/recent-source-qualification-20260927.json"
+    qualification = Path(__file__).parents[3] / "docs/evidence/recent-source-qualification-20260927.json"
 
     assert t100.main(["--verify-only", "--snapshot-id", snapshot_id, "--qualification",
                       str(qualification), "--data-root", str(data_root)]) == 1

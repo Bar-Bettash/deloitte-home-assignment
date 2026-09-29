@@ -1,6 +1,6 @@
 # Backend ↔ frontend connection contract
 
-**Implemented structured API with a stateless follow-up context. The model path is implemented, but it is disabled until admitted.** This file records HTTP field names and the UI code that consumes them. [docs/DESIGN.md](DESIGN.md) owns scope, calculations and limits. The model path has offline coverage, but there has been no real provider call and no live admission. No additional service, client SDK, queue or general-purpose rendering framework is used.
+**Implemented structured API with a stateless follow-up context. The model path is implemented, but it is disabled until admitted.** This file records HTTP field names and the UI code that consumes them. The [root README](../README.md) owns scope, calculations and limits. The model path has offline coverage, but there has been no real provider call and no live admission. No additional service, client SDK, queue or general-purpose rendering framework is used.
 
 ## 1. Source-derived decisions and explicit project choices
 
@@ -21,8 +21,8 @@ The config's API canon describes `/api/v1/` mechanics, but the protocol-selectio
 
 | Method / path | Frontend caller | Backend owner | Returned/displayed content | Plan step |
 |---|---|---|---|---|
-| `GET /` | Open the application URL | `backend/app/main.py` serves `backend/app/static/index.html` | The single analyst screen | 1.3–1.4 |
-| `GET /static/app.js` | Script tag in `index.html` | `main.py` mounts **only** the static directory | Browser behavior; no provider credentials | 1.4 |
+| `GET /` | Open the application URL | `app/backend/app/main.py` serves `app/frontend/index.html` | The single analyst screen | 1.3–1.4 |
+| `GET /static/app.js` | Script tag in `index.html` | `main.py` mounts **only** the `app/frontend/` directory | Browser behavior; no provider credentials | 1.4 |
 | `GET /health` | One page-load probe from `app.js`; developer smoke check | `main.py` | `{"status":"ok"}` → “Backend reachable”, not “data/model ready” | 1.1, 2.5 |
 | `POST /api/query` | Chat submit, preset, metric/year/threshold change, or Explain button in `app.js` | `main.py` → validated internal handlers | A result object or safe error → active/partial/error/previous-result view | 1.5, 2.4–2.5, 5.1–5.6 |
 
@@ -177,7 +177,7 @@ All rows below use the implemented **`POST /api/query`** handler in `main.py`; i
 
 ## 7. Verification status
 
-Use the existing test files and browser acceptance; this contract does not introduce another test framework. The structured API/UI implementation has passed the recorded suite. Clean-environment setup and test evidence is in [ARCHITECTURE.md](../backend/docs/ARCHITECTURE.md); step-level outcomes and remaining model/review gates are in [TODO.md](../TODO.md).
+Use the existing test files and browser acceptance; this contract does not introduce another test framework. The structured API/UI implementation has passed the recorded suite. Clean-environment setup and test evidence is in [ARCHITECTURE.md](ARCHITECTURE.md); remaining model and deployment steps are in [app/README.md](../app/README.md#whats-left).
 
 - **1.4 / 2.5:** serve only the static assets; verify `/`, `/static/app.js`, one health call and the first SFO query in the browser's network trace. A green health check is not source readiness.
 - **1.5 / 2.4:** contract/API tests cover request XOR, exact field types, valid real calculation output, unknown fields, insufficient data, `screen_score` metric/compare rejection, unavailable ratio nulls and normalized 422 errors. Assert non-2xx errors and bare 200 success.

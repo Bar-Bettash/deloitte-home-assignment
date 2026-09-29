@@ -56,7 +56,7 @@ function setup(query, overrides = {}, healthQuery = async () => ({ ok: true, jso
     window, CustomEvent: UiCustomEvent, requestAnimationFrame: callback => callback(),
     setTimeout, clearTimeout, AbortController, URL, Intl, console, ...overrides,
   });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../app/static/app.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8'), context);
   return { context, document, documentListeners, nodes, events, window, CustomEvent: UiCustomEvent, run: (code) => vm.runInContext(code, context) };
 }
 function result() {
@@ -80,7 +80,7 @@ function disclosureByTitle(node, title) { return findDescendant(node, child => c
 const success = (payload) => ({ ok: true, json: async () => payload });
 
 test('composer explains that free-text is sent to the analysis service', () => {
-  const html = fs.readFileSync(path.join(__dirname, '../app/static/index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
   const helper = html.match(/<p id="question-help"[^>]*>([^<]*)<\/p>/);
   assert.ok(helper, 'chat helper must be present');
   assert.equal(helper[1], 'Your question is sent to the analysis service.');
@@ -112,7 +112,7 @@ test('empty composer submission links and announces its field error, then clears
 });
 
 test('idle and result states keep the compact contact header and open the result composer on activation', async () => {
-  const html = fs.readFileSync(path.join(__dirname, '../app/static/index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
   const header = html.match(/<header class="contact-header">([\s\S]*?)<\/header>/)?.[1] || '';
   assert.match(header, /class="contact"/);
   assert.doesNotMatch(header, /<nav|<h1|<button|brand|logo/i);
@@ -842,7 +842,7 @@ test('one feedback region follows the active action without taking focus', async
   ui.run('showFeedback("Follow-up message", false, $("#follow-up"))');
   assert.equal(followUp.afterNode, feedback);
   assert.equal(feedback.focused, false);
-  const html = fs.readFileSync(path.join(__dirname, '../app/static/index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
   assert.equal((html.match(/id="feedback"/g) || []).length, 1);
 });
 
@@ -958,16 +958,16 @@ test('preset edits publish the new airports before its request and retain the ol
 });
 
 test('final UI markup keeps the local renderer, mapped airports and honest data labels', () => {
-  const html = fs.readFileSync(path.join(__dirname, '../app/static/index.html'), 'utf8');
-  const css = fs.readFileSync(path.join(__dirname, '../app/static/styles.css'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const css = fs.readFileSync(path.join(__dirname, '../styles.css'), 'utf8');
   assert.equal((html.match(/<h1\b/g) || []).length, 1);
   assert.equal((html.match(/id="feedback"/g) || []).length, 1);
   assert.match(html, /<script type="module" src="\/static\/globe\.js"><\/script>/);
-  assert.ok(fs.existsSync(path.join(__dirname, '../app/static/globe.js')));
-  const coordinates = JSON.parse(fs.readFileSync(path.join(__dirname, '../app/static/assets/airport-coordinates.json'), 'utf8'));
+  assert.ok(fs.existsSync(path.join(__dirname, '../globe.js')));
+  const coordinates = JSON.parse(fs.readFileSync(path.join(__dirname, '../assets/airport-coordinates.json'), 'utf8'));
   assert.deepEqual(Object.keys(coordinates).sort(), ['ANC', 'BOS', 'LAX', 'PVD', 'SFO', 'SNA']);
   for (const asset of ['earth-day-2048.webp', 'earth-night-2048.webp', 'earth-clouds-2048.webp', 'earth-poster.webp', 'airport-coordinates.json']) {
-    assert.ok(fs.existsSync(path.join(__dirname, `../app/static/assets/${asset}`)), asset);
+    assert.ok(fs.existsSync(path.join(__dirname, `../assets/${asset}`)), asset);
   }
   assert.match(css, /touch-action: pan-y/);
   const globeBackgroundRule = [...css.matchAll(/\.earth-stage\s*\{[^}]*\}/g)].map(match => match[0]).find(rule => /position:\s*fixed/.test(rule) && /inset:\s*var\(--header-h\)\s+0\s+0/.test(rule)) || '';
@@ -1119,7 +1119,7 @@ test('2025 bundle result with 23 New England rows including EWB is admitted and 
   const period = scopeHeading.children.find(child => child.className === 'result-period');
   assert.equal(period.textContent, 'Period · CY2024 → CY2025 · showing 2025 · Bundle annual-2025-r1');
   assert.ok(ui.run('supportedAirports.has("EWB") && newEnglandAirports.has("EWB")'));
-  const html = fs.readFileSync(path.join(__dirname, '../app/static/index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
   assert.match(html, /<option>EWB<\/option>/);
   assert.match(html, /<option value="2025" selected>2025 \(vs 2024, accepted bundle\)<\/option>/);
   assert.match(html, /CY2024→CY2025 accepted bundle; 2023–2024 historical/);

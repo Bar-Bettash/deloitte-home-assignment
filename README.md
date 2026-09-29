@@ -1,127 +1,191 @@
 # Airport Investment Intelligence Agent
 
-This is a home-assignment prototype for the Deloitte FDE exam brief ([FDE Exam 2.pdf](FDE%20Exam%202.pdf)). It is an analyst chat screen that answers four airport-investment questions from public US aviation data:
+A prototype built for the Deloitte FDE home assignment ([brief](docs/FDE%20Exam%202.pdf)). An analyst uses a chat screen to ask investment-screening questions about US airports. The agent answers from public aviation data, ranks or compares airports with deterministic logic, explains how it reached each answer, and supports follow-up questions.
 
-- Which New England airports are strong candidates for terminal expansion?
-- How do LAX and Santa Ana (SNA) compare on congestion?
-- What share of Anchorage (ANC) departures are long-haul?
-- What is SFO's unmet flight demand, and why?
+This README is the design and architecture document the brief asks for. It covers the scoring methodology, the key tradeoffs, where and how AI is used, and the assumptions, uncertainty and scope. To run, test or deploy the app, see **[app/README.md](app/README.md)**.
 
-All numbers come from deterministic Python over packaged, hash-verified snapshots. AI appears in one place only: a single model call that turns free text into a strict structured request.
+## Repository layout
 
-**The design and architecture deliverable is [docs/DESIGN.md](docs/DESIGN.md).** It covers the scoring methodology, key tradeoffs, where and how AI is used, and the assumptions and limits.
-
-## Status
-
-| Item | Status |
-|---|---|
-| Four workflows, follow-ups and error paths | **Locally tested** ([integrated acceptance, 2026-09-29](backend/docs/evidence/integrated-acceptance-20260929.md)) |
-| Packaged data vs official sources | **Live source verified on 2026-09-27** ([activation review](backend/docs/evidence/recent-data-activation-review.md)); not re-checked since |
-| Free-text model interpretation | **Not yet live-verified.** Free text returns `503 ai_unavailable` until the model is admitted; presets work regardless. |
-| Hosted deployment (Vercel) | **Not yet deployed.** The package was checked offline only ([package check](backend/docs/evidence/vercel-package-check.md)). |
-
-What remains to be done is listed in [TODO.md](TODO.md).
-
-## Quick start (local)
-
-You need Python 3.11 or 3.12. `backend/.python-version` pins 3.12, and `pyproject.toml` allows `>=3.11,<3.13`. Node is optional; it is needed only for the UI tests. The data ships with the repository, so nothing needs to be downloaded.
-
-```sh
-python3 -m venv .venv && source .venv/bin/activate
-python -m pip install -r backend/requirements-dev.txt     # runtime pins + pytest
-python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+```text
+.
+├── README.md          ← this document: design, methodology, tradeoffs, AI use
+├── docs/              ← supporting documentation
+│   ├── ARCHITECTURE.md    modules, request flow, numerical definitions, data refresh
+│   ├── API_UI_MAP.md      the HTTP contract and how the UI uses it
+│   ├── adr/               architecture decision records
+│   ├── evidence/          verification records (hashes, recomputed figures, acceptance runs)
+│   └── history/           earlier plans and reviews, kept for traceability
+└── app/
+    ├── README.md      ← run, test, configure and deploy
+    ├── backend/       FastAPI service, calculations, data snapshots, ingestion scripts, tests
+    └── frontend/      static chat UI (HTML, CSS, JS, WebGL globe), no build step
 ```
 
-Open http://127.0.0.1:8000/ and use the presets or the "Adjust scope" controls. `GET /health` returns `{"status":"ok"}`. That response shows the server is reachable, not that the data or the model is ready.
+## The four questions and what the agent answers
 
-A local loopback run needs no environment variables. The signing key for follow-up context is then generated per process, so restarting the server ends any existing follow-up context. For the settings that turn on free text, see [backend/.env.example](backend/.env.example) and the section on enabling free text below.
+By default the agent compares calendar year 2024 with 2025 (the accepted data bundle `annual-2025-r1`). If the analyst names 2023 or 2024, it uses the historical 2023 → 2024 snapshots instead.
 
-## Tests
-
-Run these from the repository root:
-
-```sh
-PYTHONPATH=backend python -m pytest backend/tests -q
-node --test backend/tests/*.cjs
-ruff check backend --ignore EXE002,SIM905     # optional; ruff is not in the requirements
-```
-
-Recorded results:
-
-| Revision | Python tests | Node UI tests | Other |
+| Question | How it is answered | Data source | Answer (CY2025) |
 |---|---|---|---|
-| `104acfc` ([integrated acceptance](backend/docs/evidence/integrated-acceptance-20260929.md)) | 583 passed, 2 skipped | 88/88 | 41 real-HTTP calls matched the evidence figures |
-| `fbd2342` (rerun during the docs update) | 679 passed, 2 skipped | 96/96 | — |
+| Which New England airports are strong candidates for terminal expansion? | Screen score ranking, with terminal notes | BTS T-100, FAA airport list | 22 airports ranked. HVN is 1st (score 74.76); BGR and PWM tie for 2nd. PVC is excluded because its data is incomplete. |
+| How do LAX and Santa Ana (SNA) compare on congestion? | 4 operational-strain indicators, side by side | BTS On-Time Performance | Mixed. SNA has more cancellations (1.047 % vs 0.690 %) and longer departure delays (15.17 vs 13.80 min). LAX has longer taxi-out times (17.73 vs 16.05 min). |
+| What share of Anchorage (ANC) departures are long-haul? | Departures of 3,000 miles or more ÷ all departures | BTS T-100 | 999 / 36,040 = 2.77 % |
+| What is SFO's unmet flight demand, and why? | Passenger growth minus seat growth, with supporting context | DataSF, BTS T-100, BTS On-Time | −1.22 pp: seats grew faster than passengers (+4.70 %). This is not evidence of unmet demand, and unmet demand cannot be measured from traffic data. |
 
-The two skipped tests need raw external inputs that exist only on the original author's machine.
+Every figure above was recomputed independently from the raw files and matched the API ([integrated acceptance](docs/evidence/integrated-acceptance-20260929.md)).
 
-## Repository map
+## Architecture
 
-| Path | What it holds |
+```mermaid
+flowchart LR
+    subgraph Offline["Offline, run by an operator"]
+        Src["Public sources<br/>BTS T-100 · BTS On-Time · DataSF · FAA · AIP"]
+        Ingest["Ingestion scripts<br/>download or import, validate, hash"]
+        Snap[("Parquet snapshots<br/>+ manifests + bundle registry")]
+        Src --> Ingest --> Snap
+    end
+
+    subgraph Runtime["Runtime, one FastAPI app"]
+        UI["Chat UI<br/>app/frontend"]
+        Guard["Host and Origin guard"]
+        API["POST /api/query<br/>strict contracts"]
+        LLM["One OpenAI call<br/>free text → structured request"]
+        Engine["Deterministic engine<br/>Python + DuckDB"]
+        Cookie["Signed follow-up cookie<br/>airport_context"]
+    end
+
+    UI --> Guard --> API
+    API -. "free text only, when enabled" .-> LLM
+    LLM -. "validated AnalysisRequest" .-> API
+    API --> Engine
+    Snap -- "SHA-256 verified on load" --> Engine
+    Engine --> API
+    API <--> Cookie
+    API --> UI
+```
+
+- **Data is prepared offline.** Ingestion scripts fetch or import each official file, check it, and write it as a Parquet snapshot. They record a SHA-256 hash for every file. The server never calls a data provider while it answers a question. It loads the snapshots named in `data/bundles/accepted.json`, checks every hash, and refuses to answer if any file is missing or has been altered.
+- **All numbers come from Python.** `dispatch.py` sends each validated request to one plain function in `calculations/`, which runs DuckDB SQL over the snapshots. There is no agent loop, no SQL written by a model, no database server and no queue.
+- **Follow-ups are stateless.** Each result sets a signed `airport_context` cookie (HMAC-SHA256). The cookie holds the resolved request, a digest of the result and an expiry time. When the analyst asks for an explanation, the server checks the signature, recomputes the result, and checks the digest. Because nothing is stored on the server, this works on any serverless instance.
+
+### A question, from start to finish
+
+```mermaid
+sequenceDiagram
+    actor A as Analyst
+    participant UI as Chat UI
+    participant API as FastAPI
+    participant M as OpenAI (one call)
+    participant E as Engine (DuckDB)
+
+    alt Preset or "Adjust scope" controls
+        A->>UI: Click a preset or change the scope
+        UI->>API: POST {analysis: {...}}
+    else Free-text question
+        A->>UI: Type a question
+        UI->>API: POST {message, context_result_id?}
+        API->>M: Question + previous request as context
+        M-->>API: AnalysisRequest, or "clarify" / "unsupported"
+        API->>API: Validate with the same strict contract as presets
+    end
+    API->>E: Deterministic calculation
+    E-->>API: Rows, sources, scope, coverage notes
+    API-->>UI: Typed result + Set-Cookie airport_context
+    A->>UI: Click "Explain this result"
+    UI->>API: POST {analysis: {action: explain}, context_result_id}
+    API->>API: Verify cookie, recompute, compare digest
+    API->>E: Same calculation again
+    API-->>UI: Explanation of the same figures and their sources
+```
+
+## Scoring methodology
+
+A general rule for every workflow: missing months are never filled in. If any month of an airport-year is missing, that airport-year is treated as unavailable, never as zero.
+
+### New England terminal-expansion screen
+
+```mermaid
+flowchart LR
+    Cohort["FAA New England<br/>commercial-service airports<br/>(23 in 2025)"] --> Elig{"12/12 months in both years?<br/>Passengers > 0 and seats > 0?"}
+    Elig -- no --> Excl["Excluded, with the reason shown<br/>(e.g. PVC: December 2024 missing)"]
+    Elig -- yes --> Inputs["Growth %<br/>Passenger volume<br/>Occupancy %"]
+    Inputs --> Pct["Mid-rank percentile<br/>for each input"]
+    Pct --> Score["Score = 100 × (0.40·growth<br/>+ 0.30·volume + 0.30·occupancy)"]
+    Score --> Rank["Competition ranking<br/>(tied scores share a rank)"]
+```
+
+- **Inputs.** P is passengers and S is seats, for the baseline and comparison years.
+  - Growth = `100 · (P_cmp − P_base) / P_base`.
+  - Volume = `P_cmp`.
+  - Occupancy = `100 · P_cmp / S_cmp`.
+- **Percentile.** Each input is converted to a mid-rank percentile among the eligible airports: `(2·lower + tied − 1) / (2·(n − 1))`. Here `lower` is the number of airports with a lower value and `tied` is the number with the same value, including the airport itself. Percentiles make the three inputs comparable on one scale. They also stop BOS's size from dominating the score.
+- **Why these weights.** Growth gets 40 % because expansion is about future demand. Volume and occupancy get 30 % each, because they measure how much the current terminal is used. The weights are a judgment call, not a calibrated model. Each result says the score is a heuristic measure of traffic pressure, not of terminal capacity or investment success.
+- **Terminal notes.** Each ranked airport shows curated terminal-project evidence. Every claim is labelled "Status unknown", because the sources do not confirm project status.
+- If fewer than two airports are eligible, the result is `insufficient_data` and no ranking is shown.
+
+### LAX vs SNA congestion
+
+The agent compares domestic departures by reporting carriers on four indicators:
+
+- cancellation rate
+- diversion rate
+- mean departure delay (early departures count as 0)
+- mean taxi-out time
+
+Delay and taxi-out averages use completed flights only. For each indicator the agent reports which airport is higher, lower, or tied. It deliberately does **not** combine them into one congestion index, because any weighting would be arbitrary and would hide the fact that the picture is mixed.
+
+### ANC long-haul share
+
+Long-haul share = departures of at least 3,000 miles ÷ all performed departures, from T-100. The analyst can change the threshold to any value above 0 and up to 12,000 miles. If some departures have no recorded distance, the agent returns lower and upper bounds rather than a single number. For ANC there are no such departures.
+
+### SFO unmet demand
+
+Traffic data records flights that operated. It cannot show demand that was never served. The agent therefore does not produce a number for "unmet demand" and marks it `not_identifiable`. Instead it reports a **pressure indicator**: passenger growth % minus seat growth %, in percentage points. A positive value would mean passengers grew faster than seats, which points to tightening capacity. For 2025 the value is −1.22 pp: seats grew faster than passengers. The indicator is shown alongside the DataSF monthly enplanement trend, occupancy and on-time indicators. The answer to "why" states which of these the data supports and which it cannot address, such as fares, slot limits and latent demand.
+
+## Where and how AI is used
+
+AI is used in **exactly one place**: `app/backend/app/model_adapter.py` turns a free-text question into a structured request.
+
+| | |
 |---|---|
-| `backend/app/main.py` | FastAPI app: the host/Origin guard, `POST /api/query` and static UI serving |
-| `backend/app/contracts.py` | Strict request, result and error models |
-| `backend/app/dispatch.py` | Deterministic routing from a request to the calculations |
-| `backend/app/calculations/` | Screen, traffic, operations, comparison, long-haul and SFO calculations |
-| `backend/app/model_adapter.py` | The single OpenAI Responses API call for free text |
-| `backend/app/context_token.py` | The signed, stateless `airport_context` follow-up cookie |
-| `backend/app/settings.py` | Validated model and hosting settings |
-| `backend/app/sources/`, `backend/scripts/` | Offline ingestion, qualification and bundle acceptance; never run on a user request |
-| `backend/data/` | Accepted Parquet snapshots, manifests, the bundle registry and curated evidence |
-| `backend/app/static/` | The static chat UI (no build step) |
-| `backend/index.py`, `backend/vercel.json`, `backend/.vercelignore` | Vercel packaging |
+| **What the model does** | One OpenAI Responses API call with a strict JSON schema. It returns an `AnalysisRequest`, or `clarification_required`, or `unsupported_scope`. For a follow-up, the previous request is passed in as context. |
+| **What the model never does** | It never produces numbers, SQL, citations or text shown to the analyst. Everything shown comes from the deterministic engine and fixed templates. |
+| **Validation** | The model's output is checked by the same strict contract used for presets: a closed list of airports, metrics and years, and no extra fields. Anything outside that list is refused with a clear message. |
+| **Limits** | Up to 4,000 characters in; up to 512 output tokens; a 20 s timeout; `store: false`; spend capped by a hard monthly budget on the OpenAI project. |
+| **Admission gate** | Free text stays off until the chosen model passes a 30-case evaluation (at least 29 of 30 correct). The server then calls the model only if the model name and the SHA-256 of the adapter file match the admitted values, so an unreviewed change to the prompt or code turns the feature off. |
+| **Failure** | Any provider error becomes a safe `ai_unavailable` or `query_timeout` response. Presets and the scope controls work without the model. |
 
-More detail:
+The design keeps AI where it adds value, which is understanding loosely worded questions. It keeps AI out of places where it could make up a figure.
 
-- [backend/docs/ARCHITECTURE.md](backend/docs/ARCHITECTURE.md): components, numerical definitions and data refresh.
-- [docs/API_UI_MAP.md](docs/API_UI_MAP.md): the wire contract and how the UI uses it.
-- [backend/docs/evidence/](backend/docs/evidence/): verification records.
-- [backend/docs/specs/](backend/docs/specs/) and [docs/frontend/](docs/frontend/): historical planning documents. They are superseded where they conflict with the code and [docs/DESIGN.md](docs/DESIGN.md).
+## Key tradeoffs
 
-## Enabling free text (model admission)
+| Choice | Benefit | Cost |
+|---|---|---|
+| Parquet snapshots prepared ahead of time, queried with DuckDB, instead of live API calls | Reproducible, fast and free to run. Every figure can be traced to a file hash. | Refreshing the data means re-running ingestion and redeploying. |
+| One constrained model call instead of an agent framework | The model cannot invent numbers. Behaviour can be tested with a fixed evaluation set. | Questions outside the supported list are refused rather than improvised. |
+| A deterministic scoring formula instead of LLM judgement | Transparent, repeatable and explainable line by line. | The weights are a judgment call, and percentiles depend on which airports are in the cohort. |
+| No composite congestion index | Honest about a mixed picture. | No single "winner" headline. |
+| A signed cookie instead of a session store | Works on any serverless instance, with no database. | Context lasts at most 1 hour and is lost when the signing key changes. |
+| Public data only | Every number traces back to an official source. | Capacity, fares and latent demand cannot be observed. |
+| No login (owner's decision) | Simple to demo and review. | Cost is limited by per-call limits and the OpenAI project's budget, not by user accounts. |
 
-Free text is disabled by default and fails closed. Every one of the following must hold before a message reaches the model:
+## Assumptions, uncertainty and scope
 
-- `MODEL_RUNTIME_ENABLED=true`.
-- `OPENAI_API_KEY` and `OPENAI_MODEL` are both set.
-- `MODEL_ADMITTED_NAME` equals `OPENAI_MODEL`.
-- `MODEL_ADMITTED_ADAPTER_SHA256` equals the SHA-256 of `backend/app/model_adapter.py`.
+- **Scope.** The four questions above, 2023–2025, and the airports and metrics in the contract. Profitability, ROI, capital cost and causal claims are out of scope. Results state this in their limitations, and the model path refuses such questions as unsupported.
+- **Differences between data sources.** T-100 covers scheduled passenger service with seats reported. On-Time data covers domestic flights by reporting carriers only. Figures from different sources are never combined into one ratio.
+- **Incomplete data.** Incomplete airport-years are excluded, and the reason is shown. Missing data is never replaced with an estimate.
+- **Terminal evidence** is a small, curated review. Every claim is labelled "Status unknown".
+- **Freshness.** The packaged data was checked against the official sources on 2026-09-27. The answers are about the past; they are not forecasts.
+- **In the UI.** Every result shows the period compared, the data sources, notes on data coverage and the reason for any exclusion.
+- **Not implemented.** Voice input, an optional extra in the brief.
 
-To admit a model:
+## Verification status
 
-1. Create an OpenAI project and set a **hard monthly budget** on it. This budget is the only spending cap, because the app keeps no spend ledger.
-2. Run the live evaluation from `backend/`. It passes at 29/30 or better.
+| Claim | Status |
+|---|---|
+| Four workflows, follow-ups and error paths | Locally tested: 722 Python and 102 UI tests. Every figure was recomputed independently. 23,474 API cases ran with no server errors. ([evidence](docs/evidence/)) |
+| Packaged data matches the official sources | Checked against the live sources on 2026-09-27 ([activation review](docs/evidence/recent-data-activation-review.md)) |
+| Free-text model | Implemented and tested offline. Not yet tested against the live API, so free text returns `503 ai_unavailable` until the model is admitted. |
+| Hosted deployment | Packaged for Vercel and checked offline. Not deployed yet ([package check](docs/evidence/vercel-package-check.md)). |
 
-   ```sh
-   python scripts/eval_intents.py --mode candidate --live --acceptance \
-     --input-usd-per-mtok <price> --output-usd-per-mtok <price>
-   ```
-
-   Read the per-token prices from OpenAI on the day of the run. The network must allow `api.openai.com`.
-3. If the evaluation passes, set the four admission variables. Get the adapter hash with `sha256sum backend/app/model_adapter.py`. Any edit to that file invalidates the admission.
-
-## Deploying to Vercel (not yet done)
-
-1. **Project.** Import the repository and set **Root Directory = `backend`**.
-   - `vercel.json` pins `index.py` as the only function, with `maxDuration` 60 s, and routes every path to it.
-   - There is no `public/` directory, so no file is served around the host and Origin checks.
-2. **Environment variables.** Set these for Preview and Production:
-   - `APP_SIGNING_KEY` is **required**. It must be 32 to 512 bytes. Generate one with `python -c "import secrets;print(secrets.token_urlsafe(32))"`. Without it, hosted mode returns 503 on every route except `/health`. Rotating it invalidates all follow-up cookies.
-   - `ALLOWED_HOSTS` is optional. It is a comma-separated list of hostnames and is needed only for custom domains. Vercel's own `VERCEL_URL`, `VERCEL_BRANCH_URL` and `VERCEL_PROJECT_PRODUCTION_URL` hostnames are allowed automatically.
-   - `MAX_CONCURRENT_QUERIES` is optional. It applies per instance: the default is 4 when hosted, and the allowed range is 1 to 16.
-   - Model variables are needed only after admission: `OPENAI_API_KEY`, `OPENAI_MODEL`, `MODEL_RUNTIME_ENABLED`, `MODEL_ADMITTED_NAME`, `MODEL_ADMITTED_ADAPTER_SHA256` and, optionally, `MODEL_REASONING_EFFORT`. Put the key in Vercel's encrypted environment settings, never in Git.
-3. **Cost control.** There is no login, by the owner's decision. Model spend is bounded per call and capped overall by the OpenAI project's hard budget.
-   - The per-call bounds are a 4,000-character question, 512 output tokens, a 20 s model timeout and a 30 s query deadline.
-4. **RE-VERIFY before the first deploy.** These points come from [vercel-package-check.md](backend/docs/evidence/vercel-package-check.md) and could not be checked because the network was blocked:
-   1. `@vercel/python` still accepts `builds` and `routes` and honours `maxDuration` and `includeFiles`. If it does not, use the fallback layout (`api/index.py`) described in that file.
-   2. Python 3.12 is selected from `.python-version`.
-   3. The measured bundle, about 82.4 MiB uncompressed, fits within the function size limit, which is assumed to be 250 MB.
-   4. The `VERCEL_*` host variables are present at runtime.
-   5. The function sees the public `Host` and an `https://` `Origin`.
-   6. The Deployment Protection choice is made, and `Cache-Control: no-store` responses are not cached at the edge.
-   7. The filesystem is read-only apart from `/tmp`.
-5. **Smoke test.** Deploy a preview and check the following. Only then promote to production.
-   - `/health` responds.
-   - The four presets return results.
-   - "Explain" works through the cookie.
-   - A cross-origin POST is refused.
+For more detail, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (modules, numerical definitions, how data is refreshed) and [docs/API_UI_MAP.md](docs/API_UI_MAP.md) (the HTTP contract).

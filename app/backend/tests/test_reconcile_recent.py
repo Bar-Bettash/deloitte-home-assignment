@@ -14,7 +14,8 @@ from scripts import reconcile_recent
 
 DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
-REFERENCE_PATH = BACKEND_ROOT / "docs/evidence/recent-arithmetic-reference.json"
+REPO_ROOT = BACKEND_ROOT.parents[1]
+REFERENCE_PATH = REPO_ROOT / "docs/evidence/recent-arithmetic-reference.json"
 
 
 @pytest.fixture(scope="module")
@@ -458,7 +459,7 @@ def test_cli_unknown_bundle_fails_with_one_line(tmp_path, capsys, mode) -> None:
 
 def test_committed_receipt_code_hashes_match_current_files() -> None:
     receipt = json.loads(
-        (BACKEND_ROOT / "docs/evidence/recent-reconciliation.json").read_text(encoding="utf-8")
+        (REPO_ROOT / "docs/evidence/recent-reconciliation.json").read_text(encoding="utf-8")
     )
     current = {
         relative: hashlib.sha256((BACKEND_ROOT / relative).read_bytes()).hexdigest()

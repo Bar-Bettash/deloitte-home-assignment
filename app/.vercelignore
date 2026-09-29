@@ -1,0 +1,20 @@
+# Paths are relative to the Vercel Root Directory (app/).
+# Never exclude backend/app/, backend/data/ or the frontend files: load_bundle
+# hash-verifies every snapshot file, including the FAA PDF and AIP workbook, and
+# fails closed if one is missing; the UI is served from frontend/.
+README.md
+backend/tests/
+backend/scripts/
+backend/requirements-dev.txt
+frontend/tests/
+.env
+.env.*
+**/.env
+**/.env.*
+.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+.DS_Store

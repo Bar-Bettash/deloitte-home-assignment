@@ -16,6 +16,8 @@ from app.sources.bundle import BundleContext, BundleError, SnapshotRef, load_bun
 DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
 DEFAULT_THRESHOLD = 3_000.0
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+# Evidence lives in the repository-level docs/; REFERENCE_PATH is relative to it.
+REPO_ROOT = BACKEND_ROOT.parents[1]
 REFERENCE_PATH = Path("docs/evidence/recent-arithmetic-reference.json")
 CODE_PATHS = (
     "app/calculations/traffic.py",
@@ -822,7 +824,7 @@ def build_final_receipt(
     from pydantic import ValidationError
 
     root = root.resolve()
-    canonical_reference = (root / REFERENCE_PATH).resolve()
+    canonical_reference = (REPO_ROOT / REFERENCE_PATH).resolve()
     if reference_path.resolve() != canonical_reference:
         raise ReconciliationError("reference path is not the canonical preserved reference")
     validate_reference(bundle, reference)
@@ -887,7 +889,7 @@ def validate_reconciliation_payload(
     expected = build_final_receipt(
         bundle,
         reference,
-        reference_path=root.resolve() / REFERENCE_PATH,
+        reference_path=REPO_ROOT / REFERENCE_PATH,
         root=root,
         checked_at=parsed,
     )
@@ -904,9 +906,9 @@ def validate_reconciliation_file(
     binding = payload.get("reference")
     if not isinstance(binding, Mapping) or binding.get("path") != REFERENCE_PATH.as_posix():
         raise ReconciliationError("reconciliation reference path is invalid")
-    reference_path = (root.resolve() / REFERENCE_PATH).resolve()
-    if not reference_path.is_relative_to(root.resolve()):
-        raise ReconciliationError("reconciliation reference escapes backend root")
+    reference_path = (REPO_ROOT / REFERENCE_PATH).resolve()
+    if not reference_path.is_relative_to(REPO_ROOT.resolve()):
+        raise ReconciliationError("reconciliation reference escapes repository root")
     reference = _strict_json_file(reference_path, "arithmetic reference")
     validate_reconciliation_payload(bundle, payload, reference, root=root)
     return payload

@@ -4,7 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const source = fs.readFileSync(path.join(__dirname, '../app/static/globe.js'), 'utf8');
+const source = fs.readFileSync(path.join(__dirname, '../globe.js'), 'utf8');
 
 function harness({ context = true, throwContext = false, autoLoad = true, shaderOk = true, failUploadAt = 0, rectWidth = 1200, rectHeight = 600, innerWidth = 1440, finePointer = true, reducedMotion = false, hidden = false } = {}) {
   let activeRectWidth = rectWidth, activeRectHeight = rectHeight;
