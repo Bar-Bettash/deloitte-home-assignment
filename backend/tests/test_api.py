@@ -673,6 +673,36 @@ def test_invalid_context_cookie_fails_before_model_and_is_cleared(monkeypatch, c
         assert "max-age=0" in response.headers["set-cookie"].lower()
 
 
+def test_no_server_side_session_state_remains():
+    import importlib.util
+
+    assert importlib.util.find_spec("app.session") is None
+    assert importlib.util.find_spec("app.model_budget") is None
+    assert not hasattr(main, "session_store")
+    assert not hasattr(main, "model_budget")
+    mutable = {
+        name for name, value in vars(main).items()
+        if not name.startswith("__") and isinstance(value, (dict, list, set))
+    }
+    assert mutable == set()
+
+
+def test_message_without_context_ignores_bad_cookie(monkeypatch):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def interpret(_message, *, settings, context):
+        assert context is None
+        analysis = main.AnalysisRequest(action="metric", airports=["PVD"], metric="passengers", year=2024)
+        return ModelInterpretation("analysis", analysis, None, ModelUsage(10, 5))
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    other = TestClient(main.app)
+    other.cookies.set(main.CONTEXT_COOKIE, "garbage", domain="testserver.local")
+    response = other.post("/api/query", json={"message": "PVD passengers in 2024"})
+    assert response.status_code == 200, response.text
+    assert context_claims(other).result_id == UUID(response.json()["result_id"])
+
+
 def test_tampered_context_cookie_is_rejected():
     first = client.post("/api/query", json=SFO_REQUEST)
     token = client.cookies.get(main.CONTEXT_COOKIE)
