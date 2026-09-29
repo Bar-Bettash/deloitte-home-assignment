@@ -101,12 +101,16 @@ def test_hand_calculated_independent_denominators_and_origin_scope(tmp_path):
 
 
 def test_means_do_not_depend_on_scan_order():
+    from functools import reduce
+    from operator import add
+
     from app.calculations import operations
 
     values = [1e16, 1.0, 1.0, 0.1, 0.2]
     forward = operations._mean([(v,) for v in values], 0, None)
     backward = operations._mean([(v,) for v in reversed(values)], 0, None)
-    assert sum(values) != sum(reversed(values))  # naive summation would differ
+    # Left-to-right float addition differs by order (3.12's sum() compensates, 3.11's does not).
+    assert reduce(add, values) != reduce(add, reversed(values))
     assert forward == backward
     assert operations._mean([], 0, None).numerator == 0
 
