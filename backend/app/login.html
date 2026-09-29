@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Sign in · Airport Analyst</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #010736;
+      --surface: #0D1C42;
+      --surface-2: #22396F;
+      --text: #FCF1D0;
+      --muted: rgba(252, 241, 208, .72);
+      --line: rgba(252, 241, 208, .20);
+      --error: #ffb4ab;
+      font-family: Inter, Geist, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+      color: var(--text); background: radial-gradient(circle at 72% 32%, rgba(34, 57, 111, .35), transparent 42%), linear-gradient(135deg, #010736 0%, #0D1C42 55%, #010736 100%);
+      background-color: var(--bg);
+    }
+    main { width: 100%; max-width: 24rem; padding: 32px 24px; background: rgba(13, 28, 66, .78); border: 1px solid var(--line); border-radius: 16px; }
+    .eyebrow { margin: 0 0 8px; font-size: .75rem; letter-spacing: .12em; color: var(--muted); }
+    h1 { margin: 0 0 8px; font-size: 1.6rem; font-weight: 500; line-height: 1.2; }
+    p { margin: 0 0 24px; color: var(--muted); line-height: 1.5; }
+    label { display: block; font-weight: 600; }
+    input {
+      display: block; width: 100%; min-height: 44px; margin-top: 8px; padding: 10px 12px; font: inherit;
+      color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+    }
+    input[aria-invalid="true"] { border-color: var(--error); }
+    button {
+      width: 100%; min-height: 44px; margin-top: 16px; padding: 10px 16px; font: inherit; font-weight: 600;
+      color: var(--bg); background: var(--text); border: 0; border-radius: 999px; cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: progress; }
+    input:focus-visible, button:focus-visible { outline: 3px solid var(--text); outline-offset: 3px; }
+    #login-error { margin: 12px 0 0; padding: 10px 12px; color: var(--error); background: rgba(161, 35, 35, .18); border-inline-start: 4px solid var(--error); border-radius: 4px; }
+    #login-error:empty { display: none; }
+  </style>
+</head>
+<body>
+  <main aria-labelledby="login-title">
+    <p class="eyebrow">AIRPORT INVESTMENT ANALYST</p>
+    <h1 id="login-title">Sign in</h1>
+    <p id="login-help">Enter the access code you were given to open the prototype.</p>
+    <form id="login-form" novalidate>
+      <label for="code">Access code</label>
+      <input id="code" name="code" type="password" autocomplete="current-password" maxlength="256" required autofocus aria-describedby="login-help login-error">
+      <button type="submit">Continue</button>
+      <p id="login-error" role="alert" aria-live="assertive"></p>
+    </form>
+  </main>
+  <script>
+    "use strict";
+    (() => {
+      const form = document.getElementById("login-form");
+      const input = document.getElementById("code");
+      const error = document.getElementById("login-error");
+      const button = form.querySelector("button");
+      const showError = (message) => {
+        error.textContent = message;
+        input.setAttribute("aria-invalid", "true");
+        input.focus();
+      };
+      input.addEventListener("input", () => {
+        error.textContent = "";
+        input.removeAttribute("aria-invalid");
+      });
+      form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const code = input.value;
+        if (!code) { showError("Enter the access code."); return; }
+        button.disabled = true;
+        error.textContent = "";
+        try {
+          const response = await fetch("/api/access", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ code }),
+          });
+          if (response.status === 204) { window.location.assign("/"); return; }
+          if (response.status === 401) showError("Access code not recognised.");
+          else showError("Sign-in is unavailable right now. Try again shortly.");
+        } catch (_) {
+          showError("Sign-in is unavailable right now. Try again shortly.");
+        } finally {
+          button.disabled = false;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

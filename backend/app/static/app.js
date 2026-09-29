@@ -1,14 +1,20 @@
 "use strict";
 
+// Presets omit `year` so the server applies its accepted default period
+// (bundle annual-2025-r1: CY2024 baseline -> CY2025 comparison).
 const demos = {
-  "new-england": { action: "rank", region: "new_england", metric: "screen_score", year: 2024 },
-  "lax-sna": { action: "compare", airports: ["LAX", "SNA"], metric: "congestion", year: 2024 },
-  "anc-long-haul": { action: "metric", airports: ["ANC"], metric: "long_haul_share", year: 2024, threshold_miles: 3000 },
-  "sfo-pressure": { action: "metric", airports: ["SFO"], metric: "sfo_pressure", year: 2024 },
-  "sfo-trend": { action: "metric", airports: ["SFO"], metric: "sfo_enplaned_trend", year: 2024 },
-  "bos-pvd": { action: "compare", airports: ["BOS", "PVD"], metric: "passenger_growth", year: 2024 },
-  "growth": { action: "rank", region: "new_england", metric: "passenger_growth", year: 2024 },
+  "new-england": { action: "rank", region: "new_england", metric: "screen_score" },
+  "lax-sna": { action: "compare", airports: ["LAX", "SNA"], metric: "congestion" },
+  "anc-long-haul": { action: "metric", airports: ["ANC"], metric: "long_haul_share", threshold_miles: 3000 },
+  "sfo-pressure": { action: "metric", airports: ["SFO"], metric: "sfo_pressure" },
+  "sfo-trend": { action: "metric", airports: ["SFO"], metric: "sfo_enplaned_trend" },
+  "bos-pvd": { action: "compare", airports: ["BOS", "PVD"], metric: "passenger_growth" },
+  "growth": { action: "rank", region: "new_england", metric: "passenger_growth" },
 };
+// The server default period. Selecting it in the scope form omits `year`.
+const DEFAULT_YEAR = 2025;
+const SUPPORTED_YEARS = [2023, 2024, 2025];
+const COVERAGE_SUMMARY = "Supported coverage: CY2024→CY2025 accepted bundle; 2023–2024 historical traffic and selected operational measures.";
 const $ = (selector) => document.querySelector(selector);
 const feedback = $("#feedback");
 let feedbackTarget = $("#analyze");
@@ -121,12 +127,13 @@ function showResultReady(message) {
   feedback.setAttribute("data-complete", "true");
 }
 
-const supportedAirports = new Set("BDL HVN PWM BGR PQI RKD BHB AUG BOS ACK ORH MVY HYA PVC MHT PSM LEB PVD WST BID BTV RUT ANC LAX SNA SFO".split(" "));
-const newEnglandAirports = new Set("BDL HVN PWM BGR PQI RKD BHB AUG BOS ACK ORH MVY HYA PVC MHT PSM LEB PVD WST BID BTV RUT".split(" "));
+const supportedAirports = new Set("BDL HVN PWM BGR PQI RKD BHB AUG BOS ACK ORH MVY HYA PVC MHT PSM LEB PVD WST BID BTV RUT EWB ANC LAX SNA SFO".split(" "));
+// EWB joins the New England cohort in the accepted 2025 bundle.
+const newEnglandAirports = new Set("BDL HVN PWM BGR PQI RKD BHB AUG BOS ACK ORH MVY HYA PVC MHT PSM LEB PVD WST BID BTV RUT EWB".split(" "));
 const operationalMetrics = new Set(["congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"]);
 const t100Metrics = new Set(["passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share"]);
 const rankMetrics = new Set(["screen_score", "passengers", "passenger_growth", "seat_occupancy"]);
-const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_too_large", "invalid_request", "unsupported_scope", "clarification_required", "insufficient_data", "busy", "session_expired", "result_mismatch", "ai_unavailable", "budget_exhausted", "data_unavailable", "query_timeout", "internal_error"]);
+const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_too_large", "invalid_request", "unsupported_scope", "clarification_required", "insufficient_data", "busy", "session_expired", "result_mismatch", "ai_unavailable", "data_unavailable", "query_timeout", "internal_error", "access_required", "access_denied"]);
 
 function parseErrorResponse(payload) {
   if (!isRecord(payload) || payload.success !== false || !isRecord(payload.error)) return null;
@@ -139,6 +146,7 @@ function parseErrorResponse(payload) {
 function errorRecovery(detail, status) {
   if (detail.code === "busy") return "Wait for the current analysis to finish, then retry explicitly.";
   if (["session_expired", "result_mismatch"].includes(detail.code)) return "Use Start a new analysis, then choose a complete request.";
+  if (detail.code === "ai_unavailable") return "Presets and Adjust scope still work without AI interpretation.";
   return "Review the scope or try again explicitly.";
 }
 
@@ -148,9 +156,11 @@ function validateAnalysisScope(analysis) {
   if (airports.some((code) => !supportedAirports.has(code)) || new Set(airports).size !== airports.length) {
     errors.push({ field: "airports", message: "Use unique supported three-letter airport codes." });
   }
-  if (![2023, 2024].includes(analysis.year)) errors.push({ field: "year", message: "Choose a supported year." });
-  if (["passenger_growth", "screen_score"].includes(analysis.metric) && analysis.year !== 2024) {
-    errors.push({ field: "year", message: "Passenger growth and screening score use 2024 with the 2023 baseline." });
+  // Mirrors contracts.AnalysisRequest: an omitted year means the server default (2025 bundle).
+  const year = analysis.year ?? DEFAULT_YEAR;
+  if (!SUPPORTED_YEARS.includes(year)) errors.push({ field: "year", message: "Choose a supported year." });
+  if (["passenger_growth", "screen_score"].includes(analysis.metric) && year === 2023) {
+    errors.push({ field: "year", message: "Passenger growth and screening score need a comparison period; choose 2025 or 2024." });
   }
   if (analysis.metric === "long_haul_share" && !(analysis.threshold_miles > 0 && analysis.threshold_miles <= 12000)) {
     errors.push({ field: "threshold", message: "Enter a long-haul threshold greater than 0 and no more than 12,000 miles." });
@@ -163,16 +173,16 @@ function validateAnalysisScope(analysis) {
   } else if (analysis.action === "compare") {
     if (airports.length !== 2) errors.push({ field: "airports", message: "Compare needs exactly two airport codes." });
     if (operationalMetrics.has(analysis.metric)) {
-      if (analysis.year !== 2024) errors.push({ field: "year", message: "Operational comparisons support 2024 only." });
+      if (year === 2023) errors.push({ field: "year", message: "Operational comparisons support 2025 and 2024 only." });
       if (airports.some((code) => !["LAX", "SNA", "SFO"].includes(code))) errors.push({ field: "airports", message: "Operational comparisons support LAX, SNA, and SFO." });
     } else if (!t100Metrics.has(analysis.metric)) errors.push({ field: "metric", message: "This metric is not available for comparisons." });
   } else if (analysis.action === "metric") {
     if (airports.length !== 1) errors.push({ field: "airports", message: "Single-airport metric needs exactly one airport code." });
     if (operationalMetrics.has(analysis.metric)) {
-      if (analysis.year !== 2024) errors.push({ field: "year", message: "Operational metrics support 2024 only." });
+      if (year === 2023) errors.push({ field: "year", message: "Operational metrics support 2025 and 2024 only." });
       if (airports.length === 1 && !["LAX", "SNA", "SFO"].includes(airports[0])) errors.push({ field: "airports", message: "Operational metrics support LAX, SNA, and SFO." });
     } else if (["sfo_enplaned_trend", "sfo_pressure"].includes(analysis.metric)) {
-      if (analysis.year !== 2024) errors.push({ field: "year", message: "SFO metrics support 2024 only." });
+      if (year === 2023) errors.push({ field: "year", message: "SFO metrics support 2025 and 2024 only." });
       if (airports.length === 1 && airports[0] !== "SFO") errors.push({ field: "airports", message: "This metric supports SFO only." });
     } else if (!t100Metrics.has(analysis.metric)) errors.push({ field: "metric", message: "This metric is not available for a single airport." });
   }
@@ -259,6 +269,11 @@ async function submitRequest(request) {
     if (generation !== requestGeneration) return;
     if (!response.ok) {
       const detail = parseErrorResponse(payload);
+      if (detail?.code === "access_required" || (response.status === 401 && !detail)) {
+        showFeedback("Access code required. Opening the sign-in page.", true);
+        window.location.assign("/login");
+        return;
+      }
       if (detail) showRequestError(detail, response.status);
       else showFeedback(connectionFailureMessage, true);
       if (latestSuccessfulResult) renderResult(latestSuccessfulResult, true);
@@ -344,6 +359,7 @@ function renderResult(result, previous) {
   const measureName = result.scope.metric === "congestion" ? `${result.scope.airports.join(" / ")} operational comparison` : humanScopeMetricLabel(result.scope.metric);
   const scopeDetails = paragraph(scopeHeading, `${measureName} · ${result.scope.year}`);
   scopeDetails.className = "result-measure";
+  paragraph(scopeHeading, describePeriod(result.scope)).className = "result-period";
   resultPanel.append(scopeHeading);
   const kpis = renderKpiRow(result);
   if (kpis) resultPanel.append(kpis);
@@ -569,8 +585,13 @@ function closeQuestionComposer(returnFocus = true) {
   if (returnFocus) $("#ask-trigger").focus();
 }
 
+function describePeriod(scope) {
+  if (scope.bundle_id == null) return `Period · ${scope.year} historical data`;
+  return `Period · CY${scope.baseline_year} → CY${scope.comparison_year} · showing ${scope.year} · Bundle ${scope.bundle_id}`;
+}
+
 function updateContextStrip(result, previous) {
-  const base = `${result.scope.airports.join(" / ")} · ${humanScopeMetricLabel(result.scope.metric)} · ${result.scope.year}`;
+  const base = `${result.scope.airports.join(" / ")} · ${humanScopeMetricLabel(result.scope.metric)} · ${result.scope.year}${result.scope.bundle_id == null ? "" : ` (bundle ${result.scope.bundle_id})`}`;
   const candidates = result.rows.flatMap(row => row.metrics.map(metric => ({ airport: row.airport, metric })));
   const preferredKey = result.scope.metric === "congestion" ? "cancellation_rate" : result.scope.metric;
   let displayed = candidates.filter(item => item.metric.key === preferredKey).slice(0, 2);
@@ -919,12 +940,12 @@ function validateResult(result) {
   if (!isRecord(result) || !["ok", "partial"].includes(result.status)
       || typeof result.result_id !== "string" || typeof result.request_id !== "string"
       || !isRecord(result.scope) || !Array.isArray(result.scope.airports)
-      || result.scope.airports.length < 1 || result.scope.airports.length > 22
+      || result.scope.airports.length < 1 || result.scope.airports.length > 23
       || !result.scope.airports.every((airport) => typeof airport === "string" && supportedAirports.has(airport))
       || new Set(result.scope.airports).size !== result.scope.airports.length
-      || ![2023, 2024].includes(result.scope.year) || !scopeMetrics.has(result.scope.metric)
+      || !SUPPORTED_YEARS.includes(result.scope.year) || !validResolvedPeriod(result.scope) || !scopeMetrics.has(result.scope.metric)
       || typeof result.scope.population !== "string" || !(result.summary === null || typeof result.summary === "string")
-      || !Array.isArray(result.rows) || result.rows.length > 22
+      || !Array.isArray(result.rows) || result.rows.length > 23
       || !Array.isArray(result.series) || result.series.length > 24
       || !Array.isArray(result.sources) || !Array.isArray(result.evidence)
       || !stringArray(result.limitations) || !stringArray(result.exclusions)) fail();
@@ -936,7 +957,7 @@ function validateResult(result) {
   }
   for (const row of result.rows) {
     if (!isRecord(row) || !result.scope.airports.includes(row.airport) || !Array.isArray(row.metrics)
-        || (row.rank != null && (!Number.isInteger(row.rank) || row.rank < 1 || row.rank > 22))) fail();
+        || (row.rank != null && (!Number.isInteger(row.rank) || row.rank < 1 || row.rank > 23))) fail();
     for (const metric of row.metrics) {
       if (!validValue(metric) || typeof metric.key !== "string" || !metricUnits[metric.key] || metric.unit !== metricUnits[metric.key] || !stringArray(metric.source_ids)
           || !metric.source_ids.every((id) => ids.has(id))
@@ -948,11 +969,22 @@ function validateResult(result) {
           || (metric.comparison_direction != null && !["higher", "lower", "tied", "unavailable"].includes(metric.comparison_direction))) fail();
     }
   }
-  for (const point of result.series) if (!validValue(point) || !/^202[34](0[1-9]|1[0-2])$/.test(point.period)) fail();
+  for (const point of result.series) if (!validValue(point) || !/^202[345](0[1-9]|1[0-2])$/.test(point.period)) fail();
   for (const item of result.evidence) {
     if (!isRecord(item) || !["source_id", "locator", "date", "claim", "limitation"].every((key) => typeof item[key] === "string") || !item.source_id || item.source_id.length > 120) fail();
   }
   return result;
+}
+// Mirrors contracts.ResultScope: bundle_id, baseline_year and comparison_year are
+// optional but appear together; a 2025 result must carry the resolved bundle.
+function validResolvedPeriod(scope) {
+  const fields = [scope.bundle_id, scope.baseline_year, scope.comparison_year];
+  const present = fields.filter((value) => value != null).length;
+  if (present === 0) return scope.year !== 2025;
+  if (present !== 3) return false;
+  if (typeof scope.bundle_id !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(scope.bundle_id)) return false;
+  if (![scope.baseline_year, scope.comparison_year].every((year) => Number.isInteger(year) && SUPPORTED_YEARS.includes(year))) return false;
+  return scope.baseline_year < scope.comparison_year && [scope.baseline_year, scope.comparison_year].includes(scope.year);
 }
 function validValue(value) {
   return isRecord(value) && ["count", "percent", "percentage_points", "minutes", "score"].includes(value.unit)
@@ -988,7 +1020,7 @@ function renderDraftSummary() {
   const action = $("#action").value;
   const airports = currentDraftAirports();
   const airportLabel = action === "rank" && !airports.length ? "New England cohort" : airports.join(", ") || "Choose airport(s)";
-const values = [label(action), airportLabel, humanScopeMetricLabel($("#metric").value), $("#year").value,
+const values = [label(action), airportLabel, humanScopeMetricLabel($("#metric").value), yearLabel($("#year").value),
     $("#metric").value === "long_haul_share" ? `${$("#threshold").value} miles` : ""];
   draftChips.forEach((chip, index) => {
     chip.hidden = index === 4 && !values[index];
@@ -997,6 +1029,7 @@ const values = [label(action), airportLabel, humanScopeMetricLabel($("#metric").
 }
 $("#scope-panel").insertBefore(draftSummary, $("#scope-form"));
 renderDraftSummary();
+function yearLabel(value) { return value === String(DEFAULT_YEAR) ? `${DEFAULT_YEAR} (vs 2024)` : value; }
 function formatNumber(value) { return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value); }
 function formatMetric(metric) {
   const value = metric.unit === "count" ? formatNumber(metric.value) : metric.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -1024,7 +1057,7 @@ function makeTable(title, columns) {
 }
 function fillScope(analysis) {
   $("#action").value = analysis.action; $("#airports").value = (analysis.airports || []).join(", ");
-  $("#metric").value = analysis.metric; $("#year").value = String(analysis.year);
+  $("#metric").value = analysis.metric; $("#year").value = String(analysis.year ?? DEFAULT_YEAR);
   $("#threshold").value = analysis.threshold_miles || 3000;
   syncThresholdAvailability();
 }
@@ -1067,7 +1100,7 @@ function startNewAnalysis() {
   positionFeedback($("#analyze"));
   $("#question").value = "";
   clearQuestionError();
-  $("#context-summary").textContent = "Supported coverage: 2023–2024 historical traffic and selected operational measures.";
+  $("#context-summary").textContent = COVERAGE_SUMMARY;
   $("#explain").disabled = true;
   changedDraft(false);
   showScopeErrors([]);
@@ -1101,7 +1134,10 @@ $("#scope-form").addEventListener("submit", (event) => {
   event.preventDefault();
   const action = $("#action").value;
   const airports = $("#airports").value.split(",").map((item) => item.trim().toUpperCase()).filter(Boolean);
-  const analysis = { action, metric: $("#metric").value, year: Number($("#year").value) };
+  const analysis = { action, metric: $("#metric").value };
+  // The default period is requested by omitting year, exactly like the presets.
+  const year = Number($("#year").value || DEFAULT_YEAR);
+  if (year !== DEFAULT_YEAR) analysis.year = year;
   if (action === "rank" && !airports.length) analysis.region = "new_england"; else analysis.airports = airports;
   if (analysis.metric === "long_haul_share") analysis.threshold_miles = Number($("#threshold").value);
   void submitScope(analysis);

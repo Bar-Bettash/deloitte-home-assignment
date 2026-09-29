@@ -260,6 +260,7 @@
     .result-scope-heading { margin: 0 0 .45rem; padding: 0 0 .55rem; border-bottom: 1px solid var(--line); }
     .result-scope-heading .result-airports { margin: 0; color: var(--text); font-size: clamp(1.75rem,2.3vw,2rem); font-weight: 500; line-height: 1.12; }
     .result-scope-heading .result-measure { margin: .12rem 0 0; color: var(--muted); font-size: .8rem; }
+    .result-scope-heading .result-period { margin: .12rem 0 0; color: var(--muted); font-size: .75rem; overflow-wrap: anywhere; }
     #result .backend-conclusion { margin: .55rem 0 .7rem; color: var(--text); font-size: 1.05rem; line-height: 1.45; }
     #result .metric-view > h3 { margin-top: .7rem; }
     #result .congestion-table-region { max-height: none; overflow: visible; border: 0; border-radius: 0; }
