@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "bundle_id": "historical-2024",
+  "baseline_year": 2023,
+  "comparison_year": 2024,
+  "cohort": [
+    "BOS",
+    "BDL",
+    "PVD",
+    "PWM",
+    "BTV",
+    "MHT",
+    "HVN",
+    "BGR",
+    "ACK",
+    "ORH",
+    "PSM",
+    "MVY",
+    "HYA",
+    "PQI",
+    "RKD",
+    "WST",
+    "BID",
+    "BHB",
+    "LEB",
+    "PVC",
+    "AUG",
+    "RUT"
+  ],
+  "sources": [
+    {
+      "source": "datasf",
+      "snapshot_id": "datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf",
+      "manifest_sha256": "29661a6df4221fb05787f58c50da3bfdff379609a6e2d319539c154f37593b51",
+      "content_sha256": "cc472e67b5dd529d513ff7b4482797450acaf98ce17b64c8d78076cfa2fc8ee1",
+      "manifest_path": "raw/datasf/snapshots/datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf/manifest.json",
+      "data_path": "raw/datasf/snapshots/datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf/data.parquet",
+      "years": [
+        2023,
+        2024
+      ],
+      "vintage_id": "datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf",
+      "publication_status": "final"
+    },
+    {
+      "source": "t100",
+      "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+      "manifest_sha256": "562cecd8ec7314440894538615b6fb7d7f8b542c5864bd26de132caf45a040ad",
+      "content_sha256": "1c023467175d599cbbb642e5ca5d22e711134178dc07cb77d8c9e3a3f7f6f8d5",
+      "manifest_path": "raw/t100/snapshots/t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac/manifest.json",
+      "data_path": "raw/t100/snapshots/t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac/data.parquet",
+      "years": [
+        2023,
+        2024
+      ],
+      "vintage_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+      "publication_status": "final"
+    },
+    {
+      "source": "ontime",
+      "snapshot_id": "ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b",
+      "manifest_sha256": "f8a694a6c0617c2fe01d886163da27bcf68098a35506d98eff4754e17c401a78",
+      "content_sha256": "1fe2d4bddfaa5f744a7bb09df80f0c5d0e893a8ee7e4a507575eaa375aac1231",
+      "manifest_path": "raw/ontime/snapshots/ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b/manifest.json",
+      "data_path": "raw/ontime/snapshots/ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b/data.parquet",
+      "years": [
+        2024
+      ],
+      "vintage_id": "ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b",
+      "publication_status": "final"
+    },
+    {
+      "source": "faa",
+      "snapshot_id": "faa-3aed36dd6b33ba6e6c0a272926de2a9dda05630f4ee64450959e0e6443e4c3d4",
+      "manifest_sha256": "7228af60286ba5f25eb5662595a7d66a4f66463d2a9eb755262f21c4a74a57a0",
+      "content_sha256": "458273de65b91eb0e7c26cc372616f812320b2dad163909edefd89c13cdff251",
+      "manifest_path": "raw/faa/snapshots/faa-3aed36dd6b33ba6e6c0a272926de2a9dda05630f4ee64450959e0e6443e4c3d4/manifest.json",
+      "data_path": "raw/faa/snapshots/faa-3aed36dd6b33ba6e6c0a272926de2a9dda05630f4ee64450959e0e6443e4c3d4/source.pdf",
+      "years": [
+        2024
+      ],
+      "vintage_id": "faa-3aed36dd6b33ba6e6c0a272926de2a9dda05630f4ee64450959e0e6443e4c3d4",
+      "publication_status": "final"
+    }
+  ],
+  "evidence_path": "evidence.json",
+  "evidence_sha256": "29db3d041ae5d6c315aded224aab33c3163eec6a683736fcf66223d198723361"
+}

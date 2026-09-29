@@ -22,6 +22,11 @@ import duckdb
 import httpx
 
 DATASET_URL = "https://data.sf.gov/resource/rkru-6vcg.csv"
+DEFAULT_YEARS = (2023, 2024)
+SUPPORTED_YEAR_PAIRS = {
+    DEFAULT_YEARS: ("202301", "202412"),
+    (2024, 2025): ("202401", "202512"),
+}
 PREDICATE = "activity_period >= '202301' AND activity_period <= '202412'"
 REQUIRED_COLUMNS = (
     "activity_period",
@@ -79,10 +84,8 @@ PARQUET_SCHEMA = (
     ("data_loaded_at", "TIMESTAMP"),
 )
 
-_MONTHS = {f"{year}{month:02d}" for year in (2023, 2024) for month in range(1, 13)}
 _GEOGRAPHIES = {"Domestic", "International"}
 _ACTIVITY_TYPES = {"Enplaned", "Deplaned", "Thru / Transit"}
-_EXPECTED_ENPLANED_CELLS = {(month, geography) for month in _MONTHS for geography in _GEOGRAPHIES}
 
 
 class DataSFError(RuntimeError):
@@ -92,10 +95,12 @@ class DataSFError(RuntimeError):
 async def fetch_datasf(
     client: httpx.AsyncClient,
     *,
+    years: tuple[int, int] = DEFAULT_YEARS,
     monotonic: Callable[[], float] = time.monotonic,
     time_limit_seconds: float = TIME_LIMIT_SECONDS,
 ) -> list[dict[str, str]]:
-    """Fetch the fixed 2023/24 dataset or raise without publishing any data."""
+    """Fetch one supported two-year pair or raise without publishing any data."""
+    _, _, predicate, expected_months = _resolve_years(years)
     if not 0 < time_limit_seconds <= TIME_LIMIT_SECONDS:
         raise ValueError("time_limit_seconds must be within the fixed 60 second cap")
     started_at = monotonic()
@@ -130,7 +135,7 @@ async def fetch_datasf(
             raise DataSFError("DataSF refresh exceeded the 60 second limit")
         return b"".join(chunks)
 
-    count_params = {"$select": "count(*) AS count", "$where": PREDICATE}
+    count_params = {"$select": "count(*) AS count", "$where": predicate}
     pre_count = _parse_count(await get(count_params))
     if pre_count > MAX_ROWS:
         raise DataSFError("DataSF row count exceeds the 20,000 row limit")
@@ -145,7 +150,7 @@ async def fetch_datasf(
             await get(
                 {
                     "$select": ",".join(REQUIRED_COLUMNS),
-                    "$where": PREDICATE,
+                    "$where": predicate,
                     "$order": ":id",
                     "$limit": PAGE_SIZE,
                     "$offset": offset,
@@ -157,7 +162,7 @@ async def fetch_datasf(
             detail = "extra rows" if len(page) > expected_size else "an early short or empty page"
             raise DataSFError(f"DataSF returned {detail}")
         for row in page:
-            _validate_row(row)
+            _validate_row(row, expected_months)
             raw_key = tuple(row[column] for column in RAW_KEY)
             if raw_key in seen_keys:
                 raise DataSFError("DataSF returned a duplicate declared raw key")
@@ -168,19 +173,26 @@ async def fetch_datasf(
     post_count = _parse_count(await get(count_params))
     if pre_count != post_count or post_count != len(rows):
         raise DataSFError("DataSF row count changed during retrieval")
-    _validate_enplaned_coverage(rows)
+    _validate_enplaned_coverage(rows, expected_months)
     return rows
 
 
 async def publish_datasf_snapshot(
     client: httpx.AsyncClient,
     *,
+    years: tuple[int, int] = DEFAULT_YEARS,
+    publish_current: bool | None = None,
     data_root: Path = DEFAULT_DATA_ROOT,
     monotonic: Callable[[], float] = time.monotonic,
     retrieved_at: datetime | None = None,
 ) -> dict[str, object]:
-    """Publish an accepted immutable Parquet snapshot and update its pointer last."""
-    rows = await fetch_datasf(client, monotonic=monotonic)
+    """Publish an immutable snapshot; only the legacy pair activates by default."""
+    period_start, period_end, predicate, _ = _resolve_years(years)
+    if publish_current is None:
+        publish_current = years == DEFAULT_YEARS
+    if publish_current and years != DEFAULT_YEARS:
+        raise ValueError("the 2024/25 DataSF snapshot must remain a staged candidate")
+    rows = await fetch_datasf(client, years=years, monotonic=monotonic)
     retrieval_time = retrieved_at or datetime.now(timezone.utc)
     if retrieval_time.tzinfo is None:
         raise ValueError("retrieved_at must include a timezone")
@@ -212,18 +224,19 @@ async def publish_datasf_snapshot(
                 "url": DATASET_URL,
             },
             "request": {
-                "count": {"$select": "count(*) AS count", "$where": PREDICATE},
+                "count": {"$select": "count(*) AS count", "$where": predicate},
                 "pages": {
                     "$select": ",".join(REQUIRED_COLUMNS),
-                    "$where": PREDICATE,
+                    "$where": predicate,
                     "$order": ":id",
                     "$limit": PAGE_SIZE,
                     "$offsets": list(range(0, len(rows), PAGE_SIZE)),
                 },
             },
             "scope": {
-                "activity_period_start": "202301",
-                "activity_period_end": "202412",
+                "years": list(years),
+                "activity_period_start": period_start,
+                "activity_period_end": period_end,
                 "enplaned_geographies": sorted(_GEOGRAPHIES),
             },
             "retrieved_at_utc": retrieval_time.isoformat().replace("+00:00", "Z"),
@@ -260,12 +273,13 @@ async def publish_datasf_snapshot(
             os.replace(staging_dir, final_dir)
             published_metadata = metadata
 
-        pointer = {
-            "snapshot_id": snapshot_id,
-            "manifest": f"snapshots/{snapshot_id}/manifest.json",
-        }
-        _write_json(pointer_temp, pointer)
-        os.replace(pointer_temp, data_root / "current.json")
+        if publish_current:
+            pointer = {
+                "snapshot_id": snapshot_id,
+                "manifest": f"snapshots/{snapshot_id}/manifest.json",
+            }
+            _write_json(pointer_temp, pointer)
+            os.replace(pointer_temp, data_root / "current.json")
         return published_metadata
     finally:
         if staging_dir.exists():
@@ -340,16 +354,17 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Refresh the accepted DataSF snapshot")
     parser.add_argument("--refresh", action="store_true")
+    parser.add_argument("--years", nargs=2, type=int, default=DEFAULT_YEARS)
     args = parser.parse_args(argv)
     if not args.refresh:
         parser.error("--refresh is required")
     try:
         async def refresh() -> dict[str, object]:
             async with httpx.AsyncClient() as client:
-                return await publish_datasf_snapshot(client)
+                return await publish_datasf_snapshot(client, years=tuple(args.years))
 
         metadata = asyncio.run(refresh())
-    except (DataSFError, OSError, duckdb.Error) as exc:
+    except (ValueError, DataSFError, OSError, duckdb.Error) as exc:
         print(f"DataSF refresh failed: {exc}", file=sys.stderr)
         return 1
     print(metadata["snapshot_id"])
@@ -380,14 +395,29 @@ def _parse_page(content: bytes) -> list[dict[str, str]]:
         raise DataSFError("DataSF CSV response is invalid") from exc
 
 
-def _validate_row(row: dict[str, str]) -> None:
+def _resolve_years(years: tuple[int, int]) -> tuple[str, str, str, set[str]]:
+    try:
+        period_start, period_end = SUPPORTED_YEAR_PAIRS[years]
+    except KeyError as exc:
+        raise ValueError(f"unsupported DataSF year pair {years!r}") from exc
+    start_year, end_year = int(period_start[:4]), int(period_end[:4])
+    expected_months = {
+        f"{year}{month:02d}"
+        for year in range(start_year, end_year + 1)
+        for month in range(1, 13)
+    }
+    predicate = f"activity_period >= '{period_start}' AND activity_period <= '{period_end}'"
+    return period_start, period_end, predicate, expected_months
+
+
+def _validate_row(row: dict[str, str], expected_months: set[str]) -> None:
     missing_or_blank = set(row) != set(REQUIRED_COLUMNS) or any(
         not isinstance(row[column], str) or not row[column].strip()
         for column in REQUIRED_COLUMNS
     )
     if missing_or_blank:
         raise DataSFError("DataSF row has a missing or blank required field")
-    if row["activity_period"] not in _MONTHS:
+    if row["activity_period"] not in expected_months:
         raise DataSFError("DataSF row has an invalid activity period")
     if row["geo_summary"] not in _GEOGRAPHIES:
         raise DataSFError("DataSF row has an unexpected geography value")
@@ -403,13 +433,16 @@ def _validate_row(row: dict[str, str]) -> None:
             raise DataSFError(f"DataSF row has an invalid {column}") from exc
 
 
-def _validate_enplaned_coverage(rows: list[dict[str, str]]) -> None:
+def _validate_enplaned_coverage(rows: list[dict[str, str]], expected_months: set[str]) -> None:
     cells = {
         (row["activity_period"], row["geo_summary"])
         for row in rows
         if row["activity_type_code"] == "Enplaned"
     }
-    if cells != _EXPECTED_ENPLANED_CELLS:
+    expected_cells = {
+        (month, geography) for month in expected_months for geography in _GEOGRAPHIES
+    }
+    if cells != expected_cells:
         raise DataSFError("DataSF is missing one or more required Enplaned month/geography cells")
 
 

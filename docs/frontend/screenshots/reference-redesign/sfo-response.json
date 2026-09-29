@@ -1,0 +1,389 @@
+{
+  "result_id": "bb36ea5e-2d2e-4c30-925e-a9731f164d52",
+  "request_id": "06a52757-db41-4a76-b0c6-4ee5ad8720b4",
+  "status": "ok",
+  "scope": {
+    "airports": [
+      "SFO"
+    ],
+    "year": 2024,
+    "metric": "sfo_pressure",
+    "threshold_miles": null,
+    "population": "SFO Enplaned passengers combined Domestic and International; T-100 and on-time populations separately identified"
+  },
+  "rows": [
+    {
+      "airport": "SFO",
+      "metrics": [
+        {
+          "key": "sfo_enplaned_trend",
+          "value": 26054586,
+          "unit": "count",
+          "status": "ok",
+          "numerator": null,
+          "denominator": null,
+          "eligible_count": null,
+          "comparison_direction": null,
+          "source_ids": [
+            "datasf-a7952fc3c1649f96aaa0"
+          ],
+          "reason": null
+        },
+        {
+          "key": "passengers",
+          "value": 25288609,
+          "unit": "count",
+          "status": "ok",
+          "numerator": null,
+          "denominator": null,
+          "eligible_count": null,
+          "comparison_direction": null,
+          "source_ids": [
+            "t100-e046736d0936743c3f6d"
+          ],
+          "reason": null
+        },
+        {
+          "key": "seats",
+          "value": 30369317,
+          "unit": "count",
+          "status": "ok",
+          "numerator": null,
+          "denominator": null,
+          "eligible_count": null,
+          "comparison_direction": null,
+          "source_ids": [
+            "t100-e046736d0936743c3f6d"
+          ],
+          "reason": null
+        },
+        {
+          "key": "departures",
+          "value": 174804,
+          "unit": "count",
+          "status": "ok",
+          "numerator": null,
+          "denominator": null,
+          "eligible_count": null,
+          "comparison_direction": null,
+          "source_ids": [
+            "t100-e046736d0936743c3f6d"
+          ],
+          "reason": null
+        },
+        {
+          "key": "passenger_growth",
+          "value": 3.9579148307226224,
+          "unit": "percent",
+          "status": "ok",
+          "numerator": 962795,
+          "denominator": 24325814,
+          "eligible_count": null,
+          "comparison_direction": null,
+          "source_ids": [
+            "t100-e046736d0936743c3f6d"
+          ],
+          "reason": null
+        },
+        {
+          "key": "seat_occupancy",
+          "value": 83.27025925541888,
+          "unit": "percent",
+          "status": "ok",
+          "numerator": 25288609,
+          "denominator": 30369317,
+          "eligible_count": null,
+          "comparison_direction": null,
+          "source_ids": [
+            "t100-e046736d0936743c3f6d"
+          ],
+          "reason": null
+        },
+        {
+          "key": "cancellation_rate",
+          "value": 1.3283646223829069,
+          "unit": "percent",
+          "status": "ok",
+          "numerator": 1793,
+          "denominator": 134978,
+          "eligible_count": 134978,
+          "comparison_direction": null,
+          "source_ids": [
+            "bts_ontime-cceee68e94d79e332f37"
+          ],
+          "reason": null
+        },
+        {
+          "key": "diversion_rate",
+          "value": 0.2511520395916372,
+          "unit": "percent",
+          "status": "ok",
+          "numerator": 339,
+          "denominator": 134978,
+          "eligible_count": 134978,
+          "comparison_direction": null,
+          "source_ids": [
+            "bts_ontime-cceee68e94d79e332f37"
+          ],
+          "reason": null
+        },
+        {
+          "key": "departure_delay_minutes",
+          "value": 17.36998479442362,
+          "unit": "minutes",
+          "status": "ok",
+          "numerator": 2307533.0,
+          "denominator": 132846,
+          "eligible_count": 132846,
+          "comparison_direction": null,
+          "source_ids": [
+            "bts_ontime-cceee68e94d79e332f37"
+          ],
+          "reason": null
+        },
+        {
+          "key": "taxi_out_minutes",
+          "value": 20.096593047588936,
+          "unit": "minutes",
+          "status": "ok",
+          "numerator": 2669752.0,
+          "denominator": 132846,
+          "eligible_count": 132846,
+          "comparison_direction": null,
+          "source_ids": [
+            "bts_ontime-cceee68e94d79e332f37"
+          ],
+          "reason": null
+        },
+        {
+          "key": "sfo_pressure",
+          "value": -0.03657706976654129,
+          "unit": "percentage_points",
+          "status": "ok",
+          "numerator": null,
+          "denominator": null,
+          "eligible_count": null,
+          "comparison_direction": null,
+          "source_ids": [
+            "t100-e046736d0936743c3f6d"
+          ],
+          "reason": null
+        }
+      ],
+      "rank": null
+    }
+  ],
+  "summary": "SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable.",
+  "series": [
+    {
+      "period": "202301",
+      "value": 1607927,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202302",
+      "value": 1570749,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202303",
+      "value": 1952141,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202304",
+      "value": 1962171,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202305",
+      "value": 2194151,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202306",
+      "value": 2399561,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202307",
+      "value": 2419322,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202308",
+      "value": 2317631,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202309",
+      "value": 2167533,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202310",
+      "value": 2217499,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202311",
+      "value": 2071308,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202312",
+      "value": 2112093,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202401",
+      "value": 1746648,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202402",
+      "value": 1718709,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202403",
+      "value": 2084687,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202404",
+      "value": 2019052,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202405",
+      "value": 2261423,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202406",
+      "value": 2379631,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202407",
+      "value": 2451730,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202408",
+      "value": 2385664,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202409",
+      "value": 2192489,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202410",
+      "value": 2345080,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202411",
+      "value": 2147267,
+      "unit": "count",
+      "status": "ok"
+    },
+    {
+      "period": "202412",
+      "value": 2322206,
+      "unit": "count",
+      "status": "ok"
+    }
+  ],
+  "sources": [
+    {
+      "id": "datasf-a7952fc3c1649f96aaa0",
+      "name": "DataSF SFO passenger statistics",
+      "url": "https://data.sf.gov/resource/rkru-6vcg.csv",
+      "snapshot_id": "datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf",
+      "period": "2023-2024",
+      "retrieved_at": null
+    },
+    {
+      "id": "t100-e046736d0936743c3f6d",
+      "name": "BTS T-100 Segment All Carriers",
+      "url": "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=&gnoyr_VQ=FMG",
+      "snapshot_id": "t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac",
+      "period": "2023-2024",
+      "retrieved_at": null
+    },
+    {
+      "id": "bts_ontime-cceee68e94d79e332f37",
+      "name": "BTS Reporting Carrier On-Time Performance",
+      "url": "https://transtats.bts.gov/PREZIP/",
+      "snapshot_id": "ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b",
+      "period": "2024",
+      "retrieved_at": null
+    },
+    {
+      "id": "sfo_cip_statement_2023",
+      "name": "San Francisco International Airport / Airport Commission: Preliminary Official Statement \u2014 Series 2023AB, capital program and Airport Development Plan",
+      "url": "https://www.flysfo.com/sites/default/files/2023-02/Preliminary%20Official%20Statement%20-%20Series%202023AB.pdf",
+      "snapshot_id": "curated-sfo_cip_statement_2023",
+      "period": "2023-02-01",
+      "retrieved_at": null
+    },
+    {
+      "id": "sfo_t3_project_page",
+      "name": "San Francisco International Airport: Terminal 3 Construction \u2014 Terminal 3 West Modernization Project",
+      "url": "https://www.flysfo.com/it/node/15471",
+      "snapshot_id": "curated-sfo_t3_project_page",
+      "period": "undated",
+      "retrieved_at": null
+    }
+  ],
+  "evidence": [
+    {
+      "source_id": "sfo_cip_statement_2023",
+      "locator": "Preliminary Official Statement, Airport Development Plan and Capital Improvement Plan discussion (statement basis: January 2023)",
+      "date": "2023-02-01",
+      "claim": "Status unknown; SFO's 2023 financing statement says its recommended Airport Development Plan was completed in 2016, framed potential long-term development for up to approximately 71 million annual passengers, and was not included in Ascent Phase 1 or the then-current CIP.",
+      "limitation": "The 2023 financing statement is historical and is not proof of the current CIP or project status."
+    },
+    {
+      "source_id": "sfo_t3_project_page",
+      "locator": "Terminal 3 Construction page, Terminal 3 West Modernization Project and Travel Alerts",
+      "date": "2026-09-27",
+      "claim": "Status unknown; SFO currently describes active Terminal 3 West modernization, construction-related passenger routing and curbside impacts, and a Terminal 3 AirTrain station closed pending the new facility expected in 2027.",
+      "limitation": "The 2023 financing statement is historical and is not proof of the current CIP or project status."
+    }
+  ],
+  "exclusions": [],
+  "limitations": [
+    "These transported-passenger, supplied-seat and operational indicators do not identify unmet demand, terminal saturation, or the cause of any observed pressure.",
+    "Profitability and quantitative unmet demand are not_identifiable.",
+    "The 2023 financing statement is historical and is not proof of the current CIP or project status.",
+    "The live Terminal 3 project page is undated; its observed status is checked as of 2026-09-27 and should be refreshed before future decisions.",
+    "Precise quantitative unmet demand and profitability remain not_identifiable from the qualified data and reviewed evidence."
+  ]
+}

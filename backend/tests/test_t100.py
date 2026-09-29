@@ -4,18 +4,25 @@ import csv
 import hashlib
 import io
 import zipfile
+from collections import Counter
 from dataclasses import replace
+from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
+from app.sources import t100
 from app.sources.t100 import (
     CSV_MEMBER,
     FIELDS,
+    RECENT_ORIGINS,
+    RECENT_YEARS,
     ArchiveSpec,
+    ImportResult,
     T100Error,
     coverage_by_airport_period,
     filter_eligible,
     import_archives,
+    publish_t100_snapshot,
 )
 
 
@@ -48,6 +55,7 @@ def test_filter_excludes_cargo_nonscheduled_and_zero_seat_rows(tmp_path) -> None
         _row(unique_carrier="CC", class_code="L", seats="10.00"),
         _row(unique_carrier="DD", class_code="P", seats="10.00"),
         _row(unique_carrier="EE", class_code="F", seats="0.00"),
+        _row(unique_carrier="FF", class_code="F", origin="EWB"),
     ]
     spec = _archive(tmp_path, "classes.zip", rows, "AK", 2024)
     imported = import_archives(tmp_path, (spec,))
@@ -56,6 +64,7 @@ def test_filter_excludes_cargo_nonscheduled_and_zero_seat_rows(tmp_path) -> None
 
     assert [row["UNIQUE_CARRIER"] for row in eligible] == ["AA"]
     assert Decimal(eligible[0]["SEATS"]) == Decimal("10.00")
+    assert [row["UNIQUE_CARRIER"] for row in filter_eligible(imported.records, RECENT_ORIGINS)] == ["AA", "FF"]
 
 
 def test_pvc_2024_december_remains_missing() -> None:
@@ -87,6 +96,42 @@ def test_unquantizable_measure_is_rejected_as_t100_error(tmp_path) -> None:
         import_archives(tmp_path, (spec,))
 
 
+def test_recent_scope_stages_snapshot_and_preserves_current_pointer(tmp_path, monkeypatch) -> None:
+    rows = _recent_coverage_rows()
+    counts = Counter(int(row["YEAR"]) for row in rows)
+    imported = ImportResult(
+        {("row", str(index)): row for index, row in enumerate(rows)},
+        [{"sha256": "a" * 64}], counts, counts,
+    )
+    monkeypatch.setattr(t100, "import_archives", lambda _path, _specs: imported)
+    monkeypatch.setattr(t100, "_write_parquet", lambda path, _rows: path.write_bytes(b"parquet"))
+    monkeypatch.setattr(t100, "_verify_parquet", lambda _path, _count: None)
+    data_root = tmp_path / "published"
+    data_root.mkdir()
+    (data_root / "current.json").write_bytes(b"legacy-pointer")
+
+    metadata = publish_t100_snapshot(
+        tmp_path, data_root=data_root, specs=_recent_specs(), years=RECENT_YEARS,
+        origins=RECENT_ORIGINS, expected_unique_by_year=dict(counts),
+        expected_eligible_by_year=dict(counts),
+        imported_at=datetime(2026, 9, 27, tzinfo=timezone.utc),
+    )
+
+    assert (data_root / "current.json").read_bytes() == b"legacy-pointer"
+    assert metadata["population"]["years"] == [2024, 2025]
+    assert "EWB" in metadata["population"]["origins"]
+    assert metadata["source_complete_no_eligible_months"] == {
+        "PVC-2024": [12], "PVC-2025": [1, 2, 3, 4, 12]
+    }
+
+
+def test_recent_scope_rejects_forced_promotion_before_import(tmp_path) -> None:
+    with pytest.raises(ValueError, match="staged candidate"):
+        publish_t100_snapshot(
+            tmp_path, years=RECENT_YEARS, origins=RECENT_ORIGINS, publish_current=True
+        )
+
+
 def _archive(
     directory,
     filename: str,
@@ -103,6 +148,25 @@ def _archive(
         archive.writestr(CSV_MEMBER, csv_buffer.getvalue().encode())
     content = path.read_bytes()
     return ArchiveSpec(filename, state, year, len(content), hashlib.sha256(content).hexdigest(), len(rows))
+
+
+def _recent_specs() -> tuple[ArchiveSpec, ...]:
+    return tuple(
+        ArchiveSpec(f"{state}-{year}.zip", state, year, 0, "0" * 64, 0)
+        for year in RECENT_YEARS
+        for state in ("AK", "CA", "CT", "MA", "ME", "NH", "RI", "VT")
+    )
+
+
+def _recent_coverage_rows() -> list[dict[str, str]]:
+    missing = {("PVC", 2024): {12}, ("PVC", 2025): {1, 2, 3, 4, 12}}
+    return [
+        _row(origin=origin, year=year, month=month, unique_carrier=f"{origin}{year}{month}")
+        for origin in sorted(RECENT_ORIGINS)
+        for year in RECENT_YEARS
+        for month in range(1, 13)
+        if month not in missing.get((origin, year), set())
+    ]
 
 
 def _row(

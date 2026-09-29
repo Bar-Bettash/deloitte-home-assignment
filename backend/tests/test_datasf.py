@@ -18,6 +18,7 @@ import pytest
 from app.sources import datasf
 from app.sources.datasf import (
     DATASET_URL,
+    DEFAULT_YEARS,
     MAX_BYTES,
     PREDICATE,
     REQUIRED_COLUMNS,
@@ -41,6 +42,34 @@ def test_fetches_sequential_pages_with_fixed_scope_and_matching_counts() -> None
     assert requests[1]["$limit"] == ["5000"]
     assert requests[1]["$select"] == [",".join(REQUIRED_COLUMNS)]
     assert requests[-1] == requests[0]
+
+
+def test_fetches_explicit_2024_2025_pair_with_full_coverage() -> None:
+    requests: list[dict[str, list[str]]] = []
+    rows = _run_fetch(
+        _client_for_rows(_coverage_rows((2024, 2025)), observed=requests),
+        years=(2024, 2025),
+    )
+
+    predicate = "activity_period >= '202401' AND activity_period <= '202512'"
+    assert len(rows) == 48
+    assert all(request["$where"] == [predicate] for request in requests)
+
+
+def test_rejects_unsupported_period_pair_before_request() -> None:
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        return httpx.Response(500, request=request)
+
+    with pytest.raises(ValueError, match="unsupported DataSF year pair"):
+        _run_fetch(
+            httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+            years=(2025, 2026),
+        )
+    assert calls == 0
 
 
 @pytest.mark.parametrize("post_count", [5_000, 5_002])
@@ -259,6 +288,7 @@ def test_publishes_typed_parquet_manifest_and_current_pointer(tmp_path) -> None:
     assert metadata["source_counts"] == {"pre": 48, "post": 48}
     assert metadata["enplaned_cell_count"] == 48
     assert metadata["validation_status"] == "accepted"
+    assert metadata["scope"]["years"] == list(DEFAULT_YEARS)
     assert metadata["content_sha256"] == hashlib.sha256(parquet_path.read_bytes()).hexdigest()
     assert metadata["request"]["pages"]["$order"] == ":id"
     assert duckdb.sql(
@@ -270,6 +300,24 @@ def test_publishes_typed_parquet_manifest_and_current_pointer(tmp_path) -> None:
         "FROM read_parquet(?) LIMIT 1",
         params=[str(parquet_path)],
     ).fetchone() == ("BIGINT", "TIMESTAMP")
+
+
+def test_recent_publish_stages_without_changing_historical_pointer(tmp_path) -> None:
+    data_root = tmp_path / "raw" / "datasf"
+    legacy = _run_publish(_client_for_rows(_coverage_rows(DEFAULT_YEARS)), data_root=data_root)
+    pointer_before = (data_root / "current.json").read_bytes()
+
+    recent = _run_publish(
+        _client_for_rows(_coverage_rows((2024, 2025))),
+        data_root=data_root,
+        years=(2024, 2025),
+    )
+
+    assert recent["snapshot_id"] != legacy["snapshot_id"]
+    assert (data_root / "snapshots" / recent["snapshot_id"] / "manifest.json").is_file()
+    assert (data_root / "current.json").read_bytes() == pointer_before
+    with pytest.raises(ValueError, match="must remain a staged candidate"):
+        _run_publish(httpx.AsyncClient(), years=(2024, 2025), publish_current=True)
 
 
 @pytest.mark.parametrize("failure_stage", ["fetch", "validation", "write"])
@@ -295,7 +343,9 @@ def test_failed_publication_preserves_previous_pointer_and_snapshot(
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(failing_handler))
     else:
-        failing_rows = [_row(index) for index in range(47 if failure_stage == "validation" else 48)]
+        failing_rows = _coverage_rows((2024, 2025))
+        if failure_stage == "validation":
+            failing_rows.pop()
         client = _client_for_rows(failing_rows)
         if failure_stage == "write":
             monkeypatch.setattr(
@@ -305,7 +355,7 @@ def test_failed_publication_preserves_previous_pointer_and_snapshot(
             )
 
     with pytest.raises((DataSFError, OSError)):
-        _run_publish(client, data_root=data_root)
+        _run_publish(client, data_root=data_root, years=(2024, 2025))
 
     assert (data_root / "current.json").read_bytes() == pointer_before
     assert {
@@ -398,3 +448,13 @@ def _row(index: int) -> dict[str, str]:
         "data_as_of": "2026-09-22T00:00:00.000",
         "data_loaded_at": "2026-09-22T12:00:00.000",
     }
+
+
+def _coverage_rows(years: tuple[int, int]) -> list[dict[str, str]]:
+    rows = [_row(index) for index in range(48)]
+    for index, row in enumerate(rows):
+        year = years[(index % 24) // 12]
+        month = index % 12 + 1
+        row["activity_period"] = f"{year}{month:02d}"
+        row["activity_period_start_date"] = f"{year}-{month:02d}-01T00:00:00.000"
+    return rows

@@ -55,6 +55,21 @@ OBSERVED_CLASSES = {"F", "G", "L", "P"}
 DATA_SOURCES = {"DF", "DU", "IF", "IU"}
 EXPECTED_UNIQUE_BY_YEAR = {2023: 153_307, 2024: 160_404}
 EXPECTED_ELIGIBLE_BY_YEAR = {2023: 29_039, 2024: 31_428}
+HISTORICAL_YEARS = (2023, 2024)
+RECENT_YEARS = (2024, 2025)
+RECENT_ORIGINS = REQUIRED_ORIGINS | {"EWB"}
+_SUPPORTED_ORIGINS = {
+    HISTORICAL_YEARS: frozenset(REQUIRED_ORIGINS),
+    RECENT_YEARS: frozenset(RECENT_ORIGINS),
+}
+_QUALIFIED_COUNTS = {
+    HISTORICAL_YEARS: (EXPECTED_UNIQUE_BY_YEAR, EXPECTED_ELIGIBLE_BY_YEAR),
+    RECENT_YEARS: ({2024: 160_404, 2025: 163_030}, {2024: 31_453, 2025: 31_839}),
+}
+_NO_ELIGIBLE_MONTHS = {
+    HISTORICAL_YEARS: {("PVC", 2024): {12}},
+    RECENT_YEARS: {("PVC", 2024): {12}, ("PVC", 2025): {1, 2, 3, 4, 12}},
+}
 
 PARQUET_SCHEMA = (
     ("departures_scheduled", "DECIMAL(18,2)"),
@@ -188,12 +203,14 @@ def import_archives(input_dir: Path, specs: tuple[ArchiveSpec, ...] = EXPECTED_A
     return ImportResult(records, archive_metadata, input_by_year, unique_by_year)
 
 
-def filter_eligible(records: dict[tuple[str, ...], dict[str, str]]) -> list[dict[str, str]]:
+def filter_eligible(
+    records: dict[tuple[str, ...], dict[str, str]], origins=REQUIRED_ORIGINS
+) -> list[dict[str, str]]:
     """Select declared origin-direction scheduled passenger rows with positive seats."""
     return [
         row
         for row in records.values()
-        if row["ORIGIN"] in REQUIRED_ORIGINS
+        if row["ORIGIN"] in origins
         and row["CLASS"] in ALLOWED_CLASSES
         and Decimal(row["SEATS"]) > 0
     ]
@@ -211,19 +228,36 @@ def publish_t100_snapshot(
     *,
     data_root: Path = DEFAULT_DATA_ROOT,
     specs: tuple[ArchiveSpec, ...] = EXPECTED_ARCHIVES,
-    expected_unique_by_year: dict[int, int] = EXPECTED_UNIQUE_BY_YEAR,
-    expected_eligible_by_year: dict[int, int] = EXPECTED_ELIGIBLE_BY_YEAR,
+    years: tuple[int, int] = HISTORICAL_YEARS,
+    origins=None,
+    publish_current: bool | None = None,
+    expected_unique_by_year: dict[int, int] | None = None,
+    expected_eligible_by_year: dict[int, int] | None = None,
     imported_at: datetime | None = None,
 ) -> dict[str, object]:
+    supported_origins = _SUPPORTED_ORIGINS.get(years)
+    selected_origins = supported_origins if origins is None else frozenset(origins)
+    if supported_origins is None or selected_origins != supported_origins:
+        raise ValueError("unsupported T-100 year/origin scope")
+    if publish_current is None:
+        publish_current = years == HISTORICAL_YEARS
+    if publish_current and years != HISTORICAL_YEARS:
+        raise ValueError("the 2024/25 T-100 snapshot must remain a staged candidate")
+    expected_partitions = {(state, year) for state in ("AK", "CA", "CT", "MA", "ME", "NH", "RI", "VT") for year in years}
+    if {(spec.state, spec.year) for spec in specs} != expected_partitions:
+        raise T100Error("T-100 archive specs do not match the selected scope")
+    qualified_unique, qualified_eligible = _QUALIFIED_COUNTS[years]
+    expected_unique_by_year = expected_unique_by_year or qualified_unique
+    expected_eligible_by_year = expected_eligible_by_year or qualified_eligible
     imported = import_archives(input_dir, specs)
     if dict(imported.unique_by_year) != expected_unique_by_year:
         raise T100Error("T-100 union unique counts do not match qualification")
-    rows = filter_eligible(imported.records)
+    rows = filter_eligible(imported.records, selected_origins)
     eligible_by_year = Counter(int(row["YEAR"]) for row in rows)
     if dict(eligible_by_year) != expected_eligible_by_year:
         raise T100Error("T-100 eligible row counts do not match qualification")
     coverage = coverage_by_airport_period(rows)
-    _validate_coverage(coverage)
+    _validate_coverage(coverage, years, selected_origins)
 
     import_time = imported_at or datetime.now(timezone.utc)
     if import_time.tzinfo is None:
@@ -253,7 +287,7 @@ def publish_t100_snapshot(
         raw_classes = Counter(
             (int(row["YEAR"]), row["CLASS"])
             for row in imported.records.values()
-            if row["ORIGIN"] in REQUIRED_ORIGINS
+            if row["ORIGIN"] in selected_origins
         )
         source_families = Counter((int(row["YEAR"]), row["DATA_SOURCE"]) for row in rows)
         metadata: dict[str, object] = {
@@ -269,7 +303,8 @@ def publish_t100_snapshot(
             },
             "eligible_rows": {str(year): eligible_by_year[year] for year in sorted(eligible_by_year)},
             "population": {
-                "origins": sorted(REQUIRED_ORIGINS),
+                "origins": sorted(selected_origins),
+                "years": list(years),
                 "classes": sorted(ALLOWED_CLASSES),
                 "seats": "> 0",
                 "direction": "origin",
@@ -284,6 +319,7 @@ def publish_t100_snapshot(
             },
             "coverage_cells": len(coverage),
             "missing_months": missing_months,
+            "source_complete_no_eligible_months": missing_months,
             "parquet_file": "data.parquet",
             "parquet_sha256": parquet_sha256,
             "validation_status": "accepted",
@@ -309,9 +345,10 @@ def publish_t100_snapshot(
         else:
             os.replace(staging_dir, final_dir)
             published_metadata = metadata
-        pointer = {"snapshot_id": snapshot_id, "manifest": f"snapshots/{snapshot_id}/manifest.json"}
-        _write_json(pointer_temp, pointer)
-        os.replace(pointer_temp, data_root / "current.json")
+        if publish_current:
+            pointer = {"snapshot_id": snapshot_id, "manifest": f"snapshots/{snapshot_id}/manifest.json"}
+            _write_json(pointer_temp, pointer)
+            os.replace(pointer_temp, data_root / "current.json")
         return published_metadata
     finally:
         if staging_dir.exists():
@@ -350,13 +387,13 @@ def _validate_row(source_row: dict[str, str], spec: ArchiveSpec) -> dict[str, st
     return row
 
 
-def _validate_coverage(coverage: dict[tuple[str, int], set[int]]) -> None:
-    expected_keys = {(airport, year) for airport in REQUIRED_ORIGINS for year in (2023, 2024)}
+def _validate_coverage(coverage, years, origins) -> None:
+    expected_keys = {(airport, year) for airport in origins for year in years}
     if set(coverage) != expected_keys:
         raise T100Error("T-100 eligible airport-year coverage is incomplete")
     full_year = set(range(1, 13))
     for key, months in coverage.items():
-        expected = full_year - {12} if key == ("PVC", 2024) else full_year
+        expected = full_year - _NO_ELIGIBLE_MONTHS[years].get(key, set())
         if months != expected:
             raise T100Error(f"T-100 month coverage is invalid for {key[0]}-{key[1]}")
 
