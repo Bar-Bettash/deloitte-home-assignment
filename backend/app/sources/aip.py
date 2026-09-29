@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shutil
+import sys
 import tempfile
 import zipfile
 from dataclasses import dataclass
@@ -222,7 +223,10 @@ def verify_aip_snapshot(snapshot_id: str, qualification: Path, *, data_root: Pat
         source = directory / "source.xlsx"
     except (KeyError, TypeError) as exc:
         raise AIPError("AIP qualification contract is incomplete") from exc
-    checksum = hashlib.sha256(source.read_bytes()).hexdigest()
+    try:
+        checksum = hashlib.sha256(source.read_bytes()).hexdigest()
+    except OSError as exc:
+        raise AIPError("AIP snapshot source workbook is unreadable") from exc
     derived_id = "aip-" + hashlib.sha256(
         f"faa-aip:fy2025:{checksum}".encode("ascii")
     ).hexdigest()
@@ -261,18 +265,24 @@ def main(argv: list[str] | None = None) -> int:
     if args.refresh:
         if not args.stage or args.year != 2025 or args.snapshot_id or args.qualification:
             parser.error("refresh requires only --stage --year 2025")
-        content = fetch_qualified_workbook()
-        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as handle:
-            handle.write(content)
-            temporary = Path(handle.name)
-        try:
-            result = publish_aip_snapshot(temporary, data_root=args.data_root)
-        finally:
-            temporary.unlink(missing_ok=True)
-    else:
-        if args.stage or args.year or not args.snapshot_id or args.qualification is None:
-            parser.error("verify-only requires --snapshot-id and --qualification")
-        result = verify_aip_snapshot(args.snapshot_id, args.qualification, data_root=args.data_root)
+    elif args.stage or args.year or not args.snapshot_id or args.qualification is None:
+        parser.error("verify-only requires --snapshot-id and --qualification")
+    try:
+        if args.refresh:
+            content = fetch_qualified_workbook()
+            with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as handle:
+                handle.write(content)
+                temporary = Path(handle.name)
+            try:
+                result = publish_aip_snapshot(temporary, data_root=args.data_root)
+            finally:
+                temporary.unlink(missing_ok=True)
+        else:
+            result = verify_aip_snapshot(args.snapshot_id, args.qualification, data_root=args.data_root)
+    except (AIPError, OSError) as exc:
+        action = "refresh" if args.refresh else "verification"
+        print(f"AIP {action} failed: {exc}", file=sys.stderr)
+        return 1
     print(result["snapshot_id"])
     return 0
 

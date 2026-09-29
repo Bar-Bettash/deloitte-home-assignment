@@ -176,3 +176,64 @@ def _workbook(path: Path, *, problem: str | None = None) -> Path:
         archive.writestr("xl/sharedStrings.xml", f'<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">{shared}</sst>')
         archive.writestr("xl/worksheets/sheet1.xml", f'<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>{"".join(rows)}</sheetData></worksheet>')
     return path
+
+
+XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+PACKAGED_AIP = next((Path(__file__).resolve().parents[1] / "data" / "raw" / "aip" / "snapshots").glob("aip-*/source.xlsx"))
+
+
+def _serve(monkeypatch, handler) -> None:
+    real_client = aip.httpx.Client
+    monkeypatch.setattr(aip.httpx, "Client", lambda: real_client(transport=aip.httpx.MockTransport(handler)))
+
+
+def test_fetch_qualified_workbook_returns_the_qualified_bytes(monkeypatch) -> None:
+    content = PACKAGED_AIP.read_bytes()
+    _serve(monkeypatch, lambda request: aip.httpx.Response(200, headers={"content-type": XLSX_TYPE}, content=content))
+    assert aip.fetch_qualified_workbook() == content
+
+
+@pytest.mark.parametrize(
+    "status, content_type, body, message",
+    [
+        (503, XLSX_TYPE, b"", "request failed"),
+        (200, "text/html", b"<html>", "not an XLSX"),
+        (200, XLSX_TYPE, b"x" * (aip.MAX_XLSX_BYTES + 1), "compressed-size limit"),
+        (200, XLSX_TYPE, b"PK-not-the-qualified-workbook", "differs from the qualified source"),
+    ],
+)
+def test_fetch_qualified_workbook_fails_closed(monkeypatch, status, content_type, body, message) -> None:
+    _serve(monkeypatch, lambda request: aip.httpx.Response(status, headers={"content-type": content_type}, content=body))
+    with pytest.raises(AIPError, match=message):
+        aip.fetch_qualified_workbook()
+
+
+def test_fetch_qualified_workbook_maps_transport_errors(monkeypatch) -> None:
+    def handler(request):
+        raise aip.httpx.ConnectError("offline", request=request)
+
+    _serve(monkeypatch, handler)
+    with pytest.raises(AIPError, match="request failed"):
+        aip.fetch_qualified_workbook()
+
+
+def test_cli_reports_one_line_failures_and_exits_nonzero(tmp_path: Path, monkeypatch, capsys) -> None:
+    def fail() -> bytes:
+        raise AIPError("FAA AIP workbook request failed")
+
+    monkeypatch.setattr(aip, "fetch_qualified_workbook", fail)
+    assert aip.main(["--refresh", "--stage", "--year", "2025", "--data-root", str(tmp_path)]) == 1
+    assert capsys.readouterr().err == "AIP refresh failed: FAA AIP workbook request failed\n"
+
+    snapshot_id = "aip-" + hashlib.sha256(b"faa-aip:fy2025:" + b"0" * 64).hexdigest()
+    (tmp_path / "snapshots" / snapshot_id).mkdir(parents=True)
+    (tmp_path / "snapshots" / snapshot_id / "manifest.json").write_text("{}")
+    qualification = tmp_path / "qualification.json"
+    qualification.write_text(json.dumps({"sources": {"faa_aip_fy2025_awards": {
+        "source": {}, "workbook": {}, "new_england_cohort": {}}}}))
+    args = ["--verify-only", "--snapshot-id", snapshot_id, "--qualification", str(qualification), "--data-root", str(tmp_path)]
+    assert aip.main(args) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("AIP verification failed:") and err.count("\n") == 1
+    assert aip.main([*args[:4], str(tmp_path / "missing.json"), *args[5:]]) == 1
+    assert capsys.readouterr().err.startswith("AIP verification failed:")
