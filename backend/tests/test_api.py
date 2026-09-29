@@ -251,7 +251,7 @@ def test_real_recent_bundle_dispatch_binds_scope_cohort_and_anc_counts(monkeypat
     [
         ("congestion", ["LAX"], 4),
         ("sfo_enplaned_trend", ["SFO"], 2),
-        ("sfo_pressure", ["SFO"], 11),
+        ("sfo_pressure", ["SFO"], 12),
     ],
 )
 def test_real_recent_bundle_dispatches_operations_and_sfo_workflows(
@@ -1238,3 +1238,23 @@ def test_cancelled_request_keeps_busy_slot_until_worker_finishes_without_saving_
         asyncio.run(run_cancelled_request())
     finally:
         work_gate.set()
+
+
+@pytest.mark.parametrize("year", [2024, 2025])
+def test_sfo_pressure_returns_datasf_enplaned_growth(year):
+    payload = client.post("/api/query", json={"analysis": {
+        "action": "metric", "airports": ["SFO"], "metric": "sfo_pressure", "year": year,
+    }}).json()
+    metrics = {metric["key"]: metric for metric in payload["rows"][0]["metrics"]}
+    growth = metrics["enplaned_growth"]
+    datasf_ids = {source["id"] for source in payload["sources"] if source["snapshot_id"].startswith("datasf-")}
+    series = {point["period"]: point["value"] for point in payload["series"]}
+    baseline = sum(value for period, value in series.items() if period.startswith(str(year - 1)))
+    comparison = sum(value for period, value in series.items() if period.startswith(str(year)))
+
+    assert growth["unit"] == "percent" and growth["status"] == "ok"
+    assert growth["source_ids"] == metrics["sfo_enplaned_trend"]["source_ids"]
+    assert set(growth["source_ids"]) <= datasf_ids
+    assert (growth["numerator"], growth["denominator"]) == (comparison - baseline, baseline)
+    assert growth["value"] == pytest.approx((comparison - baseline) / baseline * 100)
+    assert metrics["sfo_enplaned_trend"]["value"] == comparison

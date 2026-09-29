@@ -179,7 +179,8 @@ class MetricValue(StrictModel):
     key: Literal[
         "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
         "long_haul_share", "screen_score", "cancellation_rate", "diversion_rate",
-        "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "sfo_pressure",
+        "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "enplaned_growth",
+        "sfo_pressure",
     ]
     value: WireNumber | None
     unit: Literal["count", "percent", "percentage_points", "minutes", "score"]
@@ -216,7 +217,8 @@ class MetricValue(StrictModel):
             "long_haul_share": "percent", "screen_score": "score",
             "cancellation_rate": "percent", "diversion_rate": "percent",
             "departure_delay_minutes": "minutes", "taxi_out_minutes": "minutes",
-            "sfo_enplaned_trend": "count", "sfo_pressure": "percentage_points",
+            "sfo_enplaned_trend": "count", "enplaned_growth": "percent",
+            "sfo_pressure": "percentage_points",
         }[self.key]
         if self.unit != expected_unit:
             raise ValueError(f"{self.key} must use {expected_unit}")

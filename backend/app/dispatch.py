@@ -671,6 +671,10 @@ def _sfo_pressure(
         enplaned_id = source_by_key["datasf"]["id"]
         annual = {item.year: item.passengers for item in trend.annual_totals}
         metrics.append(MetricValue(key="sfo_enplaned_trend", value=annual[comparison_year], unit="count", status="ok", source_ids=[enplaned_id]))
+        baseline = annual[trend.growth.baseline_year]
+        metrics.append(MetricValue(key="enplaned_growth", value=trend.growth.percent, unit="percent",
+                                   status=trend.growth.status, numerator=annual[comparison_year] - baseline,
+                                   denominator=baseline, source_ids=[enplaned_id], reason=trend.growth.reason))
         series = [{"period": item.period, "value": item.passengers, "unit": "count", "status": "ok"} for item in trend.series]
     if pressure.t100_traffic.result is not None:
         traffic = pressure.t100_traffic.result
