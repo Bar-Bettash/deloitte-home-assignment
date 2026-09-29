@@ -98,7 +98,7 @@ class PressureMetric:
 
 @dataclass(frozen=True, slots=True)
 class SFOPressureLineage:
-    source_id: Literal["datasf", "t100", "bts_ontime"]
+    source_id: Literal["datasf", "t100", "ontime"]
     snapshot_id: str
     name: str
     url: str
@@ -293,7 +293,8 @@ def calculate_sfo_pressure(
         lineage.append(SFOPressureLineage("t100", source.snapshot_id, source.name, source.url, source.period))
     if operations.result is not None:
         source = operations.result.source
-        lineage.append(SFOPressureLineage("bts_ontime", source.snapshot_id, source.name, source.url, source.period))
+        # Same "ontime" kind as the operations workflow, so one snapshot has one source ID.
+        lineage.append(SFOPressureLineage("ontime", source.snapshot_id, source.name, source.url, source.period))
 
     available_components = sum(
         component.result is not None for component in (enplaned, traffic, operations)

@@ -1076,6 +1076,36 @@ def test_real_operations_congestion_compare_uses_accepted_snapshot():
     assert any("reporting carriers" in item and "observed months" in item for item in payload["limitations"])
 
 
+def test_mixed_congestion_summary_states_each_airports_count():
+    rows = [
+        {"airport": "LAX", "metrics": [{"value": 2}, {"value": 1}, {"value": None}, {"value": 5}]},
+        {"airport": "SNA", "metrics": [{"value": 1}, {"value": 3}, {"value": 4}, {"value": 5}]},
+    ]
+    summary = dispatch._comparison_summary("congestion", rows)
+    assert summary == (
+        "Mixed picture: LAX is higher on 1 and SNA on 1 of 3 comparable operational-strain indicators."
+    )
+    assert "favor" not in summary
+
+
+@pytest.mark.parametrize("year", [2024, 2025])
+def test_same_on_time_snapshot_has_one_source_id_across_workflows(year):
+    operations = client.post("/api/query", json={"analysis": {
+        "action": "compare", "airports": ["LAX", "SNA"], "metric": "congestion", "year": year,
+    }})
+    pressure = client.post("/api/query", json={"analysis": {
+        "action": "metric", "airports": ["SFO"], "metric": "sfo_pressure", "year": year,
+    }})
+    assert operations.status_code == pressure.status_code == 200
+    by_snapshot = {}
+    for payload in (operations.json(), pressure.json()):
+        for source in payload["sources"]:
+            by_snapshot.setdefault(source["snapshot_id"], set()).add(source["id"])
+    ontime = {snapshot: ids for snapshot, ids in by_snapshot.items() if snapshot.startswith("ontime-")}
+    assert ontime
+    assert all(len(ids) == 1 and next(iter(ids)).startswith("ontime-") for ids in ontime.values())
+
+
 def test_real_sfo_pressure_route_keeps_populations_and_not_identifiable_boundary():
     expected_operations = calculate_operations("SFO")
     response = client.post(

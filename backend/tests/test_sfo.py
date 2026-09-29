@@ -127,7 +127,7 @@ def test_pressure_bundle_uses_matched_t100_formula_and_preserves_sources(
     assert result.growth_gap_pp.unit == "percentage_points"
     assert result.t100_traffic.result.annual[0].occupancy_percent.value == 50.0
     assert result.t100_traffic.result.annual[1].occupancy_percent.value == pytest.approx(52.38, abs=0.01)
-    assert [source.source_id for source in result.lineage] == ["datasf", "t100", "bts_ontime"]
+    assert [source.source_id for source in result.lineage] == ["datasf", "t100", "ontime"]
     assert "do not identify unmet demand" in result.limitation
 
 

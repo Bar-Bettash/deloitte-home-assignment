@@ -681,7 +681,7 @@ def _sfo_pressure(
         metrics.append(_traffic_metric_value("seat_occupancy", comparison_year, traffic, source_id))
     if pressure.operations.result is not None:
         operation = pressure.operations.result
-        source_id = source_by_key["bts_ontime"]["id"]
+        source_id = source_by_key["ontime"]["id"]
         metrics.extend(_operation_metric(operation, key, source_id) for key in CONGESTION_KEYS)
     gap_source = source_by_key.get("t100", {}).get("id")
     metrics.append(MetricValue(key="sfo_pressure", value=pressure.growth_gap_pp.value, unit="percentage_points",
@@ -811,7 +811,8 @@ def _comparison_summary(metric, rows) -> str:
         if comparable == 0:
             return "Insufficient comparable operational indicators for a congestion comparison."
         if first_higher and second_higher:
-            return f"Mixed picture: indicators favor {a['airport']} and {b['airport']} across {comparable} comparable operational measures."
+            return (f"Mixed picture: {a['airport']} is higher on {first_higher} and {b['airport']} on "
+                    f"{second_higher} of {comparable} comparable operational-strain indicators.")
         if first_higher:
             return f"{a['airport']} is higher on {first_higher} of {comparable} comparable operational-strain indicators."
         if second_higher:
