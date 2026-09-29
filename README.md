@@ -119,7 +119,7 @@ flowchart LR
   - Volume = `P_cmp`.
   - Occupancy = `100 · P_cmp / S_cmp`.
 - **Percentile.** Each input is converted to a mid-rank percentile among the eligible airports: `(2·lower + tied − 1) / (2·(n − 1))`. Here `lower` is the number of airports with a lower value and `tied` is the number with the same value, including the airport itself. Percentiles make the three inputs comparable on one scale. They also stop BOS's size from dominating the score.
-- **Why these weights.** Growth gets 40 % because expansion is about future demand. Volume and occupancy get 30 % each, because they measure how much the current terminal is used. The weights are a judgment call, not a calibrated model. Each result says the score is a heuristic measure of traffic pressure, not of terminal capacity or investment success.
+- **Why these weights.** Growth gets 40 % and volume and occupancy 30 % each. Growth represents observed traffic momentum, volume represents the scale of activity, and seat occupancy represents utilization of supplied airline seats. Together they provide a traffic-pressure screen, not a measurement of terminal utilization or project profitability. The weights are a judgment call, not a calibrated model. Each result says the score is a heuristic measure of traffic pressure, not of terminal capacity or investment success.
 - **Terminal notes.** Each ranked airport shows curated terminal-project evidence. Every claim is labelled "Status unknown", because the sources do not confirm project status.
 - If fewer than two airports are eligible, the result is `insufficient_data` and no ranking is shown.
 
@@ -140,7 +140,7 @@ Long-haul share = departures of at least 3,000 miles ÷ all performed departures
 
 ### SFO unmet demand
 
-Traffic data records flights that operated. It cannot show demand that was never served. The agent therefore does not produce a number for "unmet demand" and marks it `not_identifiable`. Instead it reports a **pressure indicator**: passenger growth % minus seat growth %, in percentage points. A positive value would mean passengers grew faster than seats, which points to tightening capacity. For 2025 the value is −1.22 pp: seats grew faster than passengers. The indicator is shown alongside the DataSF monthly enplanement trend, occupancy and on-time indicators. The answer to "why" states which of these the data supports and which it cannot address, such as fares, slot limits and latent demand.
+Traffic data records flights that operated. It cannot show demand that was never served. The agent therefore does not produce a number for "unmet demand" and marks it `not_identifiable`. Instead it reports a **pressure indicator**: passenger growth % minus seat growth %, in percentage points. A positive value would mean passenger growth outpaced growth in the airline seats supplied; a negative value means supplied seats grew faster than passengers. It says nothing about terminal or airfield capacity. For 2025 the value is −1.22 pp: supplied airline seats grew faster than passengers. The indicator is shown alongside the DataSF monthly enplanement trend, occupancy and on-time indicators. The answer to "why" states which of these the data supports and which it cannot address, such as fares, slot limits and latent demand.
 
 ## Where and how AI is used
 

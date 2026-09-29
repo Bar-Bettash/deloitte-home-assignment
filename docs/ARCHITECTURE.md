@@ -187,7 +187,7 @@ The source commands under `app/sources/` (`datasf`, `faa`, `aip`, `t100`, `ontim
   3. `scripts/accept_bundle.py` registers the bundle.
 
   `python -m app.sources.bundle --check-candidate <id>` re-verifies a bundle offline.
-- The acceptance step requires a freshness receipt that is less than 7 days old. The current receipt stops being valid for promotion after **2026-10-04T17:17Z**. Serving does not depend on it.
+- The acceptance step requires a freshness receipt that is at most 7 days old and bound to the bundle's `manifest_sha256` (`app/sources/source_check.py`). The current receipt for `annual-2025-r1` stops being valid for re-promoting that same bundle after **2026-10-04T17:17Z**. Serving the already-accepted bundle does not depend on it, and it is not a rebuild deadline: a rebuilt bundle has a new manifest and needs its own fresh receipt whenever it is promoted.
 
 ## Evidence limits
 
