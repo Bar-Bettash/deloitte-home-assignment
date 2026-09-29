@@ -242,3 +242,40 @@ def test_verify_only_failure_is_labelled_verification(tmp_path, capsys) -> None:
                               "--qualification", str(qualification), "--data-root", str(tmp_path)])
     assert result == 1
     assert capsys.readouterr().err.startswith("FAA verification failed:")
+
+
+def _pdf_client(handler) -> httpx.Client:
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_fetch_faa_pdf_returns_complete_pdf() -> None:
+    client = _pdf_client(lambda request: httpx.Response(200, headers={"content-type": "application/pdf; qs=1"}, content=FAKE_PDF))
+    assert faa_source.fetch_faa_pdf(client, "https://faa.test/cohort.pdf") == FAKE_PDF
+
+
+@pytest.mark.parametrize(
+    "status, content_type, body, message",
+    [
+        (404, "application/pdf", FAKE_PDF, "request failed"),
+        (200, "text/html", b"<html>", "not a PDF"),
+        (200, "application/pdf", b"%PDF-" + b"0" * faa_source.MAX_PDF_BYTES, "5 MiB limit"),
+        (200, "application/pdf", b"%PDF-1.6\ntruncated", "not a complete PDF"),
+        (200, "application/pdf", b"<html>%%EOF", "not a complete PDF"),
+    ],
+)
+def test_fetch_faa_pdf_fails_closed(status, content_type, body, message) -> None:
+    client = _pdf_client(lambda request: httpx.Response(status, headers={"content-type": content_type}, content=body))
+    with pytest.raises(FAAError, match=message):
+        faa_source.fetch_faa_pdf(client, "https://faa.test/cohort.pdf")
+
+
+@pytest.mark.parametrize(
+    "error, message",
+    [(httpx.ReadTimeout, "timed out"), (httpx.ConnectError, "request failed")],
+)
+def test_fetch_faa_pdf_maps_transport_errors(error, message) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise error("offline", request=request)
+
+    with pytest.raises(FAAError, match=message):
+        faa_source.fetch_faa_pdf(_pdf_client(handler), "https://faa.test/cohort.pdf")

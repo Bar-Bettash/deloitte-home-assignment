@@ -373,3 +373,56 @@ def _archive_bytes(rows: list[dict[str, str]]) -> bytes:
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("data.csv", csv_buffer.getvalue().encode())
     return buffer.getvalue()
+
+
+def _ranged_server(bodies: dict[str, bytes], requests: list[tuple[str, str, str | None]]):
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = bodies.get(str(request.url))
+        requests.append((request.method, str(request.url), request.headers.get("range")))
+        if body is None:
+            return httpx.Response(404)
+        if request.method == "HEAD":
+            return httpx.Response(200, headers={"Content-Length": str(len(body)), "Last-Modified": "Mon, 01 Sep 2025 00:00:00 GMT"})
+        start, end = (int(value) for value in request.headers["range"].removeprefix("bytes=").split("-"))
+        return httpx.Response(206, content=body[start:end + 1], headers={
+            "Content-Length": str(end - start + 1), "Content-Range": f"bytes {start}-{end}/{len(body)}",
+        })
+
+    return httpx.MockTransport(handler)
+
+
+def test_acquisition_downloads_in_ranges_writes_metadata_and_reuses_files(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(ontime, "RANGE_BYTES", 97)
+    bodies = {archive_url(month): _archive_bytes([_row(month, "LAX", 1)]) for month in (2, 3)}
+    requests: list[tuple[str, str, str | None]] = []
+
+    acquired = acquire_archives(tmp_path, transport=_ranged_server(bodies, requests), months=(2, 3))
+
+    for item, month in zip(acquired, (2, 3), strict=True):
+        body = bodies[archive_url(month)]
+        assert (tmp_path / archive_filename(month)).read_bytes() == body
+        assert item["month"] == month and item["url"] == archive_url(month)
+        assert item["zip_bytes"] == len(body) and item["sha256"] == hashlib.sha256(body).hexdigest()
+        assert item["last_modified"] == "Mon, 01 Sep 2025 00:00:00 GMT"
+        ranges = [header for method, url, header in requests if method == "GET" and url == archive_url(month)]
+        assert len(ranges) == -(-len(body) // 97) > 1 and ranges[0] == "bytes=0-96"
+    assert json.loads((tmp_path / "acquisition.json").read_text()) == {"archives": acquired}
+    assert not list(tmp_path.glob(".*.part"))
+
+    requests.clear()
+    assert acquire_archives(tmp_path, transport=_ranged_server(bodies, requests), months=(2, 3)) == acquired
+    assert requests == []
+
+    (tmp_path / archive_filename(3)).write_bytes(b"stale")
+    again = acquire_archives(tmp_path, transport=_ranged_server(bodies, requests), months=(2, 3))
+    assert again[0] == acquired[0]
+    assert (tmp_path / archive_filename(3)).read_bytes() == bodies[archive_url(3)]
+    assert {url for _method, url, _range in requests} == {archive_url(3)}
+
+
+def test_acquisition_http_error_is_ontime_error_and_keeps_metadata(tmp_path: Path) -> None:
+    (tmp_path / "acquisition.json").write_text('{"archives": []}')
+    with pytest.raises(OnTimeError, match="archive 2 acquisition failed"):
+        acquire_archives(tmp_path, transport=_ranged_server({}, []), months=(2,))
+    assert json.loads((tmp_path / "acquisition.json").read_text()) == {"archives": []}
+    assert not (tmp_path / archive_filename(2)).exists()
