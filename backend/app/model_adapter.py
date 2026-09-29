@@ -1,7 +1,8 @@
 """One bounded Responses API call for interpreting an airport question.
 
 This module has no credential lookup or network activity at import time. Callers
-own admission, monetary budgets, session validation, and result dispatch.
+own admission, context validation, logging, and result dispatch. Spend is capped
+by the provider project's hard budget, not by this module.
 """
 
 from __future__ import annotations
@@ -30,8 +31,13 @@ Ask for clarification when the request is ambiguous. Mark unsupported business
 claims, arbitrary data access, and unqualified periods unsupported. One analysis
 per question. A follow-up may use only the validated previous analysis supplied
 in context; if it needs prior context and none is supplied, ask for clarification.
-The server independently validates every analysis and supplies all user-visible
-safe-outcome wording. The message field must be null."""
+A follow-up keeps the previous analysis's year unless the user names another.
+Supported periods are calendar years 2023, 2024 and 2025. If the user names no
+year, set year to null: the server then uses the newest accepted period (2025,
+compared with 2024). Growth and screen scores need a comparison year (2024 or
+2025); operational and SFO metrics support 2024 and 2025. Any other year is
+unsupported. The server independently validates every analysis and supplies all
+user-visible safe-outcome wording. The message field must be null."""
 PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()
 # Admission binds the complete running adapter, including its schema and request
 # construction, rather than only the instruction text.
@@ -49,7 +55,7 @@ _ANALYSIS_FIELDS = {
     "airports": {"type": ["array", "null"], "items": {"type": "string", "enum": sorted(AIRPORTS)}},
     "region": {"type": ["string", "null"], "enum": ["new_england", None]},
     "metric": {"type": ["string", "null"], "enum": [*_METRICS, None]},
-    "year": {"type": ["integer", "null"]},
+    "year": {"type": ["integer", "null"], "enum": [2023, 2024, 2025, None]},
     "threshold_miles": {"type": ["number", "null"]},
 }
 OUTPUT_SCHEMA = {
@@ -121,13 +127,19 @@ def _make_input(message: str, context: Mapping[str, object] | None, settings: Se
 
 
 def _request_json(settings: Settings, user_input: str) -> dict[str, object]:
-    return {
+    request: dict[str, object] = {
         "model": settings.model_name,
         "input": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_input}],
         "text": {"format": {"type": "json_schema", "name": "airport_intent", "strict": True, "schema": OUTPUT_SCHEMA}},
         "store": False,
         "max_output_tokens": settings.model_max_output_tokens,
     }
+    # Reasoning tokens count against max_output_tokens; a low effort keeps a
+    # reasoning model inside the 512-token cap. Omitted entirely when unset so
+    # non-reasoning models never receive an unsupported parameter.
+    if settings.model_reasoning_effort is not None:
+        request["reasoning"] = {"effort": settings.model_reasoning_effort}
+    return request
 
 
 def provider_input_token_ceiling(settings: Settings) -> int:

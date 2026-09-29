@@ -235,3 +235,50 @@ async def test_response_byte_cap_and_malformed_json() -> None:
             with pytest.raises(ModelAdapterError) as exc:
                 await interpret_message("question", settings=_settings(), client=client)
         assert exc.value.code == "model_invalid_response"
+
+
+async def _captured_payload(settings: Settings, outcome: dict[str, object] | None = None) -> tuple[dict, object]:
+    captured: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(json.loads(request.content))
+        return httpx.Response(200, json=_response(outcome))
+
+    async with _client(handler) as client:
+        result = await interpret_message("ANC long haul share", settings=settings, client=client)
+    return captured[0], result
+
+
+@run_async
+async def test_reasoning_key_is_omitted_unless_effort_is_configured() -> None:
+    payload, _ = await _captured_payload(_settings())
+    assert "reasoning" not in payload
+    payload, _ = await _captured_payload(_settings(model_reasoning_effort="low"))
+    assert payload["reasoning"] == {"effort": "low"}
+    assert payload["max_output_tokens"] == 512
+
+
+def test_schema_and_prompt_declare_supported_periods_including_2025() -> None:
+    year = OUTPUT_SCHEMA["properties"]["analysis"]["properties"]["year"]
+    assert year == {"type": ["integer", "null"], "enum": [2023, 2024, 2025, None]}
+    assert "bundle_id" not in OUTPUT_SCHEMA["properties"]["analysis"]["properties"]
+    assert "2025" in model_adapter.SYSTEM_PROMPT
+    assert "set year to null" in model_adapter.SYSTEM_PROMPT
+
+
+@pytest.mark.parametrize("year", [2025, None])
+def test_2025_and_omitted_year_outcomes_are_accepted(year) -> None:
+    analysis = {**_analysis(), "year": year}
+    _, result = asyncio.run(
+        _captured_payload(_settings(), {"kind": "analysis", "analysis": analysis, "message": None})
+    )
+    assert result.analysis.year == year
+    assert result.analysis.bundle_id is None
+
+
+@run_async
+async def test_unsupported_year_from_model_fails_closed() -> None:
+    analysis = {**_analysis(), "year": 2026}
+    with pytest.raises(ModelAdapterError) as exc:
+        await _captured_payload(_settings(), {"kind": "analysis", "analysis": analysis, "message": None})
+    assert exc.value.code == "model_invalid_response"

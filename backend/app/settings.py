@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Mapping
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
@@ -37,6 +37,8 @@ class Settings(BaseModel):
     model_runtime_enabled: Annotated[bool, Field(strict=True)] = False
     model_admitted_name: Annotated[str, Field(min_length=1, max_length=100)] | None = None
     model_admitted_adapter_sha256: Annotated[str, Field(min_length=64, max_length=64)] | None = None
+    # Responses API reasoning effort for reasoning models [RE-VERIFY values for the chosen model].
+    model_reasoning_effort: Literal["none", "minimal", "low", "medium", "high"] | None = None
 
     @field_validator("model_api_key", mode="before")
     @classmethod
@@ -97,6 +99,7 @@ _ENV_FIELDS = {
     "MODEL_RUNTIME_ENABLED": "model_runtime_enabled",
     "MODEL_ADMITTED_NAME": "model_admitted_name",
     "MODEL_ADMITTED_ADAPTER_SHA256": "model_admitted_adapter_sha256",
+    "MODEL_REASONING_EFFORT": "model_reasoning_effort",
 }
 
 _INTEGER_FIELDS = {
@@ -110,6 +113,8 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     """Validate supported environment overrides without reading dotenv files."""
     source = os.environ if environ is None else environ
     values = {field: source[variable] for variable, field in _ENV_FIELDS.items() if variable in source}
+    if values.get("model_reasoning_effort") == "":
+        del values["model_reasoning_effort"]
     try:
         for field in _INTEGER_FIELDS & values.keys():
             values[field] = int(values[field])

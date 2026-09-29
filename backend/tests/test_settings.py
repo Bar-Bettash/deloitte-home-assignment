@@ -213,5 +213,17 @@ def test_malformed_host_or_limit_is_rejected(environ) -> None:
         load_hosting({"ACCESS_CODE": FAKE_CODE, "APP_SIGNING_KEY": FAKE_KEY, **environ})
 
 
+@pytest.mark.parametrize("value,expected", [("low", "low"), ("minimal", "minimal"), ("", None)])
+def test_reasoning_effort_is_optional_and_enumerated(value, expected) -> None:
+    assert load_settings({"MODEL_REASONING_EFFORT": value}).model_reasoning_effort == expected
+    assert load_settings({}).model_reasoning_effort is None
+
+
+@pytest.mark.parametrize("value", ["LOW", "extreme", " low"])
+def test_invalid_reasoning_effort_is_rejected(value) -> None:
+    with pytest.raises(ValueError):
+        load_settings({"MODEL_REASONING_EFFORT": value})
+
+
 def test_explicit_concurrency_limit_is_used() -> None:
     assert load_hosting({"MAX_CONCURRENT_QUERIES": "3"}).max_concurrent_queries == 3

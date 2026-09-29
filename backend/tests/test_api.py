@@ -553,6 +553,29 @@ def test_admitted_free_text_dispatches_validated_analysis_and_stores_request(mon
     assert claims.request.metric == "sfo_enplaned_trend"
 
 
+def test_each_model_call_logs_metadata_without_question_text(monkeypatch, caplog):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def interpret(_message, *, settings, context):
+        analysis = main.AnalysisRequest(action="metric", airports=["SFO"], metric="sfo_enplaned_trend", year=2024)
+        return ModelInterpretation("analysis", analysis, None, ModelUsage(123, 45))
+
+    async def failing(*_args, **_kwargs):
+        raise ModelAdapterError("model_refusal")
+
+    caplog.set_level("INFO", logger="app.main")
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    assert client.post("/api/query", json={"message": "secret-question-text SFO trend"}).status_code == 200
+    monkeypatch.setattr(main, "interpret_message", failing)
+    assert client.post("/api/query", json={"message": "secret-question-text again"}).status_code == 503
+    lines = [record.getMessage() for record in caplog.records if record.getMessage().startswith("model call")]
+    assert len(lines) == 2
+    assert "model=fake-model outcome=analysis follow_up=False" in lines[0]
+    assert "input_tokens=123 output_tokens=45" in lines[0]
+    assert "outcome=model_refusal" in lines[1]
+    assert all("secret-question-text" not in record.getMessage() for record in caplog.records)
+
+
 def test_independent_question_after_prior_result_has_no_context(monkeypatch):
     first = client.post("/api/query", json=SFO_REQUEST)
     assert first.status_code == 200

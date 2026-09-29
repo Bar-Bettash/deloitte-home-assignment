@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import secrets
+import time
 from pathlib import Path
 from typing import Literal
 from uuid import UUID, uuid4
@@ -225,13 +226,35 @@ def _run_structured(
     return dispatch_analysis(analysis, request_id), analysis
 
 
+def _log_model_call(
+    request_id: UUID, settings, started: float, *, outcome: str, follow_up: bool,
+    input_tokens: int | None = None, output_tokens: int | None = None,
+) -> None:
+    """One metadata line per provider call; never the question, context or provider text."""
+    logger.info(
+        "model call request_id=%s model=%s outcome=%s follow_up=%s latency_ms=%d input_tokens=%s output_tokens=%s",
+        request_id, settings.model_name, outcome, follow_up,
+        round((time.perf_counter() - started) * 1000), input_tokens, output_tokens,
+    )
+
+
 async def _interpret_and_dispatch(
     message: str, request_id: UUID, claims: ContextClaims | None, settings,
 ) -> tuple[AnalysisResult, AnalysisRequest]:
-    interpreted = await interpret_message(
-        message, settings=settings,
-        context=claims.request.model_dump(mode="json", exclude_none=True) if claims is not None else None,
-    )
+    started = time.perf_counter()
+    try:
+        interpreted = await interpret_message(
+            message, settings=settings,
+            context=claims.request.model_dump(mode="json", exclude_none=True) if claims is not None else None,
+        )
+    except ModelAdapterError as exc:
+        _log_model_call(request_id, settings, started, outcome=exc.code, follow_up=claims is not None)
+        raise
+    except asyncio.CancelledError:
+        _log_model_call(request_id, settings, started, outcome="cancelled", follow_up=claims is not None)
+        raise
+    _log_model_call(request_id, settings, started, outcome=interpreted.kind, follow_up=claims is not None,
+                    input_tokens=interpreted.usage.input_tokens, output_tokens=interpreted.usage.output_tokens)
     if interpreted.analysis is None:
         code = interpreted.kind if interpreted.kind in {"clarification_required", "unsupported_scope"} else "ai_unavailable"
         raise _ModelOutcome(code, (
