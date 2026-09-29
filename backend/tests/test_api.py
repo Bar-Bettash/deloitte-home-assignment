@@ -19,7 +19,6 @@ from app.calculations.traffic import MetricResult, calculate_traffic_batch
 from app.contracts import MAX_REQUEST_BYTES
 from app.dispatch import DispatchFailure
 from app.model_adapter import ModelAdapterError, ModelInterpretation, ModelUsage
-from app.model_budget import BudgetLedger
 from app.settings import Settings
 from app.sources.bundle import DEFAULT_DATA_ROOT as BUNDLE_DATA_ROOT
 from app.sources.bundle import load_bundle
@@ -39,10 +38,8 @@ SFO_REQUEST = {
 @pytest.fixture(autouse=True)
 def reset_session_store():
     main.session_store.clear()
-    main.model_budget = BudgetLedger()
     yield
     main.session_store.clear()
-    main.model_budget = BudgetLedger()
 
 
 def admitted_settings(**overrides):
@@ -50,8 +47,6 @@ def admitted_settings(**overrides):
         "model_api_key": "offline-test-only", "model_name": "fake-model",
         "model_runtime_enabled": True, "model_admitted_name": "fake-model",
         "model_admitted_adapter_sha256": main.ADAPTER_SHA256,
-        "model_input_usd_per_million_tokens": 1.0,
-        "model_output_usd_per_million_tokens": 1.0,
     }
     values.update(overrides)
     return Settings.model_validate(values)
@@ -549,7 +544,6 @@ def test_admitted_free_text_dispatches_validated_analysis_and_stores_request(mon
     assert len(calls) == 1 and calls[0][1] is None
     token = client.cookies.get(main.SESSION_COOKIE)
     assert main.session_store.validate_request_context(token, UUID(response.json()["result_id"])).metric == "sfo_enplaned_trend"
-    assert main.model_budget.charged_usd > 0
 
 
 def test_independent_question_after_prior_result_has_no_context(monkeypatch):
@@ -570,7 +564,7 @@ def test_independent_question_after_prior_result_has_no_context(monkeypatch):
     assert second.json()["scope"]["airports"] == ["PVD"]
 
 
-def test_old_prompt_hash_cannot_admit_changed_adapter_or_spend_budget(monkeypatch):
+def test_old_prompt_hash_cannot_admit_changed_adapter(monkeypatch):
     from app.model_adapter import PROMPT_SHA256
 
     assert PROMPT_SHA256 != main.ADAPTER_SHA256
@@ -583,7 +577,6 @@ def test_old_prompt_hash_cannot_admit_changed_adapter_or_spend_budget(monkeypatc
     response = client.post("/api/query", json={"message": "How many PVD passengers in 2024?"})
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "ai_unavailable"
-    assert main.model_budget.charged_usd == 0
 
 
 def test_followup_passes_only_owned_stored_request_and_stale_id_keeps_cookie(monkeypatch):
@@ -683,7 +676,7 @@ def test_model_safe_outcome_is_422_and_preserves_prior_result(monkeypatch, kind,
     assert main.session_store.latest(token).result_id == UUID(first.json()["result_id"])
 
 
-def test_budget_rejection_and_model_timeout_preserve_prior_result(monkeypatch):
+def test_model_timeout_preserves_prior_result(monkeypatch):
     first = client.post("/api/query", json=SFO_REQUEST)
     token = client.cookies.get(main.SESSION_COOKIE)
     called = []
@@ -693,17 +686,11 @@ def test_budget_rejection_and_model_timeout_preserve_prior_result(monkeypatch):
         raise ModelAdapterError("model_timeout")
 
     monkeypatch.setattr(main, "interpret_message", interpret)
-    monkeypatch.setattr(main, "load_settings", lambda: admitted_settings(model_request_budget_usd=0))
-    rejected = client.post("/api/query", json={"message": "SFO trend?"})
-    assert rejected.status_code == 503
-    assert rejected.json()["error"]["code"] == "budget_exhausted"
-    assert called == []
     monkeypatch.setattr(main, "load_settings", admitted_settings)
     timed_out = client.post("/api/query", json={"message": "SFO trend?"})
     assert timed_out.status_code == 504
     assert timed_out.json()["error"]["code"] == "query_timeout"
     assert len(called) == 1
-    assert main.model_budget.charged_usd > 0
     assert main.session_store.latest(token).result_id == UUID(first.json()["result_id"])
 
 
@@ -716,7 +703,6 @@ def test_structured_preset_never_calls_model_even_when_admitted(monkeypatch):
     monkeypatch.setattr(main, "interpret_message", fail)
     response = client.post("/api/query", json=SFO_REQUEST)
     assert response.status_code == 200
-    assert main.model_budget.charged_usd == 0
 
 
 def test_cookie_is_opaque_and_explain_is_read_only():

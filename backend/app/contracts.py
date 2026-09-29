@@ -390,7 +390,7 @@ class AnalysisResult(StrictModel):
 ErrorCode = Literal[
     "invalid_json", "unsupported_media_type", "request_too_large", "invalid_request",
     "unsupported_scope", "clarification_required", "insufficient_data", "busy",
-    "session_expired", "result_mismatch", "ai_unavailable", "budget_exhausted",
+    "session_expired", "result_mismatch", "ai_unavailable",
     "data_unavailable", "query_timeout", "internal_error",
 ]
 

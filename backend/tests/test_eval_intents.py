@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 from app.contracts import AnalysisRequest
 from app.model_adapter import ModelAdapterError, ModelInterpretation, ModelUsage
-from app.model_budget import BudgetLedger
 from app.settings import load_settings
 from scripts import eval_intents
 from scripts.eval_intents import (
@@ -24,8 +23,6 @@ def _live_settings(**overrides):
     values = {
         "OPENAI_API_KEY": "fake-key-never-output",
         "OPENAI_MODEL": "fake.model-v1",
-        "MODEL_INPUT_USD_PER_MILLION_TOKENS": "0.15",
-        "MODEL_OUTPUT_USD_PER_MILLION_TOKENS": "0.6",
     }
     values.update(overrides)
     return load_settings(values)
@@ -172,7 +169,8 @@ def test_live_candidate_cli_uses_shared_adapter_and_records_bounded_cost_metadat
 
     monkeypatch.setattr(eval_intents.model_adapter, "interpret_message", fake_interpret)
     output = tmp_path / "live.json"
-    assert main(["--mode", "candidate", "--live", "--acceptance", "--output", str(output)]) == 0
+    assert main(["--mode", "candidate", "--live", "--acceptance", "--output", str(output),
+                 "--input-usd-per-mtok", "0.15", "--output-usd-per-mtok", "0.6"]) == 0
     report = json.loads(output.read_text())
     capsys.readouterr()
     assert len(calls) == 30
@@ -187,6 +185,8 @@ def test_live_candidate_cli_uses_shared_adapter_and_records_bounded_cost_metadat
                for item in report["results"])
     assert all(item["cost_usd"] == 4.5 / 1_000_000 for item in report["results"])
     assert all(item["latency_ms"] >= 0 for item in report["results"])
+    assert report["unknown_cost_calls"] == 0
+    assert 0 <= report["latency_ms_p50"] <= report["latency_ms_p95"]
     assert "fake-key-never-output" not in output.read_text()
 
 
@@ -205,24 +205,28 @@ def test_live_candidate_missing_config_makes_no_adapter_call(tmp_path, monkeypat
     assert report["aggregate_cost_usd"] == 0.0
 
 
-def test_live_candidate_budget_denial_prevents_adapter_call(monkeypatch):
-    settings = _live_settings(MODEL_REQUEST_BUDGET_USD="0")
+def test_live_candidate_without_rate_card_makes_no_adapter_call(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(eval_intents, "load_settings", lambda: _live_settings())
 
     async def forbidden(*_args, **_kwargs):
-        pytest.fail("budget denial must precede adapter call")
+        pytest.fail("adapter must not be called without a recorded rate card")
 
     monkeypatch.setattr(eval_intents.model_adapter, "interpret_message", forbidden)
-    report = eval_intents.evaluate_live_candidate(load_and_validate_cases(CORPUS), settings, "a" * 64)
-    assert report["error_count"] == 30
-    assert all(item["error"] == "error:BudgetExhausted" for item in report["results"])
-    assert all(item["cost_usd"] == 0.0 for item in report["results"])
-    assert report["aggregate_cost_usd"] == 0.0
-    assert report["candidate_acceptance"] is False
+    output = tmp_path / "no-rates.json"
+    assert main(["--mode", "candidate", "--live", "--acceptance", "--output", str(output)]) == 1
+    capsys.readouterr()
+    assert json.loads(output.read_text())["candidate_status"] == "missing_model_configuration_no_provider_call_made"
 
 
-def test_live_candidate_timeout_forfeits_reservation_then_denies_further_calls(monkeypatch):
-    settings = _live_settings(MODEL_PROCESS_BUDGET_USD="0.003")
-    reserved = BudgetLedger().reserve(settings).reserved_usd
+@pytest.mark.parametrize("rate", ["0", "-1", "nan", "inf", "1000.01", "cheap"])
+def test_live_rate_card_arguments_are_bounded(rate, capsys):
+    with pytest.raises(SystemExit):
+        main(["--mode", "candidate", "--live", "--input-usd-per-mtok", rate, "--output-usd-per-mtok", "1"])
+    capsys.readouterr()
+
+
+def test_live_candidate_timeout_is_recorded_with_unknown_cost_and_one_call_per_case(monkeypatch):
+    settings = _live_settings()
     calls = []
 
     async def timed_out(*_args, **_kwargs):
@@ -230,12 +234,14 @@ def test_live_candidate_timeout_forfeits_reservation_then_denies_further_calls(m
         raise ModelAdapterError("model_timeout")
 
     monkeypatch.setattr(eval_intents.model_adapter, "interpret_message", timed_out)
-    report = eval_intents.evaluate_live_candidate(load_and_validate_cases(CORPUS), settings, "a" * 64)
-    assert len(calls) == 1
-    assert report["results"][0]["error"] == "timeout"
-    assert report["results"][0]["cost_usd"] == float(reserved)
-    assert all(item["error"] == "error:BudgetExhausted" for item in report["results"][1:])
-    assert report["aggregate_cost_usd"] == float(reserved)
+    report = eval_intents.evaluate_live_candidate(
+        load_and_validate_cases(CORPUS), settings, "a" * 64,
+        input_usd_per_million_tokens=0.15, output_usd_per_million_tokens=0.6,
+    )
+    assert len(calls) == 30
+    assert all(item["error"] == "timeout" and item["cost_usd"] is None for item in report["results"])
+    assert report["aggregate_cost_usd"] == 0
+    assert report["unknown_cost_calls"] == 30
     assert report["candidate_acceptance"] is False
 
 

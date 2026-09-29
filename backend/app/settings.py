@@ -28,18 +28,15 @@ class Settings(BaseModel):
     model_timeout_seconds: Annotated[int, Field(strict=True, gt=0, le=20)] = 20
     model_max_output_tokens: Annotated[int, Field(strict=True, gt=0, le=512)] = 512
     model_max_prompt_tokens: Annotated[int, Field(strict=True, gt=0, le=8000)] = 8000
-    model_request_budget_usd: Annotated[float, Field(strict=True, ge=0, le=0.02, allow_inf_nan=False)] = 0.02
-    model_process_budget_usd: Annotated[float, Field(strict=True, ge=0, le=2.0, allow_inf_nan=False)] = 2.0
 
     model_api_key: SecretStr | None = None
     model_name: Annotated[str, Field(min_length=1, max_length=100)] | None = None
     # Candidate evaluation may use model_access_available. Runtime calls require
-    # this separate, exact admission record and explicit positive prices.
+    # this separate, exact admission record. Spend is capped by the provider
+    # project's hard monthly budget, not by process-local accounting.
     model_runtime_enabled: Annotated[bool, Field(strict=True)] = False
     model_admitted_name: Annotated[str, Field(min_length=1, max_length=100)] | None = None
     model_admitted_adapter_sha256: Annotated[str, Field(min_length=64, max_length=64)] | None = None
-    model_input_usd_per_million_tokens: Annotated[float, Field(strict=True, gt=0, le=1000, allow_inf_nan=False)] | None = None
-    model_output_usd_per_million_tokens: Annotated[float, Field(strict=True, gt=0, le=1000, allow_inf_nan=False)] | None = None
 
     @field_validator("model_api_key", mode="before")
     @classmethod
@@ -75,15 +72,13 @@ class Settings(BaseModel):
         return value
 
     def model_runtime_admitted(self, adapter_hash: str) -> bool:
-        """Fail closed unless the exact model/adapter and prices are admitted."""
+        """Fail closed unless the exact model and adapter are admitted."""
         return (
             self.model_runtime_enabled
             and self.model_access_available
             and self.model_admitted_name == self.model_name
             and self.model_admitted_adapter_sha256 is not None
             and self.model_admitted_adapter_sha256 == adapter_hash
-            and self.model_input_usd_per_million_tokens is not None
-            and self.model_output_usd_per_million_tokens is not None
         )
 
 
@@ -97,25 +92,17 @@ _ENV_FIELDS = {
     "MODEL_TIMEOUT_SECONDS": "model_timeout_seconds",
     "MODEL_MAX_OUTPUT_TOKENS": "model_max_output_tokens",
     "MODEL_MAX_PROMPT_TOKENS": "model_max_prompt_tokens",
-    "MODEL_REQUEST_BUDGET_USD": "model_request_budget_usd",
-    "MODEL_PROCESS_BUDGET_USD": "model_process_budget_usd",
     "OPENAI_API_KEY": "model_api_key",
     "OPENAI_MODEL": "model_name",
     "MODEL_RUNTIME_ENABLED": "model_runtime_enabled",
     "MODEL_ADMITTED_NAME": "model_admitted_name",
     "MODEL_ADMITTED_ADAPTER_SHA256": "model_admitted_adapter_sha256",
-    "MODEL_INPUT_USD_PER_MILLION_TOKENS": "model_input_usd_per_million_tokens",
-    "MODEL_OUTPUT_USD_PER_MILLION_TOKENS": "model_output_usd_per_million_tokens",
 }
 
 _INTEGER_FIELDS = {
     "query_timeout_seconds", "max_query_chars", "source_timeout_seconds",
     "source_max_pages", "source_page_size", "source_max_bytes",
     "model_timeout_seconds", "model_max_output_tokens", "model_max_prompt_tokens",
-}
-_FLOAT_FIELDS = {
-    "model_request_budget_usd", "model_process_budget_usd",
-    "model_input_usd_per_million_tokens", "model_output_usd_per_million_tokens",
 }
 
 
@@ -126,8 +113,6 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     try:
         for field in _INTEGER_FIELDS & values.keys():
             values[field] = int(values[field])
-        for field in _FLOAT_FIELDS & values.keys():
-            values[field] = float(values[field])
         if "model_runtime_enabled" in values:
             enabled = values["model_runtime_enabled"]
             if not isinstance(enabled, str) or enabled.lower() not in {"true", "false"}:

@@ -18,7 +18,6 @@ from typing import Any
 from app import model_adapter
 from app.contracts import AnalysisRequest
 from app.intent import parse_intent
-from app.model_budget import BudgetLedger
 from app.settings import Settings, load_settings
 from pydantic import ValidationError
 
@@ -218,37 +217,58 @@ def write_report(report: dict[str, Any], path: Path) -> None:
     path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def evaluate_live_candidate(cases: list[dict[str, Any]], settings: Settings, corpus_sha256: str) -> dict[str, Any]:
-    """Use the API adapter with a separate conservative budget for this CLI run."""
-    ledger = BudgetLedger()
-    charges: list[float] = []
+def _cost_usd(usage: model_adapter.ModelUsage, input_rate: float, output_rate: float) -> float:
+    return (usage.input_tokens * input_rate + usage.output_tokens * output_rate) / 1_000_000
+
+
+def _percentile(values: list[float], fraction: float) -> float | None:
+    """Nearest-rank percentile; None for an empty sample."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    rank = max(1, math.ceil(fraction * len(ordered)))
+    return ordered[rank - 1]
+
+
+def evaluate_live_candidate(
+    cases: list[dict[str, Any]],
+    settings: Settings,
+    corpus_sha256: str,
+    *,
+    input_usd_per_million_tokens: float,
+    output_usd_per_million_tokens: float,
+) -> dict[str, Any]:
+    """Make at most one adapter call per frozen case and record bounded usage.
+
+    Spend protection is the provider project's hard budget plus the fixed corpus
+    size; this CLI only reports cost from provider usage and the operator-supplied
+    rate card read on the day of the run. Failed calls have unknown usage.
+    """
+    costs: list[float | None] = []
 
     def candidate(text: str, context: dict[str, Any] | None) -> dict[str, Any]:
-        before = ledger.charged_usd
+        costs.append(None)
         try:
-            reservation = ledger.reserve(settings)
-            try:
-                interpreted = asyncio.run(model_adapter.interpret_message(text, context=context, settings=settings))
-            except Exception as exc:
-                reservation.forfeit()
-                if isinstance(exc, model_adapter.ModelAdapterError) and exc.code == "model_timeout":
-                    raise TimeoutError("model timeout") from None
-                raise
-            cost = reservation.settle(interpreted.usage)
-            return {
-                "outcome": interpreted.as_outcome(),
-                "usage": {
-                    "input_tokens": interpreted.usage.input_tokens,
-                    "output_tokens": interpreted.usage.output_tokens,
-                    "cost_usd": float(cost),
-                },
-            }
-        finally:
-            charges.append(float(ledger.charged_usd - before))
+            interpreted = asyncio.run(model_adapter.interpret_message(text, context=context, settings=settings))
+        except model_adapter.ModelAdapterError as exc:
+            if exc.code == "model_timeout":
+                raise TimeoutError("model timeout") from None
+            raise
+        cost = _cost_usd(interpreted.usage, input_usd_per_million_tokens, output_usd_per_million_tokens)
+        costs[-1] = cost
+        return {
+            "outcome": interpreted.as_outcome(),
+            "usage": {
+                "input_tokens": interpreted.usage.input_tokens,
+                "output_tokens": interpreted.usage.output_tokens,
+                "cost_usd": cost,
+            },
+        }
 
     report = evaluate_cases(cases, candidate, mode="candidate")
-    for result, charge in zip(report["results"], charges, strict=True):
-        result["cost_usd"] = charge
+    for result, cost in zip(report["results"], costs, strict=True):
+        result["cost_usd"] = cost
+    latencies = [item["latency_ms"] for item in report["results"]]
     report.update({
         "candidate_status": "evaluated",
         "model": settings.model_name,
@@ -256,12 +276,25 @@ def evaluate_live_candidate(cases: list[dict[str, Any]], settings: Settings, cor
         "adapter_sha256": model_adapter.ADAPTER_SHA256,
         "corpus_sha256": corpus_sha256,
         "rate_card_usd_per_million_tokens": {
-            "input": settings.model_input_usd_per_million_tokens,
-            "output": settings.model_output_usd_per_million_tokens,
+            "input": input_usd_per_million_tokens,
+            "output": output_usd_per_million_tokens,
         },
-        "aggregate_cost_usd": float(ledger.charged_usd),
+        "aggregate_cost_usd": sum(cost for cost in costs if cost is not None),
+        "unknown_cost_calls": sum(cost is None for cost in costs),
+        "latency_ms_p50": _percentile(latencies, 0.50),
+        "latency_ms_p95": _percentile(latencies, 0.95),
     })
     return report
+
+
+def _rate(value: str) -> float:
+    try:
+        rate = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("rate must be a number") from exc
+    if not math.isfinite(rate) or not 0 < rate <= 1000:
+        raise argparse.ArgumentTypeError("rate must be in (0, 1000]")
+    return rate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -270,6 +303,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--acceptance", action="store_true")
     parser.add_argument("--live", action="store_true", help="call the configured model for candidate evaluation")
+    parser.add_argument("--input-usd-per-mtok", type=_rate,
+                        help="provider input price per million tokens, read on the day of a --live run")
+    parser.add_argument("--output-usd-per-mtok", type=_rate,
+                        help="provider output price per million tokens, read on the day of a --live run")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     if args.live and args.mode != "candidate":
@@ -284,9 +321,13 @@ def main(argv: list[str] | None = None) -> int:
     elif args.live:
         settings = load_settings()
         if (settings.model_access_available
-                and settings.model_input_usd_per_million_tokens is not None
-                and settings.model_output_usd_per_million_tokens is not None):
-            report = evaluate_live_candidate(cases, settings, hashlib.sha256(args.cases.read_bytes()).hexdigest())
+                and args.input_usd_per_mtok is not None
+                and args.output_usd_per_mtok is not None):
+            report = evaluate_live_candidate(
+                cases, settings, hashlib.sha256(args.cases.read_bytes()).hexdigest(),
+                input_usd_per_million_tokens=args.input_usd_per_mtok,
+                output_usd_per_million_tokens=args.output_usd_per_mtok,
+            )
         else:
             def unconfigured_live(_text, _context):
                 raise RuntimeError("candidate model or prices are not configured")

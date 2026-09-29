@@ -17,7 +17,6 @@ from app.contracts import (
 )
 from app.dispatch import DispatchFailure, dispatch_analysis
 from app.model_adapter import ADAPTER_SHA256, ModelAdapterError, interpret_message
-from app.model_budget import BudgetConfigurationError, BudgetExhausted, BudgetLedger
 from app.session import SessionError, SessionStore
 from app.settings import load_settings
 from fastapi import FastAPI, Request
@@ -37,7 +36,6 @@ SESSION_COOKIE = "airport_session"
 QUERY_DEADLINE_SECONDS = 30
 ALLOWED_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "testserver"})
 session_store = SessionStore()
-model_budget = BudgetLedger()
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -121,23 +119,10 @@ async def _interpret_and_dispatch(
     message: str, request_id: UUID, previous: AnalysisResult | None,
     context: AnalysisRequest | None, settings,
 ) -> tuple[AnalysisResult, AnalysisRequest]:
-    reservation = model_budget.reserve(settings)
-    finalized = False
-    try:
-        interpreted = await interpret_message(
-            message, settings=settings,
-            context=context.model_dump(mode="json", exclude_none=True) if context is not None else None,
-        )
-        # Invalid or absent usage forfeits the full reserved amount.
-        finalized = True
-        try:
-            reservation.settle(interpreted.usage)
-        except ValueError as exc:
-            raise _ModelOutcome("ai_unavailable", "AI interpretation is unavailable. Try a preset.") from exc
-    except BaseException:
-        if not finalized:
-            reservation.forfeit()
-        raise
+    interpreted = await interpret_message(
+        message, settings=settings,
+        context=context.model_dump(mode="json", exclude_none=True) if context is not None else None,
+    )
 
     if interpreted.analysis is None:
         code = interpreted.kind if interpreted.kind in {"clarification_required", "unsupported_scope"} else "ai_unavailable"
@@ -270,12 +255,6 @@ async def query(request: Request) -> AnalysisResult | JSONResponse:
                                cookie_token=token if created else None)
     except SessionError as exc:
         return _error_response(request_id, 409, exc.code, exc.message,
-                               cookie_token=token if created else None)
-    except BudgetExhausted:
-        return _error_response(request_id, 503, "budget_exhausted", "AI spending limit reached. Try a preset.",
-                               cookie_token=token if created else None)
-    except BudgetConfigurationError:
-        return _error_response(request_id, 503, "ai_unavailable", "AI interpretation is unavailable. Try a preset.",
                                cookie_token=token if created else None)
     except ModelAdapterError as exc:
         safe = _model_error(exc)
