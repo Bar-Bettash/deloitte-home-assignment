@@ -1,160 +1,222 @@
-# Local airport analyst: implementation handoff
+# Backend architecture and implementation notes
 
-Status checked against the working tree on 2026-09-27. This describes the implemented local prototype. [ADR 001](adr/001-local-demo.md) records the decision; [API/UI map](../../docs/API_UI_MAP.md) defines the wire contract. Earlier planning text is not evidence that a feature runs.
+This file describes the code in this repository. [docs/DESIGN.md](../../docs/DESIGN.md) is the short assignment deliverable, covering methodology, tradeoffs and AI use. [API/UI map](../../docs/API_UI_MAP.md) is the wire contract. [ADR 001](adr/001-local-demo.md) records the original local-only decision. That ADR's in-memory session and loopback-only parts have since been replaced by the signed context cookie and the hosted mode described below.
 
 ## Run locally
 
-Run these commands from the repository root with Python **3.11**. The package declares `>=3.11,<3.12`. Use a fresh, unused virtual-environment directory; the example below assumes `.venv` does not already contain an environment you need.
+Use Python 3.11 or 3.12. `pyproject.toml` allows `>=3.11,<3.13`, and `.python-version` pins 3.12, which is the Vercel target. Run these commands from the repository root:
 
 ```sh
-python3.11 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r backend/requirements.txt
-python -m pip check
-```
-
-Runtime dependencies are pinned FastAPI, Pydantic, HTTPX, DuckDB and Uvicorn; pytest is included for checks. The UI needs no bundler or npm installation. Node is needed only for its built-in UI test runner. FAA PDF acquisition additionally requires the external `pdftotext` executable on PATH; Python requirements do not install it.
-
-### Acquire/import accepted data before starting the server
-
-Source commands write under `backend/data/raw/<source>/`; failed acquisition does not replace a previously accepted snapshot. Stop the server before refreshing. The accepted demo snapshots described below travel with the Git checkout; source refreshes remain explicit operator actions.
-
-```sh
-PYTHONPATH=backend python -m app.sources.datasf --refresh
-PYTHONPATH=backend python -m app.sources.faa --refresh
-```
-
-For T-100, obtain the exact qualified official FMG state/year exports first. The importer does **not** contain a download command. Its `EXPECTED_ARCHIVES` tuple in `backend/app/sources/t100.py` defines the 16 filenames, sizes and hashes for AK/CA/CT/MA/ME/NH/RI/VT × 2023/2024, and `FIELDS` defines the full source grain. The official export form is recorded there as `BTS_FORM_URL`. A newly revised export with different bytes is rejected rather than silently accepted; requalification is required. Put the qualified ZIPs in an existing directory, then replace the example path below with that directory:
-
-```sh
-PYTHONPATH=backend python -m app.sources.t100 --input-dir /path/to/qualified-t100-zips
-```
-
-Acquire and import all twelve CY2024 Reporting Carrier FGJ archives using an operator-chosen archive directory:
-
-```sh
-PYTHONPATH=backend python -m app.sources.ontime --input-dir /path/to/ontime-zips --acquire
-```
-
-Omit `--acquire` to validate/import archives already present. This command can make substantial downloads. It verifies required archive/schema/population coverage before publishing; it is never invoked by a browser query. No automatic source fallback is provided.
-
-Each source publishes a `current.json` pointer and a snapshot manifest. Analytical readers verify accepted status and Parquet checksums. Snapshot IDs, periods, known source retrieval times and separate import metadata become result provenance. API `retrieved_at` is nullable and means source retrieval time; it is never populated from a local import timestamp. The curated [evidence dataset](../data/evidence.json) is separate from numerical snapshots and is loaded by `backend/app/evidence.py`.
-
-### Fresh-checkout accepted snapshot handoff
-
-Git carries the exact `current.json`, accepted manifest and data artifact for each qualified source. After dependency installation, a fresh checkout can run every supported demo analysis without downloading the historical bulk inputs.
-
-| Source | Accepted snapshot ID | Data artifact SHA-256 |
-|---|---|---|
-| DataSF | `datasf-28fd4041701d874e6ad2cb134615e2e2ced826ddce40bece5b938c0a0b7250cf` | `cc472e67b5dd529d513ff7b4482797450acaf98ce17b64c8d78076cfa2fc8ee1` |
-| FAA | `faa-3aed36dd6b33ba6e6c0a272926de2a9dda05630f4ee64450959e0e6443e4c3d4` | `458273de65b91eb0e7c26cc372616f812320b2dad163909edefd89c13cdff251` |
-| BTS T-100 | `t100-09666a46b4108e6393c72af9423ac17913ca99206e75c0bc336d717355c318ac` | `1c023467175d599cbbb642e5ca5d22e711134178dc07cb77d8c9e3a3f7f6f8d5` |
-| BTS on-time | `ontime-c224389c0a37c9b70d50e4181ec5caf4f382c1758b8fc148077a82bf475cce0b` | `1fe2d4bddfaa5f744a7bb09df80f0c5d0e893a8ee7e4a507575eaa375aac1231` |
-
-The T-100 and on-time manifests retain the qualified raw archive filenames, sizes, hashes and row metadata, so the demo does not need the 28 source ZIPs. The FAA PDF is retained as cohort evidence; runtime screening uses the frozen 22-airport cohort in `backend/app/calculations/screen.py`. This handoff reproduces the accepted analytical inputs, not a fresh upstream acquisition: T-100 still has no automated downloader, changed upstream bytes require requalification, and unknown source retrieval timestamps remain null rather than being replaced by import timestamps.
-
-### Launch and use
-
-```sh
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install -r backend/requirements-dev.txt
 python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
-Open `http://127.0.0.1:8000/`. `http://127.0.0.1:8000/health` returns `{"status":"ok"}`; it proves backend reachability, not source or model readiness. Use one process/worker, with no hosted deployment implied.
-
-The examples and scope controls submit structured requests. Explain uses the stored result. **Free-text interpretation is implemented but disabled by default:** message requests return `503 ai_unavailable` without exact runtime admission. Model configuration alone does not enable a provider. The visible helper states the default limitation. No real provider call or successful conversational/model demonstration has been recorded.
+- `backend/requirements.txt` holds the runtime pins only: duckdb, fastapi, httpx, pydantic and uvicorn.
+- `requirements-dev.txt` adds pytest.
+- The UI has no build step. Node is needed only for `backend/tests/*.cjs`.
+- A loopback run needs no environment variables. See [backend/.env.example](../.env.example) for the variables that exist.
 
 ## Components and request flow
 
 ```mermaid
 flowchart LR
-    UI[Static HTML and JavaScript] --> API[FastAPI /api/query]
-    API --> Contract[Strict request validation]
-    Contract --> Dispatch[Deterministic dispatch]
-    Dispatch --> Calc[Traffic / screen / operations / long haul / SFO]
-    Calc --> Data[Accepted Parquet snapshots]
-    Dispatch --> Evidence[Curated evidence JSON]
-    API <--> Session[Latest result and request in process memory]
-    API -.->|Exact runtime admission| Budget[Process-local budget ledger]
-    Budget -.->|Reserve worst-case cost| Model[Direct Responses API adapter]
-    Model -.->|Validated outcome| Dispatch
+    UI[Static HTML/JS] -->|POST /api/query| Guard[HostGuard: Host allowlist, same-origin, no-store]
+    Guard --> API[main.py query route]
+    API --> Contract[contracts.py strict validation]
+    API <-->|airport_context cookie| Ctx[context_token.py HMAC sign/verify]
+    API -.->|free text, only when admitted| Model[model_adapter.py: one Responses API call]
+    Model -.->|validated AnalysisRequest| Dispatch
+    Contract --> Dispatch[dispatch.py deterministic routing]
+    Dispatch --> Calc[calculations/*]
+    Calc --> Data[Hash-verified Parquet via DuckDB]
+    Dispatch --> Evidence[evidence.py curated notes]
     Dispatch --> Result[Typed AnalysisResult]
     Result --> UI
 ```
 
-`main.py` owns transport, safe errors, the query deadline and model runtime gate; `contracts.py` owns strict request/result schemas; `dispatch.py` owns allowed operations and response projection. `calculations/` contains ordinary Python functions. For admitted free text, `session.py` supplies the saved validated request associated with the current result, `model_budget.py` reserves worst-case cost and settles bounded usage or forfeits uncertain work, and `model_adapter.py` makes one direct OpenAI Responses API call. Runtime admission binds the configured model name and complete adapter file hash to the admitted name/hash and requires positive input/output token prices. The candidate evaluator has an explicit `--mode candidate --live` path using the same adapter; its default candidate mode makes no provider call and a candidate run alone does not enable runtime use. These paths have offline coverage; live provider behavior remains unproven. There is no agent loop, SQL generation, database server, durable queue, or browser access to data providers.
+### Module responsibilities
+
+| Module | Responsibility |
+|---|---|
+| `main.py` | Transport, the HostGuard, safe errors, the 30 s query deadline, per-instance concurrency slots, the context cookie and the model admission gate |
+| `contracts.py` | The strict request, result and error models, including the closed list of airports, metrics and years |
+| `dispatch.py` | Resolves the bundle and year, routes each request to one calculation, and projects typed results |
+| `calculations/` | Plain functions |
+| `context_token.py` | The stateless follow-up context |
+| `settings.py` | Validates the model and hosting settings. It never reads dotenv files. |
+| `query_slots.py` | Per-process admission control |
+| `intent.py` | A small deterministic parser used only as the evaluation baseline. The runtime never calls it. |
+
+The design has no agent loop, no SQL generation, no database server, no queue and no browser access to data providers.
+
+### Routes
 
 | Route | Behavior |
 |---|---|
-| `GET /` | Analyst screen |
-| `GET /static/app.js` | Static UI behavior; only the static directory is mounted |
-| `GET /health` | Liveness response, no provider request |
-| `POST /api/query` | Structured analysis, stored explanation, or gated model interpretation of free text; default free text is unavailable |
+| `GET /` and `/static/*` | The analyst screen and its assets. Both sit behind the HostGuard. |
+| `GET /health` and `HEAD /health` | Liveness only. Always open, with no data or model check. |
+| `POST /api/query` | Exactly one of `message` (free text) or `analysis` (structured), plus an optional `context_result_id` |
 
-Success is a bare `AnalysisResult` with `ok` or `partial` status. Failures are non-2xx `ErrorResponse` objects with a safe code/message/request ID. The frontend renders server values, ranks, comparison directions, numerators/denominators, eligible counts, source/evidence details and limitations; it does not recompute percentages. Sources and evidence expand locally without API calls. Errors retain the last displayed result labeled **Previous result**. Duplicate sends are disabled, and input-change generation checks prevent a stale response replacing a newer draft.
+- There are no OpenAPI or docs routes.
+- A success is a bare `AnalysisResult` whose status is `ok` or `partial`.
+- A failure is a non-2xx `ErrorResponse` carrying a code, a message and a `request_id`. The `request_id` is also sent in the `X-Request-ID` header.
 
-### Scope and sessions
+### Follow-up context (stateless)
 
-- T-100 levels, occupancy and long-haul: supported airports, CY2023 or CY2024. Growth: CY2024 versus CY2023.
-- Ranking: the 22-airport New England cohort, by screening score, passenger growth, passengers or occupancy. Display subsets retain the applicable full-cohort ranking/normalization.
-- Operations: LAX, SNA and SFO, CY2024 only. SFO trend/pressure bundles: SFO only.
-- `explain` requires the displayed `context_result_id`; it reads stored values and leaves the stored result ID/scope unchanged. Fresh independent structured requests omit the reference.
+After every successful result except an "explain", the server sets the **`airport_context`** cookie. The cookie is:
 
-The server issues an opaque `airport_session` cookie (`HttpOnly`, `SameSite=Strict`, path `/`, one-hour maximum age). At most 100 process-local sessions hold one latest successful result and its validated analysis request each, with a one-hour idle timeout. Restart loses context. Wrong/expired session references return 409; this is a local session boundary, not authenticated multi-user access control. Host/Origin checks restrict requests to the local application; no wildcard CORS is enabled.
+- `HttpOnly`
+- `SameSite=Strict`
+- `Path=/`
+- valid for 1 hour
+- `Secure` on Vercel
 
-One numerical query runs at a time; another receives `409 busy`. The HTTP deadline is 30 seconds. Currently timed-out thread work is allowed to finish while the busy slot remains held; its late result is not saved. This is **not** a claim of immediate database cancellation. No durable jobs, automatic retries or exactly-once replay are provided. `settings.py` validates bounded settings without loading dotenv files; the HTTP deadline is currently a constant in `main.py`, not dynamically wired to every settings override.
+The cookie value is `v1.<payload>.<HMAC-SHA256>`. The payload holds four things:
+
+- the result ID
+- the resolved `AnalysisRequest`, with its year and bundle pinned
+- a SHA-256 digest of the result
+- an expiry time
+
+The MAC is checked in constant time before the payload is decoded. Every failure looks the same to the client: a missing, forged, malformed or expired cookie all give `409 session_expired`, and the cookie is cleared.
+
+The cookie is read only when a request carries `context_result_id`. What happens next:
+
+1. If the ID in the cookie does not match that ID, the server returns `409 result_mismatch`.
+2. Otherwise the server **recomputes** the referenced result from the signed request.
+3. It then checks the result digest. A mismatch means the data changed, and also gives `409 result_mismatch`.
+
+The recomputed result has two uses. `explain` renders it without changing it. An admitted free-text follow-up receives only the previous validated request as model context.
+
+Any instance with the same `APP_SIGNING_KEY` can verify the cookie, so no server state is needed. Replaying a cookie within its hour grants nothing beyond recomputing a public-data result the holder already received. Rotating the key invalidates every cookie.
+
+### Hosting mode, host and Origin guard
+
+`settings.load_hosting()` decides the mode, and `HostGuard` in `main.py` enforces it.
+
+**When hosted mode applies.**
+
+- Hosted mode is on when `VERCEL` is set or when `ALLOWED_HOSTS` is non-empty.
+- Hosted mode requires `APP_SIGNING_KEY`, 32 to 512 bytes long. If the hosting configuration is missing or malformed, every route except `/health` returns `503 internal_error`.
+
+**Allowed hosts.**
+
+- Loopback names are always allowed.
+- `ALLOWED_HOSTS` adds entries as comma-separated hostnames.
+- On Vercel, the hostnames in `VERCEL_URL`, `VERCEL_BRANCH_URL` and `VERCEL_PROJECT_PRODUCTION_URL` are added automatically.
+
+**Request checks.**
+
+- A Host header that is not allowed gets `400 invalid_request`.
+- Requests with unsafe methods need an `Origin` whose scheme and `host:port` exactly match the request, and the scheme must be HTTPS on Vercel.
+- A missing Origin is tolerated only outside hosted mode.
+- Hosted responses carry `Cache-Control: no-store`, and there is no CORS.
+
+**Local runs.** A loopback run without a key uses a random per-process key, so follow-up context ends when the process restarts.
+
+**Concurrency.**
+
+- `MAX_CONCURRENT_QUERIES` is per instance. The default is 4 when hosted and 1 locally, and the maximum is 16.
+- Any extra request gets `409 busy`.
+- A timed-out or cancelled analysis keeps its slot until its worker thread finishes, and its late result is discarded.
+
+There is **no login** and no in-app spending ledger. Model cost is bounded by caps on each call and by the OpenAI project's hard monthly budget (see the next section).
+
+### Model gate
+
+A `message` request reaches the model only when `settings.model_runtime_admitted(ADAPTER_SHA256)` is true. That requires all of the following:
+
+- `MODEL_RUNTIME_ENABLED=true`
+- `OPENAI_API_KEY` and `OPENAI_MODEL` are set
+- `MODEL_ADMITTED_NAME` equals `OPENAI_MODEL`
+- `MODEL_ADMITTED_ADAPTER_SHA256` equals the SHA-256 of `model_adapter.py`
+
+If any of these fails, the request gets `503 ai_unavailable`, and structured requests are unaffected.
+
+The adapter makes one streamed POST to `https://api.openai.com/v1/responses`. The call has these properties:
+
+- It uses a strict JSON schema and sets `store: false`.
+- It uses the settings caps: 512 output tokens, 8,000 prompt bytes, a 20 s timeout and a 64 KiB response limit.
+- `reasoning.effort` is optional and is sent only when `MODEL_REASONING_EFFORT` is set.
+- It validates the reported token usage against its bounds.
+- It logs only metadata, never question text.
+
+Every provider failure is mapped to a sanitized code. **No live call has been made yet.**
+
+## Scope and data bundles
+
+| Period | How it is selected | Data |
+|---|---|---|
+| **CY2024 → CY2025** (default) | Year omitted, or year 2025 | Accepted bundle `annual-2025-r1`, listed in `data/bundles/accepted.json` with its manifest SHA-256. Covers DataSF 2024–25, T-100 2024–25, on-time 2025, the FAA 2025 cohort (23 airports including EWB), and FY2025 AIP awards as context only |
+| **CY2023 → CY2024** (historical) | Year 2023 or 2024 with no `bundle_id` | The per-source `current.json` snapshots: DataSF, FAA, T-100 (26 origins) and on-time 2024 |
+
+**Rules for each workflow.**
+
+- Growth, screen score, operations and the SFO workflows use the comparison year only.
+- Levels, occupancy and long-haul share also accept the baseline year.
+- Ranking uses the New England cohort. A display subset keeps the ranks and normalization of the full cohort.
+- The operations workflow supports LAX, SNA and SFO. The SFO workflows support SFO only.
+- Explicit 2024 together with `bundle_id` is accepted only for the baseline-capable metrics.
+
+**Integrity checks.** Every read re-checks the manifest and data SHA-256 against the bundle or pointer, and fails closed with `503 data_unavailable`.
 
 ## Numerical definitions
 
-| Calculation | Implemented definition and missing-data rule |
+| Calculation | Definition and missing-data rule |
 |---|---|
-| T-100 annual levels | Sum origin passengers, seats and **performed** departures after importer filtering (`CLASS` A/C/E/F, positive seats). Exact duplicate source rows collapse; conflicting measures fail import. An airport-year missing a month is unavailable, not zero. |
-| Occupancy | `100 × passengers / seats`; positive seat denominator required. This is aggregate seat occupancy, not a terminal-capacity measure. |
-| Passenger growth | `100 × (P2024 − P2023) / P2023`; a zero/missing baseline is unavailable. No small-base floor is applied in this implementation. |
-| Screening score | Eligible airports need complete years, valid nonnegative passenger/seat counts, positive 2023 passengers and positive 2024 seats. For each growth, 2024 volume and occupancy component, percentile is `(average ascending rank − 1)/(n − 1)`. Score is `100 × (0.40 growth percentile + 0.30 volume percentile + 0.30 occupancy percentile)`. Fewer than two eligible airports gives insufficient data. Equal values use average rank; final ranks use competition ranking with airport-code display tie-breaks. |
-| Long-haul share | `100 × performed departures on rows with distance >= threshold / all performed departures`. Default threshold is 3,000 statute miles; HTTP contract requires `0 < threshold <= 12000`. Missing/invalid distance on a positive-departure row makes the share insufficient; zero total is unavailable. No point estimate is substituted. |
-| Cancellation/diversion | `100 × flagged rows / valid scheduled-flight rows`, separately at each origin. Valid rows have binary flags and `flights=1`. Only CY2024 domestic reporting-carrier coverage is represented. |
-| Departure delay/taxi out | Independent averages of non-null `DepDelayMinutes` and `TaxiOut` among noncancelled, nondiverted flights. Early departure delay is zero, not signed `DepDelay`. Each field retains its observed denominator and eligible count; zero observed denominator is unavailable. |
-| Comparison | Compare raw values; round display only. Higher means greater observed strain for all four operational indicators. Report per-indicator direction and a descriptive summary; split directions give a mixed picture. No overall congestion index or causal claim follows. |
-| DataSF SFO trend | Enplaned only; require all 24 months × Domestic/International cells before summing to a combined monthly series. Annual growth uses the same population. Never add Deplaned or Thru/Transit to enplanements. |
-| SFO pressure proxy | T-100 passenger-growth percentage minus T-100 seat-growth percentage, in **percentage points**, using matched 2023/24 origin populations and positive baselines. DataSF trends remain separate. The gap is not unmet flights or latent demand. |
+| T-100 annual levels | Sum of origin passengers, seats and **performed** departures. The importer keeps rows with service class A, C, E or F and positive seats. An airport-year missing any month is unavailable, not zero. |
+| Occupancy | `100 × passengers / seats`. Seats must be positive. |
+| Passenger growth | `100 × (P_cmp − P_base) / P_base`. A zero or missing baseline makes the value unavailable. |
+| Screen score | See `calculations/screen.py`. An airport is eligible when both years are complete, counts are valid, baseline passengers are positive and comparison-year seats are positive. Each input gets a mid-rank percentile `(2·lower + tied − 1)/(2(n − 1))`. Score = `100 × (0.40 growth + 0.30 volume + 0.30 occupancy)`. Fewer than two eligible airports gives `insufficient_data`. Ranks use competition ranking; ties are displayed in airport-code order. |
+| Long-haul share | Performed departures with `distance ≥ threshold` ÷ all performed departures. The default threshold is 3,000 miles, and a request may use any value in (0, 12000]. Rows with a null distance count as unknown, and the result gives lower and upper bounds. A single value is given only when the unknown count is 0. An invalid distance, or an incomplete year, gives `insufficient_data`. Zero total departures makes the share unavailable. |
+| Cancellation and diversion | `100 × flagged / valid scheduled flights` at each origin. Valid rows have binary flags and `flights = 1`. |
+| Departure delay and taxi-out | Separate means of non-null `DepDelayMinutes` (early departures count as 0) and `TaxiOut`, over flights that were neither cancelled nor diverted. Each mean keeps its own denominator. |
+| Comparison | Raw values are compared, and only the display is rounded. Each indicator gets a direction: higher, lower, tied or unavailable. The summary counts these directions, and says "mixed picture" when they are split. There is no composite index and no causal claim. |
+| SFO enplaned trend | Enplaned passengers only. All 24 months × Domestic/International cells must be present; they are combined into one monthly series. |
+| SFO pressure | T-100 passenger growth % minus seat growth %, in percentage points, over the matched SFO origin population. It is shown alongside the trend and the on-time indicators. Profitability and quantitative unmet demand are `not_identifiable`. |
 
-The screen's real-data path batches all 22 airports: one snapshot validation and one grouped DuckDB read, then the same exact-count/coverage calculations. Pure supplied-result screening remains available for tests.
+## Data refresh (offline operator steps)
 
-## Observed data and evidence limits
+The source commands under `app/sources/` (`datasf`, `faa`, `aip`, `t100`, `ontime`) acquire or import official files. They write immutable snapshots with manifests, and they never run on a user request.
 
-The following are observations from the accepted artifacts shipped with the checkout on 2026-09-27, not a fresh upstream acquisition. Clean-environment setup verification is recorded separately below.
+- T-100 has no downloader. You must supply the exact qualified FMG exports with `--input-dir`.
+- A recent bundle is staged and verified in this order:
+  1. `scripts/check_source_status.py` checks live freshness and writes a receipt.
+  2. `scripts/reconcile_recent.py` reconciles the sources.
+  3. `scripts/accept_bundle.py` registers the bundle.
 
-| Source | Accepted local scope |
-|---|---|
-| DataSF | 3,721 raw CY2023/24 SFO rows; calculation selects Enplaned and validates the 48 required month/geography cells. Snapshot ID begins `datasf-28fd4041`. |
-| FAA | Accepted CY2024 commercial-service cohort snapshot, ID begins `faa-3aed36dd`. Current adapter parses the official PDF with `pdftotext`; earlier XLSX research is not the adapter. |
-| T-100 | CY2023/24, 26 origins: 22 New England airports plus ANC/LAX/SFO/SNA. Snapshot ID begins `t100-09666a46`. PVC lacks December 2024 and is excluded from the complete-year screen; missingness is not imputed. |
-| On-time | All twelve CY2024 months for LAX/SFO/SNA, 372,550 rows. Snapshot ID begins `ontime-c224389c`. Carrier lists differ by airport and are disclosed; this is not all-airline/international coverage. |
+  `python -m app.sources.bundle --check-candidate <id>` re-verifies a bundle offline.
+- The acceptance step requires a freshness receipt that is less than 7 days old. The current receipt stops being valid for promotion after **2026-10-04T17:17Z**. Serving does not depend on it.
 
-Full IDs and hashes remain in the local manifests and returned provenance. FAA/BTS historical bulk data are deliberately downloaded inputs; the actual analytical public API is DataSF. Rows from different populations are not joined to manufacture a common denominator.
+## Evidence limits
 
-Evidence is a bounded review of selected candidates, not a current capacity survey of every airport. Historical plans, completed expansions and forecast assumptions do not establish an unresolved terminal bottleneck. Returned evidence states uncertainty and counterevidence, with source/date/locator; no unreviewed airport is labeled unattractive. Neither traffic pressure nor this prototype identifies project capex, attributable investor cash flows, ROI/NPV, or causal unmet demand. Recommendations remain conditional diligence/watchlist statements.
+- Terminal evidence is a bounded, curated review, and every claim begins "Status unknown".
+- Traffic pressure is a screening heuristic. It is not a measure of capacity, ROI or unmet demand.
+- On-time data covers domestic reporting carriers only.
+- Populations from different sources are never joined into a single denominator.
+- Figures and hashes are recorded in [integrated-acceptance-20260929.md](evidence/integrated-acceptance-20260929.md) and [recent-data-activation-review.md](evidence/recent-data-activation-review.md).
 
-## Verification and remaining proof
+## Verification
 
-Run from the root after setup:
+Run from the repository root:
 
 ```sh
 PYTHONPATH=backend python -m pytest backend/tests -q
-node --test backend/tests/ui.test.cjs
-node --check backend/app/static/app.js
+node --test backend/tests/*.cjs
+ruff check backend --ignore EXE002,SIM905
 ```
 
-Some source timeout tests bind an ephemeral loopback server; an environment prohibiting sockets cannot pass those tests. Python tests can exercise installed snapshots when present; fixture tests alone do not prove acquisition or end-to-end browser behavior. The Node suite uses a minimal DOM and is explicitly **not** a real-browser accessibility/keyboard/responsive audit.
+**Results.**
 
-Optional existing developer tooling, not installed by requirements:
+- **Integrated acceptance at `104acfc`:** 583 passed, 2 skipped; 88/88 Node tests; 41 real-HTTP calls with 0 figure discrepancies.
+- **Rerun at `fbd2342` during the docs update:** 679 passed, 2 skipped; 96/96 Node tests.
+- **Offline Vercel package check:** 86.4 MB uncompressed, and the four workflows ran on a read-only filesystem ([vercel-package-check.md](evidence/vercel-package-check.md)).
 
-```sh
-ruff check backend --ignore EXE002,SIM905 --output-format concise
-```
+**Not yet done.**
 
-`EXE002` is excluded for the external volume's executable file modes. Preserve source/test findings outside those declared exclusions. Against the current tree after the `23e3621` contract fix, the full suite passed **302 backend tests** and **8/8 Node UI tests**; Ruff with the declared exclusions, `git diff --check`, and JSON validation passed. A 168-case post-fix request matrix reported zero unexpected exceptions. The fix rejects `screen_score` metric/compare requests with 422 and keeps unavailable ratio numerator/denominator fields null. The earlier phase-7 fresh-archive verification passed 291 backend tests and 8/8 UI tests; the accepted snapshot artifacts were part of that handoff. The older Python 3.11 clean-environment check at `/private/tmp/deloitte-clean-final-20260927` passed 212 backend tests, `pip check`, Ruff, JavaScript syntax and 8/8 UI tests. The 291- and 212-test records are historical. No real model/provider call or live candidate admission has been recorded.
+- Live model admission.
+- A deployed smoke test.
+- A live freshness recheck after 2026-09-27.
 
-Historical local browser checks verified the 2023 passenger-only ranking response and full-cohort ranks, including PVC at 7,535 passengers, rank 19. A PVC-only 2024 passenger-rank request returned safe `422 insufficient_data` and retained the previous result. The separate complete-year screen excludes PVC because December 2024 is missing. Raw-growth results were HYA 48.12% rank 1, HVN 20.15% rank 2, and PVD 14.55% rank 3. Other historical flows exercised the SFO pressure bundle, operations comparison, ANC long-haul result, safe unavailable-model response with previous-result retention, evidence details, a 390×844 viewport, and visible keyboard focus. These checks predate the latest offline model changes; they are not current browser proof or a formal accessibility certification.
-
-The earlier lead-architect review returned **APPROVED** after disposition of three findings. That verdict predates the latest offline model changes. Native PlanGraph validation and independent review runners remain unverified; the historical architecture review is not evidence of either.
+The Node suite uses a minimal DOM. It is not a real-browser accessibility audit.

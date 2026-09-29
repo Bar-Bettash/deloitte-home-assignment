@@ -1,5 +1,14 @@
 # Backend completion plan — small hosted assignment prototype
 
+> **SUPERSEDED IN PART (2026-09-29).** This is a historical plan. The current design is described in [docs/DESIGN.md](../../../docs/DESIGN.md) and the code. The following parts of this plan are superseded and were **not** built:
+>
+> - **Postgres application state.** Replaced by a stateless, HMAC-signed `airport_context` cookie. The server recomputes the referenced result and checks its digest.
+> - **The $2 spend cap and budget ledger.** The process-local budget was removed, along with the `budget_exhausted` error. Spend is now bounded by per-call caps and by a hard monthly budget on the OpenAI project.
+> - **Database-backed throttles.** Replaced by a per-instance limit, `MAX_CONCURRENT_QUERIES`.
+> - **The shared access code, login and authorization session.** Removed by owner decision; there is no login.
+>
+> The source-qualification, bundle and model-admission sections still describe the implemented approach, except where they refer to the items above.
+
 Date: 2026-09-27. Revision: 5. Delivery type for this document: **DESIGN ONLY**.
 Review status: determined by the matching document hash in [review receipt](../evidence/backend-completion-plan-review.md); until all three verdicts exist, review is incomplete. Implementation, provider evaluation and deployment are not completed by approving this plan.
 
