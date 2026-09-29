@@ -1219,25 +1219,11 @@ test('year validation mirrors the contract for 2025, 2024 and 2023', () => {
   }
 });
 
-test('access_required redirects to the sign-in page without retrying', async () => {
-  const assigned = [];
-  let calls = 0;
-  const ui = setup(async () => { calls++; return { ok: false, status: 401, json: async () => errorEnvelope('access_required', 'Sign in to continue.') }; });
-  ui.window.location = { assign: url => assigned.push(url) };
-  await ui.run('runPreset(demos["new-england"])');
-  assert.equal(calls, 1);
-  assert.deepEqual(assigned, ['/login']);
-  assert.equal(ui.run('busy'), false);
-  ui.context.envelope = errorEnvelope('access_denied', 'Access code not recognised.');
-  assert.equal(ui.run('parseErrorResponse(envelope)').code, 'access_denied');
-});
-
 test('budget_exhausted is no longer a declared error code', () => {
   const ui = setup();
   ui.context.envelope = errorEnvelope('budget_exhausted', 'Budget exhausted.');
   assert.equal(ui.run('parseErrorResponse(envelope)'), null);
   assert.equal(ui.run('errorCodes.has("budget_exhausted")'), false);
-  assert.ok(ui.run('errorCodes.has("access_required")'));
 });
 
 test('ai_unavailable keeps the server message and says presets still work', async () => {
@@ -1248,16 +1234,4 @@ test('ai_unavailable keeps the server message and says presets still work', asyn
   const text = ui.nodes.get('#feedback').textContent;
   assert.match(text, /^AI interpretation is unavailable\. /);
   assert.match(text, /Presets and Adjust scope still work/);
-});
-
-test('login page is self-contained, labeled and posts the access code as JSON', () => {
-  const html = fs.readFileSync(path.join(__dirname, '../app/login.html'), 'utf8');
-  assert.doesNotMatch(html, /\son[a-z]+=/i, 'no inline event-handler attributes');
-  assert.doesNotMatch(html, /<(?:link|img)\b|\bsrc=|https?:\/\//i, 'no external assets');
-  assert.match(html, /<label for="code">Access code<\/label>/);
-  assert.match(html, /<input id="code"[^>]*type="password"[^>]*autocomplete="current-password"[^>]*maxlength="256"/);
-  assert.match(html, /id="login-error" role="alert"/);
-  assert.match(html, /fetch\("\/api\/access", \{\s*method: "POST",\s*headers: \{ "Content-Type": "application\/json" \},\s*credentials: "same-origin",\s*body: JSON\.stringify\(\{ code \}\)/);
-  assert.match(html, /response\.status === 204\) \{ window\.location\.assign\("\/"\)/);
-  assert.match(html, /response\.status === 401\) showError\("Access code not recognised\."\)/);
 });

@@ -130,73 +130,57 @@ def test_removed_spending_settings_are_not_read() -> None:
     assert not hasattr(settings, "model_input_usd_per_million_tokens")
 
 
-FAKE_CODE = "fake-access-code-0123456789"
 FAKE_KEY = "fake-signing-key-for-tests-only-0123456789"
 
 
-def test_plain_loopback_run_keeps_gate_off_with_one_query_slot() -> None:
+def test_plain_loopback_run_is_local_with_one_query_slot() -> None:
     hosting = load_hosting({})
-    assert hosting.gated is False
+    assert hosting.hosted is False
     assert hosting.on_vercel is False
     assert hosting.secure_cookies is False
     assert hosting.max_concurrent_queries == 1
     assert hosting.allowed_hosts == frozenset()
 
 
-def test_local_signing_key_alone_does_not_gate() -> None:
-    assert load_hosting({"APP_SIGNING_KEY": FAKE_KEY}).gated is False
+def test_local_signing_key_alone_does_not_make_a_run_hosted() -> None:
+    assert load_hosting({"APP_SIGNING_KEY": FAKE_KEY}).hosted is False
 
 
 @pytest.mark.parametrize("environ", [
     {"ALLOWED_HOSTS": "demo.example.com"},
-    {"ACCESS_CODE": FAKE_CODE},
     {"VERCEL": "1"},
-    {"ALLOWED_HOSTS": "demo.example.com", "APP_SIGNING_KEY": FAKE_KEY},
-    {"ACCESS_CODE": FAKE_CODE, "ALLOWED_HOSTS": "demo.example.com"},
-    {"VERCEL": "1", "APP_SIGNING_KEY": FAKE_KEY},
 ])
-def test_any_gating_signal_without_both_secrets_fails_closed(environ) -> None:
-    with pytest.raises(HostingConfigError) as caught:
+def test_hosted_mode_without_signing_key_fails_closed(environ) -> None:
+    with pytest.raises(HostingConfigError):
         load_hosting(environ)
-    assert FAKE_CODE not in str(caught.value)
-    assert FAKE_KEY not in str(caught.value)
-
-
-@pytest.mark.parametrize("code", ["short-code", "x" * 19, "has space in the code value", "tab\tinside-the-code-value", "x" * 257])
-def test_weak_or_malformed_access_code_is_rejected(code) -> None:
-    with pytest.raises(HostingConfigError) as caught:
-        load_hosting({"ACCESS_CODE": code, "APP_SIGNING_KEY": FAKE_KEY})
-    assert code not in str(caught.value)
 
 
 @pytest.mark.parametrize("key", ["k" * 31, "k" * 513])
 def test_short_or_oversized_signing_key_is_rejected(key) -> None:
-    with pytest.raises(HostingConfigError):
-        load_hosting({"ACCESS_CODE": FAKE_CODE, "APP_SIGNING_KEY": key})
+    with pytest.raises(HostingConfigError) as caught:
+        load_hosting({"ALLOWED_HOSTS": "demo.example.com", "APP_SIGNING_KEY": key})
+    assert key not in str(caught.value)
 
 
-def test_gated_config_collects_allowed_and_vercel_hosts_and_defaults_to_four_slots() -> None:
+def test_hosted_config_collects_allowed_and_vercel_hosts_and_defaults_to_four_slots() -> None:
     hosting = load_hosting({
         "VERCEL": "1",
-        "ACCESS_CODE": FAKE_CODE,
         "APP_SIGNING_KEY": FAKE_KEY,
         "ALLOWED_HOSTS": " Demo.Example.com ,other.example.org",
         "VERCEL_URL": "app-abc123.vercel.app",
         "VERCEL_BRANCH_URL": "https://app-git-main.vercel.app/",
         "VERCEL_PROJECT_PRODUCTION_URL": "",
     })
-    assert hosting.gated and hosting.on_vercel and hosting.secure_cookies
+    assert hosting.hosted and hosting.on_vercel and hosting.secure_cookies
     assert hosting.allowed_hosts == {
         "demo.example.com", "other.example.org", "app-abc123.vercel.app", "app-git-main.vercel.app",
     }
     assert hosting.max_concurrent_queries == 4
-    assert hosting.access_code.get_secret_value() == FAKE_CODE
-    assert FAKE_CODE not in repr(hosting)
     assert FAKE_KEY not in repr(hosting)
 
 
 def test_vercel_hosts_are_ignored_off_vercel() -> None:
-    hosting = load_hosting({"ACCESS_CODE": FAKE_CODE, "APP_SIGNING_KEY": FAKE_KEY, "VERCEL_URL": "x.vercel.app"})
+    hosting = load_hosting({"APP_SIGNING_KEY": FAKE_KEY, "VERCEL_URL": "x.vercel.app"})
     assert hosting.allowed_hosts == frozenset()
 
 
@@ -210,7 +194,7 @@ def test_vercel_hosts_are_ignored_off_vercel() -> None:
 ])
 def test_malformed_host_or_limit_is_rejected(environ) -> None:
     with pytest.raises(HostingConfigError):
-        load_hosting({"ACCESS_CODE": FAKE_CODE, "APP_SIGNING_KEY": FAKE_KEY, **environ})
+        load_hosting({"APP_SIGNING_KEY": FAKE_KEY, **environ})
 
 
 @pytest.mark.parametrize("value,expected", [("low", "low"), ("minimal", "minimal"), ("", None)])

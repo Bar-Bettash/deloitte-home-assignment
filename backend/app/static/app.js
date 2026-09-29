@@ -133,7 +133,7 @@ const newEnglandAirports = new Set("BDL HVN PWM BGR PQI RKD BHB AUG BOS ACK ORH 
 const operationalMetrics = new Set(["congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"]);
 const t100Metrics = new Set(["passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share"]);
 const rankMetrics = new Set(["screen_score", "passengers", "passenger_growth", "seat_occupancy"]);
-const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_too_large", "invalid_request", "unsupported_scope", "clarification_required", "insufficient_data", "busy", "session_expired", "result_mismatch", "ai_unavailable", "data_unavailable", "query_timeout", "internal_error", "access_required", "access_denied"]);
+const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_too_large", "invalid_request", "unsupported_scope", "clarification_required", "insufficient_data", "busy", "session_expired", "result_mismatch", "ai_unavailable", "data_unavailable", "query_timeout", "internal_error"]);
 
 function parseErrorResponse(payload) {
   if (!isRecord(payload) || payload.success !== false || !isRecord(payload.error)) return null;
@@ -269,11 +269,6 @@ async function submitRequest(request) {
     if (generation !== requestGeneration) return;
     if (!response.ok) {
       const detail = parseErrorResponse(payload);
-      if (detail?.code === "access_required" || (response.status === 401 && !detail)) {
-        showFeedback("Access code required. Opening the sign-in page.", true);
-        window.location.assign("/login");
-        return;
-      }
       if (detail) showRequestError(detail, response.status);
       else showFeedback(connectionFailureMessage, true);
       if (latestSuccessfulResult) renderResult(latestSuccessfulResult, true);

@@ -5,16 +5,9 @@ import secrets
 import time
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
-from app.access import (
-    ACCESS_COOKIE,
-    ACCESS_TTL_SECONDS,
-    MAX_CODE_CHARS,
-    AccessGate,
-    access_signer,
-    code_matches,
-)
 from app.context_token import (
     ContextClaims,
     ContextSigner,
@@ -33,33 +26,127 @@ from app.contracts import (
 from app.dispatch import DispatchFailure, dispatch_analysis
 from app.model_adapter import ADAPTER_SHA256, ModelAdapterError, interpret_message
 from app.query_slots import QuerySlots
-from app.settings import HostingConfig, load_settings
+from app.settings import HostingConfig, HostingConfigError, load_hosting, load_settings
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
 
 
-# Interactive API docs and the OpenAPI schema are never served (local or hosted).
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-app.add_middleware(AccessGate)
 logger = logging.getLogger(__name__)
-APP_DIR = Path(__file__).resolve().parent
-STATIC_DIR = APP_DIR / "static"
-LOGIN_PAGE = APP_DIR / "login.html"
-MAX_ACCESS_BODY_BYTES = 1024
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "testserver"})
+_ALWAYS_OPEN = frozenset({("GET", "/health"), ("HEAD", "/health")})
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 CONTEXT_COOKIE = "airport_context"
 CONTEXT_TTL_SECONDS = 3600
 QUERY_DEADLINE_SECONDS = 30
-# Used only by an ungated loopback run without APP_SIGNING_KEY: context tokens then
+# Used only by a local loopback run without APP_SIGNING_KEY: context tokens then
 # stop verifying when this process restarts, which a local demo can tolerate.
 _LOCAL_SIGNING_KEY = secrets.token_bytes(32)
 query_slots = QuerySlots()
 
+
+def request_hostname(host_header: str) -> str | None:
+    """Return the lowercase hostname of a Host header, or None when malformed."""
+    if not host_header or len(host_header) > 300 or any(char in host_header for char in "/?#@\\ "):
+        return None
+    try:
+        parsed = urlsplit(f"//{host_header}")
+        _ = parsed.port  # validates the port component
+    except ValueError:
+        return None
+    return parsed.hostname.lower() if parsed.hostname else None
+
+
+def origin_allowed(origin: str | None, host_header: str, hosting: HostingConfig) -> bool:
+    """Same-origin check for state-changing requests.
+
+    Hosted mode requires an Origin header whose scheme and host:port exactly match
+    the request (HTTPS on Vercel). A loopback run tolerates a missing Origin.
+    """
+    if origin is None:
+        return not hosting.hosted
+    try:
+        parsed = urlsplit(origin)
+    except ValueError:
+        return False
+    allowed_schemes = {"https"} if hosting.on_vercel else {"http", "https"}
+    if parsed.scheme not in allowed_schemes or parsed.path or parsed.query or parsed.fragment:
+        return False
+    if parsed.username is not None or parsed.password is not None:
+        return False
+    return bool(parsed.netloc) and parsed.netloc.lower() == host_header.lower()
+
+
+def _no_store(send: Send) -> Send:
+    async def wrapped(message: Message) -> None:
+        if message["type"] == "http.response.start":
+            headers = [(key, value) for key, value in message.get("headers", []) if key.lower() != b"cache-control"]
+            headers.append((b"cache-control", b"no-store"))
+            message = {**message, "headers": headers}
+        await send(message)
+
+    return wrapped
+
+
+class HostGuard:
+    """Pure ASGI guard in front of every route, including the static mount.
+
+    Order: always-open health check; hosting configuration (503 when unsafe);
+    Host allowlist; same-origin check for unsafe methods. Hosted responses are
+    marked ``Cache-Control: no-store``.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            if scope["type"] == "websocket":
+                await send({"type": "websocket.close", "code": 1008})
+                return
+            await self.app(scope, receive, send)
+            return
+        if (scope["method"], scope["path"]) in _ALWAYS_OPEN:
+            await self.app(scope, receive, send)
+            return
+        try:
+            hosting = load_hosting()
+        except HostingConfigError:
+            logger.warning("request refused: hosting configuration is invalid")
+            await _guard_error(503, "internal_error", "The service is not configured.")(scope, receive, send)
+            return
+        scope.setdefault("state", {})["hosting"] = hosting
+        request = Request(scope)
+        host_header = request.headers.get("host", "")
+        hostname = request_hostname(host_header)
+        if hostname is None or hostname not in LOOPBACK_HOSTS | hosting.allowed_hosts:
+            await _guard_error(400, "invalid_request", "Use this application from its own address.")(
+                scope, receive, send)
+            return
+        if scope["method"] not in _SAFE_METHODS and not origin_allowed(
+                request.headers.get("origin"), host_header, hosting):
+            await _guard_error(400, "invalid_request", "Use this application from its own origin.")(
+                scope, receive, send)
+            return
+        await self.app(scope, receive, _no_store(send) if hosting.hosted else send)
+
+
+def _guard_error(status_code: int, code: ErrorCode, message: str) -> JSONResponse:
+    response = _error_response(uuid4(), status_code, code, message)
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+# Interactive API docs and the OpenAPI schema are never served (local or hosted).
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(HostGuard)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -73,60 +160,9 @@ def health() -> HealthResponse:
     return HealthResponse(status="ok")
 
 
-@app.api_route("/login", methods=["GET", "HEAD"], include_in_schema=False)
-def login_page() -> Response:
-    if not LOGIN_PAGE.is_file():
-        return _plain_error(503, "internal_error", "The sign-in page is not available.")
-    return FileResponse(LOGIN_PAGE, media_type="text/html", headers={"Cache-Control": "no-store"})
-
-
 def _hosting(request: Request) -> HostingConfig:
-    """Configuration validated by AccessGate for this request."""
+    """Configuration validated by HostGuard for this request."""
     return request.state.hosting
-
-
-def _plain_error(status_code: int, code: ErrorCode, message: str) -> JSONResponse:
-    return _error_response(uuid4(), status_code, code, message)
-
-
-@app.post("/api/access", status_code=204, include_in_schema=False)
-async def grant_access(request: Request) -> Response:
-    hosting = _hosting(request)
-    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
-    if content_type != "application/json":
-        return _plain_error(415, "unsupported_media_type", "Send this request as JSON.")
-    body = bytearray()
-    async for chunk in request.stream():
-        if len(body) + len(chunk) > MAX_ACCESS_BODY_BYTES:
-            return _plain_error(413, "request_too_large", "Request is too large.")
-        body.extend(chunk)
-    try:
-        payload = json.loads(bytes(body))
-    except (json.JSONDecodeError, UnicodeDecodeError):
-        return _plain_error(400, "invalid_json", "Request JSON is invalid.")
-    code = payload.get("code") if isinstance(payload, dict) and set(payload) == {"code"} else None
-    if not isinstance(code, str) or not code or len(code) > MAX_CODE_CHARS:
-        return _plain_error(422, "invalid_request", "Send the access code as {\"code\": \"...\"}.")
-    if not hosting.gated:
-        # A loopback run has no access code; there is nothing to prove.
-        return Response(status_code=204)
-    if not code_matches(code, hosting.access_code.get_secret_value()):
-        return _plain_error(401, "access_denied", "That access code is not valid.")
-    response = Response(status_code=204)
-    response.set_cookie(
-        ACCESS_COOKIE, access_signer(hosting).issue(), httponly=True, samesite="lax", path="/",
-        max_age=ACCESS_TTL_SECONDS, secure=hosting.secure_cookies,
-    )
-    return response
-
-
-@app.post("/api/logout", status_code=204, include_in_schema=False)
-def logout(request: Request) -> Response:
-    secure = _hosting(request).secure_cookies
-    response = Response(status_code=204)
-    response.delete_cookie(ACCESS_COOKIE, path="/", httponly=True, samesite="lax", secure=secure)
-    response.delete_cookie(CONTEXT_COOKIE, path="/", httponly=True, samesite="strict", secure=secure)
-    return response
 
 
 def _context_signer(hosting: HostingConfig) -> ContextSigner:

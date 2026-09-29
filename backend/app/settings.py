@@ -128,7 +128,6 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
     return Settings.model_validate(values)
 
 
-MIN_ACCESS_CODE_CHARS = 20
 MIN_SIGNING_KEY_BYTES = 32
 MAX_CONCURRENT_QUERIES_LIMIT = 16
 _HOSTNAME = re.compile(
@@ -139,26 +138,26 @@ _VERCEL_HOST_VARIABLES = ("VERCEL_URL", "VERCEL_BRANCH_URL", "VERCEL_PROJECT_PRO
 
 
 class HostingConfigError(ValueError):
-    """Gated deployment settings are missing, weak, or malformed.
+    """Hosted deployment settings are missing, weak, or malformed.
 
     Messages name the variable but never include its value.
     """
 
 
 class HostingConfig(BaseModel):
-    """Access-gate, host and concurrency settings, validated separately from model settings.
+    """Host, signing-key and concurrency settings, validated separately from model settings.
 
-    Gated mode applies when running on Vercel or when ``ALLOWED_HOSTS`` or
-    ``ACCESS_CODE`` is set. Only a plain loopback run with none of them keeps the
-    access gate off. Model misconfiguration never disables presets; hosting
-    misconfiguration closes everything except ``/health``.
+    Hosted mode applies when running on Vercel or when ``ALLOWED_HOSTS`` is set;
+    it requires ``APP_SIGNING_KEY`` (which signs the follow-up context cookie).
+    A plain loopback run with neither uses a random per-process key. Model
+    misconfiguration never disables presets; hosting misconfiguration closes
+    everything except ``/health``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    gated: bool
+    hosted: bool
     on_vercel: bool
-    access_code: SecretStr | None
     signing_key: SecretStr | None
     allowed_hosts: frozenset[str]
     max_concurrent_queries: Annotated[int, Field(strict=True, ge=1, le=MAX_CONCURRENT_QUERIES_LIMIT)]
@@ -179,11 +178,10 @@ def _host_entry(value: str, variable: str) -> str:
 
 
 def load_hosting(environ: Mapping[str, str] | None = None) -> HostingConfig:
-    """Validate gate settings; raise HostingConfigError when gated mode is unsafe."""
+    """Validate hosting settings; raise HostingConfigError when hosted mode is unsafe."""
     source = os.environ if environ is None else environ
     on_vercel = bool(source.get("VERCEL", "").strip())
     raw_hosts = source.get("ALLOWED_HOSTS", "")
-    access_code = source.get("ACCESS_CODE", "") or None
     signing_key = source.get("APP_SIGNING_KEY", "") or None
     hosts = {_host_entry(item, "ALLOWED_HOSTS") for item in raw_hosts.split(",") if item.strip()}
     if on_vercel:
@@ -192,29 +190,21 @@ def load_hosting(environ: Mapping[str, str] | None = None) -> HostingConfig:
             for variable in _VERCEL_HOST_VARIABLES
             if source.get(variable, "").strip()
         }
-    gated = on_vercel or bool(raw_hosts.strip()) or access_code is not None
+    hosted = on_vercel or bool(raw_hosts.strip())
 
-    if access_code is not None and (
-        len(access_code) < MIN_ACCESS_CODE_CHARS
-        or len(access_code) > 256
-        or any(ord(char) < 33 or ord(char) == 127 for char in access_code)
-    ):
-        raise HostingConfigError("ACCESS_CODE must be 20-256 printable characters without spaces")
     if signing_key is not None and not MIN_SIGNING_KEY_BYTES <= len(signing_key.encode("utf-8")) <= 512:
         raise HostingConfigError("APP_SIGNING_KEY must be 32-512 bytes")
-    if gated and access_code is None:
-        raise HostingConfigError("ACCESS_CODE is required in gated mode")
-    if gated and signing_key is None:
-        raise HostingConfigError("APP_SIGNING_KEY is required in gated mode")
+    if hosted and signing_key is None:
+        raise HostingConfigError("APP_SIGNING_KEY is required in hosted mode")
 
     raw_limit = source.get("MAX_CONCURRENT_QUERIES", "").strip()
     try:
-        limit = int(raw_limit) if raw_limit else (4 if gated else 1)
+        limit = int(raw_limit) if raw_limit else (4 if hosted else 1)
     except ValueError as exc:
         raise HostingConfigError("MAX_CONCURRENT_QUERIES must be an integer") from exc
     if not 1 <= limit <= MAX_CONCURRENT_QUERIES_LIMIT:
         raise HostingConfigError("MAX_CONCURRENT_QUERIES must be between 1 and 16")
     return HostingConfig(
-        gated=gated, on_vercel=on_vercel, access_code=access_code, signing_key=signing_key,
+        hosted=hosted, on_vercel=on_vercel, signing_key=signing_key,
         allowed_hosts=frozenset(hosts), max_concurrent_queries=limit,
     )

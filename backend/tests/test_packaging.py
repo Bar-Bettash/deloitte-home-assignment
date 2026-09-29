@@ -33,7 +33,7 @@ def _patterns() -> list[str]:
     return [line.strip() for line in lines if line.strip() and not line.startswith("#")]
 
 
-def test_entrypoint_exposes_the_gated_app():
+def test_entrypoint_exposes_the_app():
     import index
     from app import main
 
