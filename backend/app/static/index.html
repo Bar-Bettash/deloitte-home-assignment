@@ -4,94 +4,110 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Airport Investment Screening Assistant</title>
-  <style>
-    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #172033; background: #f3f6fa; }
-    * { box-sizing: border-box; }
-    body { margin: 0; }
-    .page { width: min(76rem, calc(100% - 2rem)); margin: auto; padding: 2rem 0; }
-    h1 { font-size: 2rem; line-height: 1.2; }
-    h2 { font-size: 1.4rem; } h3 { font-size: 1.15rem; }
-    p, li { line-height: 1.6; } p { max-width: 75ch; }
-    .intro, .hint { color: #475569; }
-    .prompt-grid, .fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-    button, input, select, textarea { font: inherit; min-height: 44px; }
-    button { border: 1px solid #667890; border-radius: .5rem; background: #fff; color: #172033; padding: .7rem 1rem; cursor: pointer; }
-    button:hover { background: #e9efff; } button:disabled { opacity: .6; cursor: not-allowed; }
-    .primary { background: #244bb3; color: #fff; } .primary:hover { background: #183887; }
-    button:focus-visible, a:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible { outline: 3px solid #315bd6; outline-offset: 3px; }
-    .prompt { text-align: start; } .prompt strong, .prompt span { display: block; }
-    .prompt span { margin-top: .4rem; line-height: 1.4; color: #475569; }
-    section, .panel { margin-top: 1.5rem; padding: 1.25rem; background: #fff; border: 1px solid #ccd5e3; border-radius: .75rem; min-width: 0; }
-    label { display: block; font-weight: 600; }
-    input, select, textarea { display: block; margin-top: .4rem; padding: .65rem; width: 100%; max-width: 100%; border: 1px solid #667890; border-radius: .3rem; color: inherit; background: #fff; }
-    textarea { min-height: 6rem; resize: vertical; } form > button { margin-top: 1rem; }
-    .actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1rem; }
-    .notice { padding: .9rem; background: #e8edf5; border-radius: .4rem; }
-    [role="alert"] { border-inline-start: .3rem solid #a12323; background: #fff0ef; }
-    details { margin-top: 1rem; padding: .75rem; border: 1px solid #ccd5e3; border-radius: .4rem; }
-    summary { min-height: 44px; cursor: pointer; font-weight: 600; padding: .5rem; }
-    a { color: #244bb3; display: inline-block; min-height: 44px; padding-block: .65rem; }
-    .table-region { overflow-x: auto; margin-block: 1rem; max-width: 100%; }
-    table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-    caption { text-align: start; font-weight: 600; padding-block: .8rem; }
-    th, td { padding: .8rem; text-align: start; border-bottom: 1px solid #d6deea; min-width: 6rem; }
-    th { background: #edf2f8; } td:nth-child(4), td:nth-child(5), td:nth-child(6) { text-align: end; }
-    td:nth-child(4), td:nth-child(5) { min-width: 12rem; }
-    #result p, #result li, #result details { overflow-wrap: anywhere; }
-    [hidden] { display: none !important; }
-    @media (max-width: 42rem) { .prompt-grid, .fields { grid-template-columns: 1fr; } .page { width: calc(100% - 1rem); padding: 1rem 0; } section { padding: .8rem; } }
-    @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
-  </style>
+  <link rel="stylesheet" href="/static/styles.css">
   <script src="/static/app.js" defer></script>
+  <script type="module" src="/static/globe.js"></script>
 </head>
 <body>
-<main class="page">
-  <h1>Airport Investment Assistant</h1>
-  <p class="intro">Compare reported airport traffic and operational pressure, then inspect evidence and limitations. Traffic pressure does not establish terminal capacity, investment returns, or unmet demand.</p>
-  <p id="health-status" class="notice" role="status">Checking backend reachability…</p>
-  <div id="controls" aria-busy="false">
-    <section aria-labelledby="demo-title">
-      <h2 id="demo-title">Run an example</h2>
-      <p class="hint">Each example sends one structured request without a model call. Unqualified data is reported as unavailable.</p>
-      <div class="prompt-grid">
-        <button type="button" class="prompt" data-preset="new-england" data-send><strong>New England screening</strong><span>2024 score, full reference cohort and evidence review.</span></button>
-        <button type="button" class="prompt" data-preset="lax-sna" data-send><strong>LAX vs Santa Ana congestion</strong><span>Four 2024 indicators with observed denominators.</span></button>
-        <button type="button" class="prompt" data-preset="anc-long-haul" data-send><strong>Anchorage long-haul share</strong><span>2024 departures at least 3,000 miles.</span></button>
-        <button type="button" class="prompt" data-preset="sfo-pressure" data-send><strong>SFO demand-pressure assessment</strong><span>Observed indicators and the unmet-demand evidence gap.</span></button>
-        <button type="button" class="prompt" data-preset="sfo-trend" data-send><strong>SFO passenger trend</strong><span>Combined domestic/international enplaned monthly series.</span></button>
-        <button type="button" class="prompt" data-preset="bos-pvd" data-send><strong>BOS vs PVD growth</strong><span>2024 passenger growth against the 2023 baseline.</span></button>
-        <button type="button" class="prompt" data-preset="growth" data-send><strong>Fastest New England growth</strong><span>Raw growth ranking, distinct from screening score.</span></button>
-      </div>
+<header class="contact-header">
+  <p class="contact"><span>Bar Bettash</span><a href="mailto:bar.bettash.jobs@gmail.com">bar.bettash.jobs@gmail.com</a></p>
+</header>
+<span id="health-status" class="visually-hidden" role="status">Backend checking</span>
+<nav class="skip-links" aria-label="Skip navigation"><a id="analysis-skip" href="#analyst-rail">Skip to analysis</a><a id="result-skip" href="#result-title">Skip to result</a></nav>
+<main id="workspace" class="page app-main">
+  <div id="hero-layout" class="hero-layout">
+   <div id="analysis-workspace" class="analysis-workspace" aria-label="Airport analysis workspace">
+   <details id="setup-controls" open>
+    <summary id="setup-toggle">Choose an analysis</summary>
+    <section id="landing-introduction" class="product-intro" aria-labelledby="landing-title">
+     <p class="eyebrow">AIRPORT INVESTMENT ANALYST</p>
+     <h1 id="landing-title">Airport modernization<br>insights</h1>
+     <p class="intro">Compare airport traffic and operational pressure, then inspect evidence and limitations.</p>
+     <p class="coverage-note">2023–2024 historical coverage · FAA cohort · BTS + DataSF data.</p>
     </section>
-    <section aria-labelledby="scope-title">
-      <h2 id="scope-title">Change the scope</h2>
+  <aside id="analyst-rail" class="copy-column" aria-label="Analyst controls" tabindex="-1">
+   <div id="controls" aria-busy="false" aria-labelledby="analyst-title">
+    <h2 id="analyst-title" class="visually-hidden">Analysis controls</h2>
+    <section id="analyze" aria-labelledby="demo-title">
+      <h2 id="demo-title" class="visually-hidden">Choose an analysis</h2>
+      <p class="eyebrow try-label">TRY AN ANALYSIS</p>
+      <div class="prompt-grid">
+        <button type="button" class="prompt" data-preset="new-england" data-send><strong>New England expansion</strong></button>
+        <button type="button" class="prompt" data-preset="lax-sna" data-send><strong>LAX vs SNA congestion</strong></button>
+        <button type="button" class="prompt" data-preset="anc-long-haul" data-send><strong>ANC long-haul share</strong></button>
+        <button type="button" class="prompt" data-preset="sfo-pressure" data-send><strong>SFO demand pressure</strong></button>
+      </div>
+      <details class="more-examples">
+        <summary>More analyses</summary>
+        <div class="prompt-grid">
+          <button type="button" class="prompt" data-preset="sfo-trend" data-send><strong>SFO passenger trend</strong><span>Combined domestic/international monthly series.</span></button>
+          <button type="button" class="prompt" data-preset="bos-pvd" data-send><strong>BOS vs PVD growth</strong><span>2024 passenger growth against the 2023 baseline.</span></button>
+          <button type="button" class="prompt" data-preset="growth" data-send><strong>New England growth ranking</strong><span>Raw growth, separate from screening score.</span></button>
+        </div>
+      </details>
+    </section>
+    <button type="button" id="ask-trigger" class="ask-trigger" aria-expanded="false" aria-controls="conversation-composer"><span>Ask your own question</span> <span class="ask-arrow" aria-hidden="true">→</span></button>
+    <p id="feedback" class="notice" role="status" aria-live="polite" hidden></p>
+    <details id="scope-panel" class="scope-disclosure">
+      <summary id="scope-title">Adjust scope</summary>
       <p id="scope-help" class="hint">Choose values, then run once. Rank applies to New England; leave airports blank for the full cohort. Compare needs two airports; metric needs one. Operations support LAX/SNA/SFO in 2024; SFO bundles support SFO only. Growth and screening use 2024 versus 2023.</p>
       <form id="scope-form" aria-describedby="scope-help">
         <div class="fields">
-          <label>Action<select id="action"><option value="rank">Rank</option><option value="compare">Compare</option><option value="metric">Single-airport metric</option></select></label>
-          <label>Airport codes, separated by commas<input id="airports" maxlength="150" placeholder="BOS, PVD" autocomplete="off"></label>
-          <label>Metric<select id="metric">
-            <option value="screen_score">Screening score</option><option value="passengers">Passengers</option><option value="seats">Seats</option><option value="departures">Departures</option><option value="passenger_growth">Passenger growth</option><option value="seat_occupancy">Seat occupancy</option><option value="long_haul_share">Long-haul share</option><option value="congestion">Operational comparison (four indicators)</option><option value="cancellation_rate">Cancellation rate</option><option value="diversion_rate">Diversion rate</option><option value="departure_delay_minutes">Departure delay minutes</option><option value="taxi_out_minutes">Taxi-out minutes</option><option value="sfo_enplaned_trend">SFO enplaned trend</option><option value="sfo_pressure">SFO demand-pressure assessment</option>
-          </select></label>
-          <label>Year<select id="year"><option value="2024">2024</option><option value="2023">2023 (T-100 levels/occupancy/long haul only)</option></select></label>
-          <label>Long-haul threshold in miles<input id="threshold" type="number" min="1" max="12000" step="any" value="3000" aria-describedby="threshold-help"><span id="threshold-help" class="hint">Used only for long-haul share.</span></label>
+          <label for="action">Action<select id="action"><option value="rank">Rank</option><option value="compare">Compare</option><option value="metric">Single-airport metric</option></select><span id="action-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
+          <label for="airports">Airport codes, separated by commas<input id="airports" maxlength="150" placeholder="BOS, PVD" autocomplete="off"><span id="airports-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
+          <div class="airport-picker-row">
+            <label for="airport-picker">Add a supported airport<select id="airport-picker" aria-describedby="airport-picker-help">
+              <option value="">Choose an airport</option>
+              <option>BDL</option><option>HVN</option><option>PWM</option><option>BGR</option><option>PQI</option><option>RKD</option><option>BHB</option><option>AUG</option>
+              <option>BOS</option><option>ACK</option><option>ORH</option><option>MVY</option><option>HYA</option><option>PVC</option><option>MHT</option><option>PSM</option>
+              <option>LEB</option><option>PVD</option><option>WST</option><option>BID</option><option>BTV</option><option>RUT</option><option>ANC</option><option>LAX</option>
+              <option>SNA</option><option>SFO</option>
+            </select></label>
+            <button type="button" id="add-airport">Add to draft</button>
+          </div>
+          <p id="airport-picker-help" class="airport-picker-help">Add one of all 26 supported airports to the visible draft. Globe shortcuts show only six mapped locations.</p>
+          <label for="metric">Metric<select id="metric">
+            <option value="screen_score">Screening score</option><option value="passengers">Passengers</option><option value="seats">Seats</option><option value="departures">Departures</option><option value="passenger_growth">Passenger growth</option><option value="seat_occupancy">Seat occupancy</option><option value="long_haul_share">Long-haul share</option><option value="congestion">Operational comparison (four indicators)</option><option value="cancellation_rate">Cancellation rate</option><option value="diversion_rate">Diversion rate</option><option value="departure_delay_minutes">Departure delay</option><option value="taxi_out_minutes">Taxi out</option><option value="sfo_enplaned_trend">SFO passenger trend</option><option value="sfo_pressure">SFO demand pressure</option>
+          </select><span id="metric-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
+          <label for="year">Year<select id="year"><option value="2024">2024</option><option value="2023">2023 (T-100 levels/occupancy/long haul only)</option></select><span id="year-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
+          <label for="threshold">Long-haul threshold in miles<input id="threshold" type="number" min="1" max="12000" step="any" value="3000" aria-describedby="threshold-help" disabled><span id="threshold-help" class="hint">Used only for long-haul share.</span><span id="threshold-error" class="field-error" role="alert" aria-live="assertive" hidden></span></label>
         </div>
         <button type="submit" class="primary" data-send>Run selected scope</button>
       </form>
-    </section>
-    <section aria-labelledby="question-title">
-      <h2 id="question-title">Ask a question or follow-up</h2>
-      <form id="chat-form">
-        <label for="question">Your question</label>
-        <textarea id="question" maxlength="4000" required aria-describedby="question-help" placeholder="Show only cancellation rates."></textarea>
-        <p id="question-help" class="hint">Structured examples, scope controls, and Explain work now. Free-text interpretation is not enabled.</p>
-        <button type="submit" data-send>Send question</button>
-      </form>
-      <div class="actions"><button type="button" id="explain" data-send disabled>Explain latest result</button><button type="button" id="fresh">Start a new analysis</button></div>
-    </section>
+    </details>
+   </div>
+  </aside>
+   </details>
+   </div>
+   <aside id="result-panel" class="results-column" aria-labelledby="result-title" hidden>
+    <button type="button" id="back-to-analysis" class="back-to-analysis" hidden aria-label="Back to analysis choices">← <span>Back</span></button>
+    <h2 id="result-title" tabindex="-1" hidden>Analysis result</h2>
+    <section id="result" aria-label="Analysis results" hidden></section>
+    <div class="result-actions"><button type="button" id="view-evidence" hidden>View evidence</button><button type="button" id="fresh" hidden>Choose another question</button><button type="button" id="explain" data-send disabled hidden>Explain this result</button></div>
+   </aside>
+   <a id="view-globe" href="#earth-stage">View globe</a>
+   </div>
+   <section id="earth-stage" class="earth-stage" aria-label="Earth visualization" tabindex="-1">
+    <div class="earth-frame">
+      <img id="earth-poster" src="/static/assets/earth-poster.webp" alt="" aria-hidden="true">
+      <canvas id="earth-canvas" width="1024" height="1024" tabindex="0" aria-label="Interactive Earth globe; drag to rotate"></canvas>
+      <div id="globe-markers" class="globe-markers" aria-label="Airport markers"></div>
+      <p id="globe-status" class="globe-status" role="status">Earth visualization is loading.</p>
+    </div>
+    <p class="earth-caption">US airport screening <span>·</span> 2023–2024 historical data</p>
+   </section>
   </div>
-  <p id="feedback" class="notice" role="status" aria-live="polite">No analysis has run. Choose an example or submit a scope.</p>
-  <section id="result" aria-label="Analysis results" hidden></section>
 </main>
+<button id="globe-motion-toggle" class="globe-motion-toggle" type="button" aria-pressed="false" aria-label="Pause Earth motion"><span data-motion-icon aria-hidden="true">Ⅱ</span></button>
+<section id="conversation-composer" class="conversation-composer" aria-label="Ask an analysis follow-up" aria-hidden="true" hidden inert>
+  <form id="chat-form" novalidate>
+    <label class="visually-hidden" for="question">Ask a question about airport analysis</label>
+    <textarea id="question" maxlength="4000" required aria-describedby="question-help question-error" placeholder="Ask about this analysis…"></textarea>
+    <button type="submit" class="composer-send" data-send aria-label="Send question">↑</button>
+    <p id="question-help" class="visually-hidden">Your question is sent to the analysis service.</p>
+    <p id="question-error" class="field-error" role="alert" aria-live="assertive" hidden></p>
+  </form>
+</section>
+<p id="context-summary" class="visually-hidden">Supported coverage: 2023–2024 historical traffic and selected operational measures.</p>
 </body>
 </html>
