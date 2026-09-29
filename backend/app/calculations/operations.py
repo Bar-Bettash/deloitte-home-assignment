@@ -176,7 +176,9 @@ def _mean(rows, index, reason):
     values = [row[index] for row in rows if row[index] is not None]
     if any(not math.isfinite(value) or value < 0 for value in values):
         return _metric(0, len(values), len(rows), "insufficient data: invalid non-null field")
-    return _metric(sum(values), len(values), len(rows), reason)
+    # fsum is exactly rounded, so the mean does not depend on DuckDB scan order;
+    # context-token digests require byte-identical recomputation on any instance.
+    return _metric(math.fsum(values) if values else 0, len(values), len(rows), reason)
 
 
 def _load_snapshot(data_root: Path):
