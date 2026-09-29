@@ -111,6 +111,20 @@ def test_incomplete_year_coverage_excludes_airport_instead_of_imputing_zero():
     assert "2024 coverage is incomplete" in result.exclusions[0].reason
 
 
+def test_exclusion_reason_lists_missing_months_for_every_incomplete_year():
+    complete = _traffic("PVD", 1000, 1100, 1000, 1100)
+    incomplete = _traffic(
+        "PVC", 1000, 1100, 1000, 1100, missing_baseline=(12,), missing_2024=(1, 2, 3, 4, 12)
+    )
+
+    result = calculate_screen([complete, incomplete])
+
+    assert result.exclusions[0].reason == (
+        "2023 coverage is incomplete (missing months: 12); "
+        "2024 coverage is incomplete (missing months: 1, 2, 3, 4, 12)"
+    )
+
+
 def test_raw_growth_sort_is_not_composite_sort_and_ranks_use_requested_order():
     candidates = [
         _traffic("BOS", 1000, 1300, 2000, 2600),
@@ -285,6 +299,7 @@ def _traffic(
     seats_2024: float,
     *,
     missing_2024: tuple[int, ...] = (),
+    missing_baseline: tuple[int, ...] = (),
     years: tuple[int, int] = (2023, 2024),
     snapshot_id: str = "fixture",
 ) -> TrafficResult:
@@ -311,7 +326,7 @@ def _traffic(
             period=f"{years[0]}-{years[1]}", imported_at=datetime(2026, 9, 26, tzinfo=timezone.utc),
         ),
         annual=(
-            annual(years[0], passengers_2023, seats_2023),
+            annual(years[0], passengers_2023, seats_2023, missing_baseline),
             annual(years[1], passengers_2024, seats_2024, missing_2024),
         ),
         growth=PassengerGrowth(years[0], years[1], 0.0, "ok", None),

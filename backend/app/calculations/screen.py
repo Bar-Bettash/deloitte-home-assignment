@@ -189,10 +189,14 @@ def _eligible_candidate(
         return None, f"both {years[0]} and {years[1]} traffic results are required"
     baseline = by_year[years[0]]
     comparison = by_year[years[1]]
-    for annual in (baseline, comparison):
-        if not _complete_coverage(annual):
-            missing = ", ".join(map(str, annual.coverage.missing_months)) or "unknown"
-            return None, f"{annual.year} coverage is incomplete (missing months: {missing})"
+    incomplete = [
+        f"{annual.year} coverage is incomplete (missing months: "
+        f"{', '.join(map(str, annual.coverage.missing_months)) or 'unknown'})"
+        for annual in (baseline, comparison)
+        if not _complete_coverage(annual)
+    ]
+    if incomplete:
+        return None, "; ".join(incomplete)
 
     baseline_passengers = _available_measure(baseline.passengers)
     comparison_passengers = _available_measure(comparison.passengers)
