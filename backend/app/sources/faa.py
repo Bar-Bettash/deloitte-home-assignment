@@ -417,7 +417,8 @@ def main(argv: list[str] | None = None) -> int:
             with httpx.Client() as client:
                 metadata = stage_faa_preliminary_2025(client, data_root=args.data_root)
     except (FAAError, OSError, ValueError) as exc:
-        print(f"FAA refresh failed: {exc}", file=sys.stderr)
+        action = "verification" if args.verify_only else "refresh"
+        print(f"FAA {action} failed: {exc}", file=sys.stderr)
         return 1
     print(metadata["snapshot_id"])
     return 0

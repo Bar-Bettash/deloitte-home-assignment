@@ -574,3 +574,20 @@ def _qualification(rows: list[dict[str, str]]) -> dict[str, object]:
             }
         }
     }
+
+
+def test_verify_only_honors_data_root_and_labels_failures_as_verification(tmp_path, capsys) -> None:
+    data_root = tmp_path / "raw" / "datasf"
+    rows = [_row(index, year_pair=(2024, 2025)) for index in range(48)]
+    metadata = _run_publish(_client_for_rows(rows), data_root=data_root, year_pair=(2024, 2025))
+    qualification = tmp_path / "qualification.json"
+    qualification.write_text(json.dumps(_qualification(rows)), encoding="utf-8")
+    base = ["--verify-only", "--snapshot-id", str(metadata["snapshot_id"]), "--qualification", str(qualification)]
+
+    assert datasf.main([*base, "--data-root", str(data_root)]) == 0
+    assert capsys.readouterr().out.strip() == metadata["snapshot_id"]
+
+    assert datasf.main([*base, "--data-root", str(tmp_path / "missing")]) == 1
+    err = capsys.readouterr().err
+    assert err.startswith("DataSF verification failed:")
+    assert "refresh" not in err

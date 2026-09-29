@@ -233,3 +233,12 @@ def _table_row_with_values(
         f"{rank:4d} {region} {state} {locid} City Airport Name "
         f"P N {current:,} {previous:,} 1.00%"
     )
+
+
+def test_verify_only_failure_is_labelled_verification(tmp_path, capsys) -> None:
+    qualification = tmp_path / "qualification.json"
+    qualification.write_text("{}")
+    result = faa_source.main(["--verify-only", "--snapshot-id", "faa-" + "0" * 64,
+                              "--qualification", str(qualification), "--data-root", str(tmp_path)])
+    assert result == 1
+    assert capsys.readouterr().err.startswith("FAA verification failed:")

@@ -428,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--years", nargs=2, type=int, metavar=("START", "END"))
     parser.add_argument("--snapshot-id")
     parser.add_argument("--qualification", type=Path)
+    parser.add_argument("--data-root", type=Path, default=DEFAULT_DATA_ROOT)
     args = parser.parse_args(argv)
     if args.refresh:
         if tuple(args.years or ()) != STAGED_YEAR_PAIR:
@@ -441,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--verify-only requires --snapshot-id and --qualification")
     try:
         if args.verify_only:
-            metadata = verify_datasf_snapshot(args.snapshot_id, args.qualification, data_root=DEFAULT_DATA_ROOT)
+            metadata = verify_datasf_snapshot(args.snapshot_id, args.qualification, data_root=args.data_root)
             print(metadata["snapshot_id"])
             return 0
 
@@ -449,13 +450,14 @@ def main(argv: list[str] | None = None) -> int:
             async with httpx.AsyncClient() as client:
                 return await publish_datasf_snapshot(
                     client,
-                    data_root=DEFAULT_DATA_ROOT,
+                    data_root=args.data_root,
                     year_pair=STAGED_YEAR_PAIR,
                 )
 
         metadata = asyncio.run(refresh())
     except (DataSFError, OSError, duckdb.Error) as exc:
-        print(f"DataSF refresh failed: {exc}", file=sys.stderr)
+        action = "verification" if args.verify_only else "refresh"
+        print(f"DataSF {action} failed: {exc}", file=sys.stderr)
         return 1
     print(metadata["snapshot_id"])
     return 0
