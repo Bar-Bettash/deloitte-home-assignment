@@ -758,7 +758,7 @@ def _fit_summary(lines: list[str], notes: list[str]) -> str:
     return " ".join([*parts, closing] if omitted else parts)
 
 
-def _format_value(value: float | int, unit: str) -> str:
+def _format_value(value: float, unit: str) -> str:
     if unit == "count":
         return f"{int(value):,}"
     if unit == "minutes":

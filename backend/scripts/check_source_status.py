@@ -650,7 +650,7 @@ def main(argv: list[str] | None = None, *, probe: ProbeClient | None = None) -> 
             observations = collector.collect(bundle, qualification)
         except SourceStatusError:
             raise
-        except Exception as exc:  # noqa: BLE001 - any probe fault must fail closed with one line
+        except Exception as exc:  # any probe fault must fail closed with one line
             raise SourceStatusError(f"official probe failed: {type(exc).__name__}: {exc}") from exc
         receipt = build_receipt(bundle, qualification, observations)
         if receipt["admission_status"] != "admitted":
