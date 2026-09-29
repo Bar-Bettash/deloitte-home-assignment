@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import zipfile
+from collections import Counter
 from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
@@ -312,3 +313,92 @@ def _row(
         "CLASS": class_code,
         "DATA_SOURCE": "DU",
     }
+
+
+PACKAGED_T100 = Path(__file__).resolve().parents[1] / "data" / "raw" / "t100" / "snapshots"
+RECENT_T100_ID = "t100-6bedff87f7afa99c7e54ce2ffc43a2dd1a97bac9bec837d33b9b0d9050cdfe8e"
+
+
+def _archives_from_packaged(tmp_path: Path, origins: set[str] | None = None):
+    """Rebuild per-state/year BTS-style ZIPs (plus one exact overlap row each) from packaged Parquet."""
+    import duckdb
+
+    names = [name for name, _ in t100.PARQUET_SCHEMA]
+    parquet = PACKAGED_T100 / RECENT_T100_ID / "data.parquet"
+    with duckdb.connect() as connection:
+        rows = [dict(zip(names, row)) for row in connection.execute(
+            "SELECT * FROM read_parquet(?)", [str(parquet)]
+        ).fetchall()]
+    if origins is not None:
+        rows = [row for row in rows if row["origin"] in origins]
+    groups: dict[tuple[int, str], list[dict]] = {}
+    for row in rows:
+        groups.setdefault((row["year"], row["origin_state_abr"]), []).append(row)
+    input_dir = tmp_path / "input"
+    specs = []
+    for (year, state), group in sorted(groups.items()):
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, lineterminator="\r\n")
+        writer.writerow(FIELDS)
+        for row in [*group, group[0]]:
+            writer.writerow(["" if row[field.lower()] is None else str(row[field.lower()]) for field in FIELDS])
+        raw = buffer.getvalue().encode()
+        path = input_dir / str(year) / state / "archive.zip"
+        path.parent.mkdir(parents=True)
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr(CSV_MEMBER, raw)
+        specs.append(ArchiveSpec(
+            f"{year}/{state}/archive.zip", state, year, path.stat().st_size,
+            hashlib.sha256(path.read_bytes()).hexdigest(), len(group) + 1, len(raw),
+            hashlib.sha256(raw).hexdigest(), "2026-09-29T00:00:00Z",
+            RequestIdentity(BTS_FORM_URL, FIELDS, state, "All", year),
+        ))
+    by_year = dict(Counter(row["year"] for row in rows))
+    return input_dir, tuple(specs), by_year
+
+
+def test_publish_rebuilds_packaged_recent_parquet_byte_for_byte(tmp_path) -> None:
+    input_dir, specs, by_year = _archives_from_packaged(tmp_path)
+    data_root = tmp_path / "root"
+
+    metadata = t100.publish_t100_snapshot(
+        input_dir, data_root=data_root, specs=specs, expected_unique_by_year=by_year,
+        expected_eligible_by_year=by_year, promote=False, origins=RECENT_ORIGINS,
+        partial_coverage=RECENT_PARTIAL_COVERAGE,
+    )
+
+    packaged = json.loads((PACKAGED_T100 / RECENT_T100_ID / "manifest.json").read_text())
+    rebuilt = data_root / "snapshots" / metadata["snapshot_id"] / "data.parquet"
+    assert hashlib.sha256(rebuilt.read_bytes()).hexdigest() == packaged["parquet_sha256"]
+    assert metadata["eligible_rows"] == packaged["eligible_rows"] == {"2024": 31_453, "2025": 31_839}
+    assert metadata["exact_overlap_rows"] == {"2024": len(specs) // 2, "2025": len(specs) // 2}
+    assert metadata["missing_months"] == {"PVC-2024": [12], "PVC-2025": [1, 2, 3, 4, 12]}
+    assert metadata["validation_status"] == "staged"
+    assert not (data_root / "current.json").exists()
+    assert [path.name for path in (data_root / "snapshots").iterdir()] == [metadata["snapshot_id"]]
+
+
+def test_publish_promotes_is_idempotent_and_rejects_tampered_existing_snapshot(tmp_path) -> None:
+    input_dir, specs, by_year = _archives_from_packaged(tmp_path, {"BOS"})
+    data_root = tmp_path / "root"
+
+    def publish(**overrides):
+        options = {"data_root": data_root, "specs": specs, "expected_unique_by_year": by_year,
+                   "expected_eligible_by_year": by_year, "origins": {"BOS"}, "partial_coverage": {}}
+        return t100.publish_t100_snapshot(input_dir, **{**options, **overrides})
+
+    first = publish()
+    pointer = json.loads((data_root / "current.json").read_text())
+    assert first["validation_status"] == "accepted"
+    assert pointer == {"snapshot_id": first["snapshot_id"], "manifest": f"snapshots/{first['snapshot_id']}/manifest.json"}
+    assert publish() == first
+    assert sorted(path.name for path in data_root.iterdir()) == ["current.json", "snapshots"]
+
+    with pytest.raises(T100Error, match="eligible row counts"):
+        publish(expected_eligible_by_year={year: count + 1 for year, count in by_year.items()})
+    with pytest.raises(T100Error, match="manifest is invalid"):
+        publish(promote=False)
+    (data_root / "snapshots" / first["snapshot_id"] / "data.parquet").write_bytes(b"tampered")
+    with pytest.raises(T100Error, match="content identity"):
+        publish()
+    assert [path.name for path in (data_root / "snapshots").iterdir()] == [first["snapshot_id"]]
