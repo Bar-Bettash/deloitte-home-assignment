@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Protocol
 from urllib.parse import urlencode, urljoin
 
+import duckdb
 import httpx
 from app.sources.aip import AIPError, verify_aip_snapshot
 from app.sources.bundle import BundleContext, BundleError, SnapshotRef, load_bundle
@@ -59,7 +60,9 @@ def verify_qualification_binding(bundle: BundleContext, qualification_path: Path
             ref = bundle.sources[name]
             data_root = ref.manifest_path.parents[2]
             verifiers[name](ref.snapshot_id, qualification_path, data_root=data_root)
-    except (DataSFError, T100Error, OnTimeError, FAAError, AIPError) as exc:
+    except (
+        DataSFError, T100Error, OnTimeError, FAAError, AIPError, OSError, ValueError, duckdb.Error
+    ) as exc:
         raise SourceStatusError(
             "source qualification is not bound to the selected bundle"
         ) from exc
@@ -643,12 +646,18 @@ def main(argv: list[str] | None = None, *, probe: ProbeClient | None = None) -> 
         qualification = _read_object(args.qualification, "source qualification")
         verify_qualification_binding(bundle, args.qualification)
         collector = probe or HttpProbeClient()
-        receipt = build_receipt(bundle, qualification, collector.collect(bundle, qualification))
+        try:
+            observations = collector.collect(bundle, qualification)
+        except SourceStatusError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - any probe fault must fail closed with one line
+            raise SourceStatusError(f"official probe failed: {type(exc).__name__}: {exc}") from exc
+        receipt = build_receipt(bundle, qualification, observations)
         if receipt["admission_status"] != "admitted":
             blocked = [item["source"] for item in receipt["sources"] if item["outcome"] != "current_for_scope"]
             raise SourceStatusError("official source check blocked admission: " + ", ".join(blocked))
         _write_atomic(args.output, receipt)
-    except (SourceStatusError, BundleError) as exc:
+    except (SourceStatusError, BundleError, OSError) as exc:
         parser.exit(1, f"source status check failed: {exc}\n")
     return 0
 

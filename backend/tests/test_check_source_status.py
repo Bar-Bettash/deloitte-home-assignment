@@ -436,3 +436,45 @@ def test_qualification_partitions_must_bind_to_selected_bundle(
 
     with pytest.raises(check_source_status.SourceStatusError, match="selected bundle"):
         check_source_status.verify_qualification_binding(bundle, path)
+
+
+class RaisingProbe:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    def collect(self, bundle, qualification):
+        raise self.error
+
+
+@pytest.mark.parametrize("error", [RuntimeError("boom"), KeyError("missing"), OSError("disk")])
+def test_cli_unexpected_probe_error_fails_with_one_line(tmp_path, capsys, error) -> None:
+    with pytest.raises(SystemExit) as exc:
+        check_source_status.main(_cli_args(tmp_path), probe=RaisingProbe(error))
+
+    assert exc.value.code == 1
+    err = capsys.readouterr().err
+    assert err.startswith("source status check failed: official probe failed:")
+    assert err.count("\n") == 1
+    assert not (tmp_path / "receipt.json").exists()
+
+
+def test_cli_unwritable_output_fails_with_one_line(tmp_path, capsys, observations) -> None:
+    args = _cli_args(tmp_path)
+    (tmp_path / "not-a-dir").write_text("")
+    args[args.index("--output") + 1] = str(tmp_path / "not-a-dir" / "receipt.json")
+
+    with pytest.raises(SystemExit) as exc:
+        check_source_status.main(args, probe=FakeProbe(observations))
+
+    assert exc.value.code == 1
+    assert capsys.readouterr().err.startswith("source status check failed:")
+
+
+@pytest.mark.parametrize("error", [OSError("unreadable"), ValueError("bad"), check_source_status.duckdb.Error("db")])
+def test_qualification_binding_wraps_verifier_faults(monkeypatch, bundle, error) -> None:
+    def fail(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(check_source_status, "verify_datasf_snapshot", fail)
+    with pytest.raises(check_source_status.SourceStatusError, match="not bound"):
+        check_source_status.verify_qualification_binding(bundle, QUALIFICATION_PATH)

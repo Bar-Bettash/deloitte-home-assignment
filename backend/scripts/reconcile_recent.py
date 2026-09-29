@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import duckdb
-from app.sources.bundle import BundleContext, SnapshotRef, load_bundle
+from app.sources.bundle import BundleContext, BundleError, SnapshotRef, load_bundle
 
 DEFAULT_DATA_ROOT = Path(__file__).resolve().parents[1] / "data"
 DEFAULT_THRESHOLD = 3_000.0
@@ -967,7 +967,9 @@ def main(argv: list[str] | None = None) -> int:
                             "historical_controls": historical_expected,
                         },
                     }
-    except (ReconciliationError, KeyError, TypeError, ValueError) as exc:
+    except (
+        ReconciliationError, BundleError, OSError, duckdb.Error, KeyError, TypeError, ValueError
+    ) as exc:
         parser.exit(1, f"recent reconciliation failed: {exc}\n")
     serialized = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if args.output is None:

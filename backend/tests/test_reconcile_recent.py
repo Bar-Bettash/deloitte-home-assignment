@@ -439,3 +439,18 @@ def _raw_reference_from(expected: dict) -> dict:
         }}}},
         "ontime": {"airports": operations},
     }
+
+
+
+@pytest.mark.parametrize("mode", [["--expected-only"], ["--reference", "unused.json"]])
+def test_cli_unknown_bundle_fails_with_one_line(tmp_path, capsys, mode) -> None:
+    with pytest.raises(SystemExit) as raised:
+        reconcile_recent.main([
+            "--bundle", "no-such-bundle", "--data-root", str(tmp_path), *mode,
+            "--output", str(tmp_path / "must-not-exist.json"),
+        ])
+
+    assert raised.value.code == 1
+    err = capsys.readouterr().err
+    assert err.startswith("recent reconciliation failed:") and err.count("\n") == 1
+    assert not (tmp_path / "must-not-exist.json").exists()
