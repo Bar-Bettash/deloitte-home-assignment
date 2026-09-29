@@ -16,7 +16,8 @@ from scripts.eval_intents import (
     write_report,
 )
 
-CORPUS = Path(__file__).parent / "fixtures" / "intent_eval.json"
+CORPUS = Path(__file__).parent / "fixtures" / "intent_eval_2025.json"
+HISTORICAL_CORPUS = Path(__file__).parent / "fixtures" / "intent_eval.json"
 
 
 def _live_settings(**overrides):
@@ -254,3 +255,28 @@ def test_baseline_cli_records_output_and_acceptance_flag_does_not_apply_candidat
     assert report["case_count"] == 30
     assert report["candidate_acceptance"] is None
     assert "descriptive" in report["acceptance_note"]
+
+
+def test_default_corpus_is_the_2025_corpus_and_historical_corpus_still_validates():
+    assert eval_intents.DEFAULT_CASES == CORPUS
+    assert len(load_and_validate_cases(HISTORICAL_CORPUS)) == 30
+
+
+def test_2025_corpus_covers_omitted_years_2025_and_signed_followup_context():
+    cases = load_and_validate_cases(CORPUS)
+    expected = [case["expected"]["analysis"] for case in cases if case["expected"]["kind"] == "analysis"]
+    assert any("year" not in analysis and analysis["action"] != "explain" for analysis in expected)
+    assert any(analysis.get("year") == 2025 for analysis in expected)
+    contexts = [case["input"]["context"] for case in cases if case["input"]["context"]]
+    assert len(contexts) >= 4
+    assert any(context.get("bundle_id") == "annual-2025-r1" for context in contexts)
+    assert all("bundle_id" not in analysis for analysis in expected)
+    assert any(analysis == {"action": "explain"} for analysis in expected)
+
+
+def test_baseline_on_2025_corpus_passes_every_safety_case(capsys):
+    assert main(["--mode", "baseline"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["case_count"] == 30
+    assert report["category_accuracy"]["safety_clarification"] == 1.0
+    assert report["category_accuracy"]["demonstration"] == 1.0

@@ -21,7 +21,9 @@ from app.intent import parse_intent
 from app.settings import Settings, load_settings
 from pydantic import ValidationError
 
-DEFAULT_CASES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "intent_eval.json"
+# The 2025 corpus reflects the current default period; intent_eval.json is the
+# frozen 2024-era corpus kept for the earlier admission record.
+DEFAULT_CASES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "intent_eval_2025.json"
 EXPECTED_CATEGORIES = {"demonstration": 6, "safety_clarification": 8, "ordinary": 16}
 MIN_ACCEPTANCE_CORRECT = 29
 

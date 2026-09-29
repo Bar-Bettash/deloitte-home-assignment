@@ -9,23 +9,27 @@ from app.contracts import AnalysisRequest
 from pydantic import ValidationError
 
 OutcomeKind = Literal["analysis", "clarification_required", "unsupported_scope"]
+SUPPORTED_YEARS = (2023, 2024, 2025)
 
 
 def parse_intent(text: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
     """Parse an explicit supported request or return a safe outcome.
 
     This baseline intentionally recognizes a small phrase/field vocabulary. It
-    does not guess airports, infer missing years, use fuzzy matching, or call an
-    external service.
+    does not guess airports, use fuzzy matching, or call an external service. An
+    omitted year stays omitted: the server resolves it to the newest accepted
+    period, exactly as it does for a model outcome with a null year.
     """
     cleaned = " ".join(text.strip().lower().split())
     if not cleaned:
         return _safe("unsupported_scope", "Enter one supported airport analysis.")
     if any(term in cleaned for term in ("profit", "profitable", "sql", "data path", "unmet demand cause")):
         return _safe("unsupported_scope", "That business claim or arbitrary data request is outside this demo's scope.")
-    unsupported_year = re.search(r"\b(20\d{2})\b", cleaned)
-    if unsupported_year and int(unsupported_year.group(1)) not in (2023, 2024):
-        return _safe("unsupported_scope", "Only qualified 2023 and 2024 periods are supported.")
+    years = {int(year) for year in re.findall(r"\b(20\d{2})\b", cleaned)}
+    if any(year not in SUPPORTED_YEARS for year in years):
+        return _safe("unsupported_scope", "Only 2023, 2024 and 2025 are supported.")
+    if len(years) > 1:
+        return _safe("clarification_required", "Choose one supported year.")
     if len(_matching_metrics(cleaned)) > 1:
         return _safe("unsupported_scope", "Submit one analysis at a time.")
 
@@ -34,6 +38,8 @@ def parse_intent(text: str, context: dict[str, Any] | None = None) -> dict[str, 
         if previous and previous.get("action") == "compare":
             metric = {"cancellations": "cancellation_rate", "delays": "departure_delay_minutes",
                       "diversions": "diversion_rate"}[cleaned.split()[-1]]
+            # Keep the previous period; the server re-resolves the accepted bundle.
+            previous.pop("bundle_id", None)
             return _analysis({**previous, "metric": metric})
 
     if re.fullmatch(r"(?:show|compare) only (cancellations|delays|diversions)", cleaned):
@@ -54,14 +60,12 @@ def parse_intent(text: str, context: dict[str, Any] | None = None) -> dict[str, 
 def _parse_explicit(text: str) -> dict[str, Any] | None:
     # UI presets and their explicit, unambiguous text equivalents.
     if text in {"new england screening", "screen new england airports", "rank new england airports by screen score"}:
-        return _request("rank", "screen_score", 2024, region="new_england")
+        return _request("rank", "screen_score", None, region="new_england")
     if text in {"fastest new england growth", "rank new england airports by passenger growth"}:
-        return _request("rank", "passenger_growth", 2024, region="new_england")
+        return _request("rank", "passenger_growth", None, region="new_england")
 
-    year_match = re.search(r"\b(2023|2024)\b", text)
+    year_match = re.search(r"\b(2023|2024|2025)\b", text)
     year = int(year_match.group(1)) if year_match else None
-    if year is None:
-        return None
 
     metric = _metric(text)
     if metric is None:
@@ -124,7 +128,7 @@ def _airports(text: str) -> list[str]:
     return list(dict.fromkeys(candidates))
 
 
-def _request(action: str, metric: str, year: int, *, region: str | None = None,
+def _request(action: str, metric: str, year: int | None, *, region: str | None = None,
              airports: list[str] | None = None, threshold_miles: int | None = None) -> dict[str, Any]:
     return AnalysisRequest.model_validate({
         "action": action, "metric": metric, "year": year, "region": region,
