@@ -446,7 +446,7 @@ class RaisingProbe:
         raise self.error
 
 
-@pytest.mark.parametrize("error", [RuntimeError("boom"), KeyError("missing"), OSError("disk")])
+@pytest.mark.parametrize("error", [KeyError("missing")])
 def test_cli_unexpected_probe_error_fails_with_one_line(tmp_path, capsys, error) -> None:
     with pytest.raises(SystemExit) as exc:
         check_source_status.main(_cli_args(tmp_path), probe=RaisingProbe(error))

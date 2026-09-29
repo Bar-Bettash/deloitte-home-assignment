@@ -379,12 +379,12 @@ def test_publish_rebuilds_packaged_recent_parquet_byte_for_byte(tmp_path) -> Non
 
 
 def test_publish_promotes_is_idempotent_and_rejects_tampered_existing_snapshot(tmp_path) -> None:
-    input_dir, specs, by_year = _archives_from_packaged(tmp_path, {"BOS"})
+    input_dir, specs, by_year = _archives_from_packaged(tmp_path, {"RUT"})
     data_root = tmp_path / "root"
 
     def publish(**overrides):
         options = {"data_root": data_root, "specs": specs, "expected_unique_by_year": by_year,
-                   "expected_eligible_by_year": by_year, "origins": {"BOS"}, "partial_coverage": {}}
+                   "expected_eligible_by_year": by_year, "origins": {"RUT"}, "partial_coverage": {}}
         return t100.publish_t100_snapshot(input_dir, **{**options, **overrides})
 
     first = publish()
