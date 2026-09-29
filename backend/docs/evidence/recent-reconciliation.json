@@ -1,18 +1,18 @@
 {
   "bundle_id": "annual-2025-r1",
   "bundle_manifest_sha256": "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548",
-  "checked_at_utc": "2026-09-27T16:47:49.232632Z",
+  "checked_at_utc": "2026-09-29T09:50:30.306404Z",
   "code_sha256": {
     "app/calculations/comparison.py": "d102981a31c82b9e6d0a5841b5f94cb7f8487bf5123fd74c2f0acb10d8a2c541",
     "app/calculations/long_haul.py": "b6e8df0415f799b7998191b98b6a5139f45fa672cb6342c321af4bca44d0c2e1",
-    "app/calculations/operations.py": "e6b4e6a325b02da031a06fbc84c6166b934c4ba659f38c5d4269d498f5337286",
-    "app/calculations/screen.py": "21e8764344334bd4414894e2d8fab25f01722b1bae050270fde56550453d620a",
-    "app/calculations/sfo.py": "fca3074e2c22032f73e2013d68dee12e8b636714e4544ac2dd465ed8cd09c074",
+    "app/calculations/operations.py": "1c8cc12dc632a56f9e9b2012f243ceb4fa3748b73934993522c04f846c3c29cd",
+    "app/calculations/screen.py": "e63974ad44f8c23b4f0c2755c3c30c863efab5b4b2ac97a64a58536ba3402e4b",
+    "app/calculations/sfo.py": "52d67a436ae2333b19f77846a2bb79683d52be81880217745b7b96e3cc8438a1",
     "app/calculations/traffic.py": "f64b8566bfc77e44e7bda3759033ac89e0f00bba879cc14a183850da08df3b10",
-    "app/contracts.py": "99762e6f811055c62e0e412c0432ea34471da470d7b6790c1f4c1ac3b790453d",
-    "app/dispatch.py": "5be0cf7ed81e388bc136ab420bf8452b5e86a9432fc3fd15ce448d01d102313b",
+    "app/contracts.py": "9ec09c3723392f4b0db0fe1273dc1bf097f0f13f7df5d7cb86a54b81e7f43f85",
+    "app/dispatch.py": "61319a426adf7a8a6e3d752a26dffb02a8c598c2a277b9170b77eb1cc2a9bc1f",
     "app/evidence.py": "6680ed12af45c83387f7daff51603b451b26fa1d53943f6d4b401f5094be1971",
-    "scripts/reconcile_recent.py": "d9f1e2648c5c1311bbb6469dbb217ddfb6ca68d8ed47acbab9cf2b0e50495826"
+    "scripts/reconcile_recent.py": "31a0ca7078b102828d078199def7bd60989b611fe24d0463034dba2f5e2b4ed4"
   },
   "cohort": [
     "BOS",

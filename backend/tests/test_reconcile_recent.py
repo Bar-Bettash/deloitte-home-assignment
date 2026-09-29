@@ -454,3 +454,17 @@ def test_cli_unknown_bundle_fails_with_one_line(tmp_path, capsys, mode) -> None:
     err = capsys.readouterr().err
     assert err.startswith("recent reconciliation failed:") and err.count("\n") == 1
     assert not (tmp_path / "must-not-exist.json").exists()
+
+
+def test_committed_receipt_code_hashes_match_current_files() -> None:
+    receipt = json.loads(
+        (BACKEND_ROOT / "docs/evidence/recent-reconciliation.json").read_text(encoding="utf-8")
+    )
+    current = {
+        relative: hashlib.sha256((BACKEND_ROOT / relative).read_bytes()).hexdigest()
+        for relative in reconcile_recent.CODE_PATHS
+    }
+    stale = sorted(path for path, digest in current.items() if receipt["code_sha256"].get(path) != digest)
+
+    assert set(receipt["code_sha256"]) == set(current)
+    assert stale == [], "regenerate docs/evidence/recent-reconciliation.json with scripts.reconcile_recent"
