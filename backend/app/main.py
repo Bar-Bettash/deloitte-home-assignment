@@ -74,7 +74,9 @@ def health() -> HealthResponse:
 
 
 @app.api_route("/login", methods=["GET", "HEAD"], include_in_schema=False)
-def login_page() -> FileResponse:
+def login_page() -> Response:
+    if not LOGIN_PAGE.is_file():
+        return _plain_error(503, "internal_error", "The sign-in page is not available.")
     return FileResponse(LOGIN_PAGE, media_type="text/html", headers={"Cache-Control": "no-store"})
 
 
@@ -109,7 +111,6 @@ async def grant_access(request: Request) -> Response:
         # A loopback run has no access code; there is nothing to prove.
         return Response(status_code=204)
     if not code_matches(code, hosting.access_code.get_secret_value()):
-        logger.warning("access denied")
         return _plain_error(401, "access_denied", "That access code is not valid.")
     response = Response(status_code=204)
     response.set_cookie(
@@ -156,7 +157,7 @@ def _error_response(
         success=False,
         error={"code": code, "message": message, "request_id": request_id},
     )
-    logger.warning("query failed request_id=%s code=%s", request_id, code)
+    logger.warning("request failed request_id=%s code=%s", request_id, code)
     response = JSONResponse(
         status_code=status_code,
         content=body.model_dump(mode="json"),

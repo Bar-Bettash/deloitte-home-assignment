@@ -124,6 +124,14 @@ def test_login_page_is_exempt_and_never_cached(gated, login_page):
     assert http.get("/login/").status_code == 401
 
 
+def test_missing_login_page_is_a_safe_error(gated, tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "LOGIN_PAGE", tmp_path / "absent.html")
+    response = _client().get("/login")
+    assert response.status_code == 503
+    assert _error_code(response) == "internal_error"
+    assert str(tmp_path) not in response.text
+
+
 def test_wrong_code_is_denied_without_cookie(gated):
     http = _client()
     for code in ("wrong-code-0123456789-xyz", FAKE_CODE.upper(), FAKE_CODE + " ", "x"):
