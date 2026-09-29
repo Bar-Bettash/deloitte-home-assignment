@@ -4,9 +4,16 @@ import logging
 import secrets
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
+from app.access import (
+    ACCESS_COOKIE,
+    ACCESS_TTL_SECONDS,
+    MAX_CODE_CHARS,
+    AccessGate,
+    access_signer,
+    code_matches,
+)
 from app.context_token import (
     ContextClaims,
     ContextSigner,
@@ -25,9 +32,9 @@ from app.contracts import (
 from app.dispatch import DispatchFailure, dispatch_analysis
 from app.model_adapter import ADAPTER_SHA256, ModelAdapterError, interpret_message
 from app.query_slots import QuerySlots
-from app.settings import HostingConfig, HostingConfigError, load_hosting, load_settings
+from app.settings import HostingConfig, load_settings
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
@@ -36,13 +43,17 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
 
 
-app = FastAPI()
+# Interactive API docs and the OpenAPI schema are never served (local or hosted).
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(AccessGate)
 logger = logging.getLogger(__name__)
-STATIC_DIR = Path(__file__).resolve().parent / "static"
+APP_DIR = Path(__file__).resolve().parent
+STATIC_DIR = APP_DIR / "static"
+LOGIN_PAGE = APP_DIR / "login.html"
+MAX_ACCESS_BODY_BYTES = 1024
 CONTEXT_COOKIE = "airport_context"
 CONTEXT_TTL_SECONDS = 3600
 QUERY_DEADLINE_SECONDS = 30
-ALLOWED_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "testserver"})
 # Used only by an ungated loopback run without APP_SIGNING_KEY: context tokens then
 # stop verifying when this process restarts, which a local demo can tolerate.
 _LOCAL_SIGNING_KEY = secrets.token_bytes(32)
@@ -56,9 +67,64 @@ def home() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
 
 
-@app.get("/health", response_model=HealthResponse)
+@app.api_route("/health", methods=["GET", "HEAD"], response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.api_route("/login", methods=["GET", "HEAD"], include_in_schema=False)
+def login_page() -> FileResponse:
+    return FileResponse(LOGIN_PAGE, media_type="text/html", headers={"Cache-Control": "no-store"})
+
+
+def _hosting(request: Request) -> HostingConfig:
+    """Configuration validated by AccessGate for this request."""
+    return request.state.hosting
+
+
+def _plain_error(status_code: int, code: ErrorCode, message: str) -> JSONResponse:
+    return _error_response(uuid4(), status_code, code, message)
+
+
+@app.post("/api/access", status_code=204, include_in_schema=False)
+async def grant_access(request: Request) -> Response:
+    hosting = _hosting(request)
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type != "application/json":
+        return _plain_error(415, "unsupported_media_type", "Send this request as JSON.")
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > MAX_ACCESS_BODY_BYTES:
+            return _plain_error(413, "request_too_large", "Request is too large.")
+        body.extend(chunk)
+    try:
+        payload = json.loads(bytes(body))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return _plain_error(400, "invalid_json", "Request JSON is invalid.")
+    code = payload.get("code") if isinstance(payload, dict) and set(payload) == {"code"} else None
+    if not isinstance(code, str) or not code or len(code) > MAX_CODE_CHARS:
+        return _plain_error(422, "invalid_request", "Send the access code as {\"code\": \"...\"}.")
+    if not hosting.gated:
+        # A loopback run has no access code; there is nothing to prove.
+        return Response(status_code=204)
+    if not code_matches(code, hosting.access_code.get_secret_value()):
+        logger.warning("access denied")
+        return _plain_error(401, "access_denied", "That access code is not valid.")
+    response = Response(status_code=204)
+    response.set_cookie(
+        ACCESS_COOKIE, access_signer(hosting).issue(), httponly=True, samesite="lax", path="/",
+        max_age=ACCESS_TTL_SECONDS, secure=hosting.secure_cookies,
+    )
+    return response
+
+
+@app.post("/api/logout", status_code=204, include_in_schema=False)
+def logout(request: Request) -> Response:
+    secure = _hosting(request).secure_cookies
+    response = Response(status_code=204)
+    response.delete_cookie(ACCESS_COOKIE, path="/", httponly=True, samesite="lax", secure=secure)
+    response.delete_cookie(CONTEXT_COOKIE, path="/", httponly=True, samesite="strict", secure=secure)
+    return response
 
 
 def _context_signer(hosting: HostingConfig) -> ContextSigner:
@@ -101,21 +167,6 @@ def _error_response(
             secure=hosting.secure_cookies if hosting is not None else False,
         )
     return response
-
-
-def _safe_local_origin(request: Request) -> bool:
-    host_header = request.headers.get("host", "").lower()
-    host_name = (request.url.hostname or "").lower()
-    if host_name not in ALLOWED_LOOPBACK_HOSTS:
-        return False
-    origin = request.headers.get("origin")
-    if origin is None:
-        return True
-    try:
-        parsed = urlsplit(origin)
-    except ValueError:
-        return False
-    return parsed.scheme == request.url.scheme and parsed.netloc.lower() == host_header
 
 
 def _release_abandoned_query(task: asyncio.Task) -> None:
@@ -199,8 +250,7 @@ async def _interpret_and_dispatch(
 @app.post("/api/query", response_model=AnalysisResult)
 async def query(request: Request) -> AnalysisResult | JSONResponse:
     request_id = uuid4()
-    if not _safe_local_origin(request):
-        return _error_response(request_id, 400, "invalid_request", "Use this local application from its own origin.")
+    hosting = _hosting(request)
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if content_type != "application/json":
         return _error_response(
@@ -231,10 +281,6 @@ async def query(request: Request) -> AnalysisResult | JSONResponse:
         return _error_response(
             request_id, 422, "invalid_request", "Request fields or analysis scope are invalid.",
         )
-    try:
-        hosting = load_hosting()
-    except HostingConfigError:
-        return _error_response(request_id, 503, "internal_error", "The service is not configured.")
     signer = _context_signer(hosting)
 
     analysis = query_request.analysis
