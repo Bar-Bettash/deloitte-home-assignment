@@ -7,14 +7,16 @@ const vm = require('node:vm');
 const path = require('node:path');
 class Element {
   constructor(id = '') { this.children = []; this.attrs = {}; this.dataset = {}; this.hidden = false; this.value = ''; this.textContent = ''; this.id = id; this.listeners = {}; this.focused = false; this.parent = null; this.classList = { values: new Set(), add: value => this.classList.values.add(value), remove: value => this.classList.values.delete(value), contains: value => this.classList.values.has(value), toggle: (value, enabled) => { if (enabled === undefined) enabled = !this.classList.values.has(value); if (enabled) this.classList.values.add(value); else this.classList.values.delete(value); return enabled; } }; }
-  append(...nodes) { for (const node of nodes) { if (node.parent) node.parent.children = node.parent.children.filter(child => child !== node); this.children.push(node); node.parent = this; } }
-  replaceChildren(...nodes) { for (const child of this.children) if (child.parent === this) child.parent = null; this.children = []; this.append(...nodes); }
+  // A child removed by replaceChildren is detached, as in a real document: an id
+  // lookup for it then returns null (see document.querySelector below).
+  append(...nodes) { for (const node of nodes) { if (typeof node !== 'object' || node === null) throw new TypeError(`append received ${node}`); if (node.parent) node.parent.children = node.parent.children.filter(child => child !== node); this.children.push(node); node.parent = this; node.detached = false; } }
+  replaceChildren(...nodes) { for (const child of this.children) if (child.parent === this) { child.parent = null; child.detached = true; } this.children = []; this.append(...nodes); }
   insertBefore(node, reference) { this.insertedBefore = { node, reference }; if (node.parent) node.parent.children = node.parent.children.filter(child => child !== node); const index = this.children.indexOf(reference); this.children.splice(index < 0 ? this.children.length : index, 0, node); node.parent = this; }
   setAttribute(key, value) { this.attrs[key] = value; }
   getAttribute(key) { return this.attrs[key] ?? null; }
   removeAttribute(key) { delete this.attrs[key]; }
   addEventListener(type, listener) { this.listeners[type] = listener; }
-  after(node) { this.afterNode = node; node.parent = this; }
+  after(node) { if (typeof node !== 'object' || node === null) throw new TypeError(`after received ${node}`); if (node.parent) node.parent.children = node.parent.children.filter(child => child !== node); this.afterNode = node; node.parent = this; node.detached = false; }
   before(node) { this.beforeNode = node; node.parent = this; }
   click() { const event = { currentTarget: this, target: this, preventDefault() {} }; this.listeners.click?.(event); this.onclick?.(event); }
   focus() { this.focused = true; }
@@ -31,7 +33,8 @@ function setup(query, overrides = {}, healthQuery = async () => ({ ok: true, jso
         if (selector === '#ask-trigger') { node.textContent = 'Ask your own question →'; node.setAttribute('aria-expanded', 'false'); }
         nodes.set(selector, node);
       }
-      return nodes.get(selector);
+      const found = nodes.get(selector);
+      return found.detached ? null : found;
     },
     querySelectorAll(selector) {
       if (selector === 'input, select, textarea') return ['action', 'airports', 'metric', 'year', 'threshold', 'question', 'airport-picker'].map(id => {
@@ -134,7 +137,8 @@ test('idle and result states keep the compact contact header and open the result
   assert.equal(composer.attrs['aria-hidden'], 'true');
   assert.equal(trigger.hidden, false);
   assert.equal(trigger.textContent, 'Ask a follow-up →');
-  assert.ok(ui.nodes.get('#result').children.includes(trigger), 'the follow-up trigger is in the visible result content');
+  assert.ok(ui.nodes.get('#result-actions').children.includes(trigger), 'the follow-up trigger sits in the persistent result actions');
+  assert.ok(!ui.nodes.get('#result').children.includes(trigger), 'the follow-up trigger is never inside the re-rendered result container');
   assert.equal(trigger.attrs['aria-expanded'], 'false');
   trigger.click();
   assert.equal(composer.hidden, false);
@@ -689,14 +693,14 @@ test('successful response keeps focus in place and evidence navigation is delibe
     'evidence navigation opens the containing disclosure before moving focus');
 });
 
-test('Back moves the follow-up trigger from result content into controls without relying on relocated feedback', async () => {
+test('Back moves the follow-up trigger from result actions back after the analysis choices', async () => {
   const ui = setup(async () => success(result()));
   await ui.run('submitRequest({analysis: demos["lax-sna"]})');
   const trigger = ui.nodes.get('#ask-trigger');
-  assert.equal(trigger.parent, ui.nodes.get('#result'));
+  assert.equal(trigger.parent, ui.nodes.get('#result-actions'));
   assert.doesNotThrow(() => ui.run('startNewAnalysis()'));
-  assert.equal(trigger.parent, ui.nodes.get('#controls'));
-  assert.ok(ui.nodes.get('#controls').children.includes(trigger));
+  assert.equal(trigger.parent, ui.nodes.get('#analyze'), 'placed directly after the analysis choices');
+  assert.ok(!ui.nodes.get('#result-actions').children.includes(trigger));
   assert.ok(!ui.nodes.get('#result').children.includes(trigger));
   assert.equal(trigger.hidden, false);
   assert.equal(trigger.textContent, 'Ask your own question →');
@@ -1046,19 +1050,19 @@ test('screening graph keeps airport identities, backend ranks and unavailable st
   assert.match(text, /Source IDs: source/);
 });
 
-test('mixed-unit series retains each supplied unit and unavailable reason', () => {
+test('mixed-unit series retains each supplied unit and labels unavailable months (SeriesPoint has no reason field)', () => {
   const payload = result(); payload.scope.metric = 'sfo_enplaned_trend'; payload.scope.airports = ['SFO'];
   payload.rows = [{ airport: 'SFO', metrics: [{ key: 'sfo_enplaned_trend', value: 10, unit: 'count', status: 'ok', source_ids: ['source'] }] }];
   payload.series = [
     { period: '202401', value: 10, unit: 'count', status: 'ok' },
-    { period: '202402', value: null, unit: 'count', status: 'unavailable', reason: 'Source coverage gap' },
+    { period: '202402', value: null, unit: 'count', status: 'unavailable' },
     { period: '202403', value: 2, unit: 'minutes', status: 'ok' },
   ];
   const ui = setup(async () => success(payload)); ui.context.payload = payload; ui.run('renderResult(validateResult(payload), false)');
   const text = resultContent(ui);
   assert.match(text, /2024-01/);
   assert.match(text, /10/);
-  assert.match(text, /Unavailable: Source coverage gap/);
+  assert.match(text, /Unavailable: Value unavailable · count/);
   assert.match(text, /minutes|min/);
 });
 
@@ -1234,4 +1238,127 @@ test('ai_unavailable keeps the server message and says presets still work', asyn
   const text = ui.nodes.get('#feedback').textContent;
   assert.match(text, /^AI interpretation is unavailable\. /);
   assert.match(text, /Presets and Adjust scope still work/);
+});
+
+// Regressions for the detached follow-up trigger, follow-up/explain flow and KPI rendering.
+function queuedFetch(responses) {
+  const bodies = [];
+  const query = async (_url, options) => { bodies.push(JSON.parse(options.body)); const next = responses.shift(); return typeof next === 'function' ? next() : next; };
+  return { query, bodies };
+}
+const flush = () => new Promise(resolve => setImmediate(resolve));
+
+test('a shown result re-renders repeatedly (scope edits, globe marker) without throwing and the next request is sent', async () => {
+  const { query, bodies } = queuedFetch([success(result()), success({ ...result(), result_id: 'result-2' })]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["lax-sna"])');
+  const airports = ui.nodes.get('#airports');
+  airports.value = 'LAX, SFO';
+  assert.doesNotThrow(() => airports.listeners.input());
+  assert.doesNotThrow(() => airports.listeners.input());
+  assert.doesNotThrow(() => ui.window.dispatchEvent(new ui.CustomEvent('airportdraftselect', { detail: { code: 'SNA' } })));
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Previous result');
+  assert.ok(ui.run('$("#ask-trigger")'), 'the trigger stays in the document after re-renders');
+  assert.equal(ui.nodes.get('#ask-trigger').textContent, 'Ask a follow-up →');
+  await ui.run('runPreset(demos["lax-sna"])');
+  assert.equal(bodies.length, 2, 'the second request reached the server');
+  assert.equal(ui.run('latestSuccessfulResult.result_id'), 'result-2');
+  assert.equal(ui.run('busy'), false);
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result');
+});
+
+test('Back after a shown result does not throw or insert stray nodes, and a later preset still runs', async () => {
+  const { query, bodies } = queuedFetch([success(result()), success(result())]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["lax-sna"])');
+  ui.run('renderResult(latestSuccessfulResult, true)');
+  assert.doesNotThrow(() => ui.nodes.get('#back-to-analysis').click());
+  assert.equal(ui.nodes.get('#result-panel').hidden, true);
+  assert.equal(ui.nodes.get('#ask-trigger').parent, ui.nodes.get('#analyze'));
+  assert.equal(ui.nodes.get('#explain').hidden, true);
+  await ui.run('runPreset(demos["sfo-trend"])');
+  assert.equal(bodies.length, 2);
+  assert.equal(ui.run('busy'), false);
+});
+
+test('a render failure while loading still releases the loading state', async () => {
+  const ui = setup(async () => success(result()));
+  await ui.run('submitRequest({analysis: demos["lax-sna"]})');
+  ui.run('renderResult = () => { throw new TypeError("render failed"); }');
+  await assert.rejects(ui.run('submitRequest({analysis: demos["lax-sna"]})'));
+  assert.equal(ui.run('busy'), false);
+  assert.equal(ui.nodes.get('#controls').getAttribute('aria-busy'), 'false');
+});
+
+test('typing a follow-up keeps the result current; sending it reaches the server and ai_unavailable keeps the result', async () => {
+  const { query, bodies } = queuedFetch([success(result()), { ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable. Try a preset or choose a supported analysis.') }]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["lax-sna"])');
+  const question = ui.nodes.get('#question');
+  question.value = 'Why is LAX higher?';
+  question.listeners.input();
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result', 'typing alone does not relabel the result');
+  ui.nodes.get('#chat-form').listeners.submit({ preventDefault() {} });
+  await flush(); await flush();
+  assert.equal(bodies.length, 2);
+  assert.deepEqual(bodies[1], { message: 'Why is LAX higher?', context_result_id: 'result-1' });
+  assert.equal(ui.run('busy'), false, 'no stuck loading state');
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result', 'the prior result stays current');
+  assert.equal(ui.run('latestSuccessfulResult.result_id'), 'result-1');
+  assert.ok(content(ui.nodes.get('#result')).includes('A qualified summary'));
+  const text = ui.nodes.get('#feedback').textContent;
+  assert.match(text, /^AI interpretation is unavailable\./);
+  assert.match(text, /Presets and Adjust scope still work/);
+  assert.equal(question.value, 'Why is LAX higher?', 'the unsent question is kept for editing');
+});
+
+test('Explain is offered after a result, sends explain with context_result_id, and renders the explanation', async () => {
+  const explained = { ...result(), summary: 'SFO: passengers 27,250,806; passenger growth 4.59%. Limitations: trends do not identify unmet demand.' };
+  const { query, bodies } = queuedFetch([success(result()), success(explained)]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["lax-sna"])');
+  const explain = ui.nodes.get('#explain');
+  assert.equal(explain.hidden, false);
+  assert.equal(explain.disabled, false);
+  explain.click();
+  await flush(); await flush();
+  assert.deepEqual(bodies[1], { analysis: { action: 'explain' }, context_result_id: 'result-1' });
+  const panel = findDescendant(ui.nodes.get('#result'), node => node.id === 'result-explanation');
+  assert.ok(panel, 'the explanation is rendered');
+  assert.equal(panel.textContent, `Explanation · ${explained.summary}`, 'the summary text is rendered as returned');
+  assert.equal(panel.parent.className, 'key-insights', 'the explanation reuses the existing insights card');
+  assert.equal(ui.nodes.get('#result-actions').children[0], ui.nodes.get('#ask-trigger'), 'Explain sits next to the existing follow-up button');
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result');
+  assert.equal(ui.run('busy'), false);
+  assert.equal(ui.run('contextResultId'), 'result-1');
+  assert.ok(content(ui.nodes.get('#result')).includes('A qualified summary'), 'the original result summary remains');
+  ui.run('renderResult(latestSuccessfulResult, true)');
+  assert.ok(findDescendant(ui.nodes.get('#result'), node => node.id === 'result-explanation'), 'the explanation survives a re-render');
+});
+
+test('KPI cards render whichever metrics the rows return, with units, and are omitted when none are returned', () => {
+  const ui = setup();
+  const payload = result(); payload.scope.metric = 'sfo_enplaned_trend'; payload.scope.airports = ['SFO'];
+  payload.rows = [{ airport: 'SFO', metrics: [
+    { key: 'passengers', value: 27250806, unit: 'count', status: 'ok', source_ids: ['source'] },
+    { key: 'passenger_growth', value: 4.59121, unit: 'percent', status: 'ok', numerator: 1196220, denominator: 26054586, source_ids: ['source'] },
+  ] }];
+  ui.context.payload = payload;
+  ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
+  const row = findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row');
+  assert.ok(row);
+  assert.equal(row.children.length, 2);
+  assert.match(content(row), /Passengers .*27,250,806/);
+  assert.match(content(row), /Passenger growth .*4\.59%/);
+  payload.rows[0].metrics.unshift({ key: 'sfo_enplaned_trend', value: 5, unit: 'count', status: 'ok', source_ids: ['source'] });
+  ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
+  const withTrend = findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row');
+  assert.equal(withTrend.children[0].children[0].textContent, 'SFO passenger trend', 'the requested key leads when returned');
+  payload.rows[0].metrics.splice(1, 0, { key: 'enplaned_growth', value: 4.59, unit: 'percent', status: 'ok', numerator: 1196220, denominator: 26054586, source_ids: ['source'] });
+  ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
+  const withEnplaned = findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row');
+  assert.match(content(withEnplaned), /Enplaned passenger growth .*4\.59%/, 'a newly added backend metric is admitted and shown with its unit');
+  payload.rows = [{ airport: 'SFO', metrics: [] }];
+  ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
+  assert.equal(findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row'), null, 'no empty KPI section');
 });

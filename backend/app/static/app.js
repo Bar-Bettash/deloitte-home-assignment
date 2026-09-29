@@ -19,6 +19,10 @@ const $ = (selector) => document.querySelector(selector);
 const feedback = $("#feedback");
 let feedbackTarget = $("#analyze");
 const resultPanel = $("#result");
+// Persistent controls are held by reference and never placed inside #result,
+// because every render replaces that container's children.
+const askTrigger = $("#ask-trigger");
+const resultActions = $("#result-actions");
 const connectionFailureMessage = "The backend is unavailable or returned an invalid response. The previous result is retained. Check the local server and retry explicitly.";
 let latestSuccessfulResult = null;
 let contextResultId = null;
@@ -26,6 +30,7 @@ let requestGeneration = 0;
 let busy = false;
 let resultIsPrevious = false;
 let rendererReady = false;
+let explanation = null;
 const metricRenderers = Object.create(null);
 
 function dispatchGlobeEvent(type, detail) {
@@ -249,17 +254,28 @@ async function submitScope(analysis) {
   return true;
 }
 
+function requestKind(request) {
+  if (request.analysis?.action === "explain") return "explain";
+  return request.message != null ? "followup" : "analysis";
+}
+
 async function submitRequest(request) {
   if (busy) return;
+  const kind = requestKind(request);
   const generation = ++requestGeneration;
-  setLoading(true);
-  showFeedback(latestSuccessfulResult
-    ? "Loading analysis. The previous result remains available; this can take up to 30 seconds."
-    : "Loading analysis. This can take up to 30 seconds.");
-  if (latestSuccessfulResult) renderResult(latestSuccessfulResult, true);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 35000);
+  let timeout = null;
+  setLoading(true);
   try {
+    // Follow-ups and explanations keep the current result labeled as current:
+    // nothing replaces it unless a new result is admitted.
+    if (kind !== "analysis" && latestSuccessfulResult) positionFeedback(resultActions);
+    showFeedback(kind === "explain" ? "Loading explanation…"
+      : latestSuccessfulResult
+        ? "Loading analysis. The previous result remains available; this can take up to 30 seconds."
+        : "Loading analysis. This can take up to 30 seconds.");
+    if (latestSuccessfulResult && kind === "analysis") renderResult(latestSuccessfulResult, true);
+    timeout = setTimeout(() => controller.abort(), 35000);
     const response = await fetch("/api/query", {
       method: "POST", credentials: "same-origin", signal: controller.signal,
       headers: { Accept: "application/json", "Content-Type": "application/json" },
@@ -271,13 +287,24 @@ async function submitRequest(request) {
       const detail = parseErrorResponse(payload);
       if (detail) showRequestError(detail, response.status);
       else showFeedback(connectionFailureMessage, true);
-      if (latestSuccessfulResult) renderResult(latestSuccessfulResult, true);
+      if (latestSuccessfulResult && kind === "analysis") renderResult(latestSuccessfulResult, true);
       return;
     }
     const result = validateResult(payload);
+    if (kind === "explain") {
+      // Explain recomputes the referenced result; it never replaces it.
+      if (!latestSuccessfulResult || result.result_id !== latestSuccessfulResult.result_id) throw new Error("Explanation does not match the displayed result");
+      explanation = { resultId: result.result_id, text: result.summary || "No explanation was returned." };
+      renderResult(latestSuccessfulResult, resultIsPrevious);
+      showFeedback("Explanation received.", false, resultActions);
+      feedback.setAttribute("data-complete", "true");
+      return;
+    }
     latestSuccessfulResult = result;
     contextResultId = result.result_id;
     resultIsPrevious = false;
+    explanation = null;
+    if (kind === "followup") $("#question").value = "";
     renderResult(result, false);
     showResultReady(result.status === "partial" ? "Partial result received. Review unavailable metrics, exclusions, and limitations." : "Analysis received.");
   } catch (error) {
@@ -285,7 +312,7 @@ async function submitRequest(request) {
     showFeedback(error.name === "AbortError"
       ? "Request timed out. The previous result is retained. Retry explicitly; no retry was sent."
       : connectionFailureMessage, true);
-    if (latestSuccessfulResult) renderResult(latestSuccessfulResult, true);
+    if (latestSuccessfulResult && kind === "analysis") renderResult(latestSuccessfulResult, true);
   } finally {
     clearTimeout(timeout);
     if (generation === requestGeneration) setLoading(false);
@@ -329,7 +356,6 @@ function renderResult(result, previous) {
     $("#fresh").hidden = true;
     $("#back-to-analysis").hidden = false;
     $("#setup-toggle").textContent = "Choose another question";
-    $("#explain").hidden = true;
   }
   enableEvidenceLink();
   resultPanel.replaceChildren();
@@ -343,7 +369,11 @@ function renderResult(result, previous) {
   $("#view-evidence").hidden = true;
   const composer = $("#conversation-composer");
   const composerOpen = !composer.hidden && !composer.inert;
-  const askTrigger = $("#ask-trigger");
+  const explain = $("#explain");
+  explain.hidden = !contextResultId || contextResultId !== result.result_id;
+  explain.disabled = busy || explain.hidden;
+  // The existing follow-up button leads; Explain sits next to it.
+  resultActions.insertBefore(askTrigger, resultActions.firstChild);
   askTrigger.textContent = "Ask a follow-up →";
   askTrigger.hidden = composerOpen;
   askTrigger.setAttribute("aria-expanded", String(composerOpen));
@@ -373,6 +403,7 @@ function renderResult(result, previous) {
   heading(insights, "h3", "Key insights");
   paragraph(insights, result.summary || "No summary was returned.");
   if (result.limitations.length) paragraph(insights, `Limitation · ${result.limitations[0]}`);
+  if (explanation && explanation.resultId === result.result_id) paragraph(insights, `Explanation · ${explanation.text}`).id = "result-explanation";
   dashboard.classList.toggle("fullwidth-insights", ["sfo_pressure", "sfo_enplaned_trend"].includes(result.scope.metric));
   dashboard.append(insights);
   if (result.series.length || ["sfo_enplaned_trend", "sfo_pressure"].includes(result.scope.metric)) {
@@ -391,7 +422,7 @@ function renderResult(result, previous) {
       for (const point of result.series) {
         const tr = document.createElement("tr");
         cell(tr, `${point.period.slice(0, 4)}-${point.period.slice(4)}`);
-        cell(tr, point.status === "unavailable" ? `Unavailable: ${point.reason || "Value unavailable"} · ${point.unit}` : formatMetric(point));
+        cell(tr, point.status === "unavailable" ? `Unavailable: Value unavailable · ${point.unit}` : formatMetric(point));
         table.body.append(tr);
       }
       const chart = renderSeriesChart(result.series);
@@ -486,7 +517,6 @@ function renderResult(result, previous) {
   paragraph(diagnostics, `Request ID: ${result.request_id}`);
   evidenceGroup.append(diagnostics);
   resultPanel.append(evidenceGroup);
-  resultPanel.append(askTrigger);
   $("#view-evidence").onclick = () => { evidenceGroup.open = true; evidenceHeading.focus(); };
   updateContextStrip(result, previous);
   publishResultState();
@@ -499,14 +529,14 @@ function renderKpiRow(result) {
     if (!metricsByKey.has(metric.key)) metricsByKey.set(metric.key, []);
     metricsByKey.get(metric.key).push({ airport: row.airport, rank: row.rank, metric });
   }
-  const preferred = {
-    congestion: ["cancellation_rate", "departure_delay_minutes", "taxi_out_minutes", "diversion_rate"],
-    screen_score: ["screen_score", "passenger_growth", "seat_occupancy", "passengers"],
-    long_haul_share: ["long_haul_share", "departures"],
-    sfo_pressure: ["passenger_growth", "sfo_pressure", "seat_occupancy"],
-    sfo_enplaned_trend: ["sfo_enplaned_trend"],
-  }[result.scope.metric] || [result.scope.metric, ...metricsByKey.keys()];
-  const keys = preferred.filter((key, index) => metricsByKey.has(key) && preferred.indexOf(key) === index).slice(0, 4);
+  // SFO pressure keeps its three primary indicators (the rest are listed as
+  // supporting evidence). Every other metric leads with the requested key when
+  // it is returned, then shows whichever other metrics the rows actually carry.
+  const candidates = result.scope.metric === "sfo_pressure"
+    ? ["passenger_growth", "sfo_pressure", "seat_occupancy"]
+    : [result.scope.metric, ...metricsByKey.keys()];
+  const keys = [...new Set(candidates)].filter((key) => metricsByKey.has(key)).slice(0, 4);
+  if (!keys.length) return null;
   const group = document.createElement("section");
   group.className = "kpi-row";
   group.setAttribute("aria-label", "Returned key metrics");
@@ -524,8 +554,8 @@ function renderKpiRow(result) {
       airport.textContent = item.airport;
       const value = document.createElement("strong");
       value.className = item.metric.status === "unavailable" ? "is-unavailable" : "";
-      value.textContent = item.metric.status === "unavailable" ? "—" : key === "sfo_pressure" ? `${formatNumber(item.metric.value)} pp` : formatMetric(item.metric);
-      if (key === "sfo_pressure" && item.metric.status === "ok") value.setAttribute("aria-label", `${formatNumber(item.metric.value)} percentage points`);
+      value.textContent = item.metric.status === "unavailable" ? "—" : formatMetric(item.metric);
+      if (item.metric.unit === "percentage_points" && item.metric.status === "ok") value.setAttribute("aria-label", `${formatNumber(item.metric.value)} percentage points`);
       line.append(airport, value);
       card.append(line);
       if (item.metric.status === "unavailable") paragraph(card, item.metric.reason).className = "kpi-reason";
@@ -557,8 +587,8 @@ function openQuestionComposer(takeFocus = true) {
   document.body?.classList?.add("composer-open");
   composer.inert = false;
   composer.setAttribute("aria-hidden", "false");
-  $("#ask-trigger").setAttribute("aria-expanded", "true");
-  $("#ask-trigger").hidden = $("#hero-layout").classList.contains("has-result");
+  askTrigger.setAttribute("aria-expanded", "true");
+  askTrigger.hidden = $("#hero-layout").classList.contains("has-result");
   const animateOpen = () => composer.classList.add("is-open");
   if (typeof requestAnimationFrame === "function") requestAnimationFrame(animateOpen);
   else setTimeout(animateOpen, 0);
@@ -573,11 +603,11 @@ function closeQuestionComposer(returnFocus = true) {
   document.body?.classList?.remove("composer-open");
   composer.setAttribute("aria-hidden", "true");
   composer.inert = true;
-  $("#ask-trigger").setAttribute("aria-expanded", "false");
-  $("#ask-trigger").hidden = false;
+  askTrigger.setAttribute("aria-expanded", "false");
+  askTrigger.hidden = false;
   clearTimeout(composerCloseTimer);
   composerCloseTimer = setTimeout(() => { composer.hidden = true; }, window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 210);
-  if (returnFocus) $("#ask-trigger").focus();
+  if (returnFocus) askTrigger.focus();
 }
 
 function describePeriod(scope) {
@@ -930,7 +960,7 @@ function renderGenericMetricTable(result, target) {
 function validateResult(result) {
   const fail = () => { throw new Error("Invalid analysis response"); };
   const scopeMetrics = new Set(["passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share", "screen_score", "congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "sfo_pressure"]);
-  const metricUnits = { passengers: "count", seats: "count", departures: "count", passenger_growth: "percent", seat_occupancy: "percent", long_haul_share: "percent", screen_score: "score", cancellation_rate: "percent", diversion_rate: "percent", departure_delay_minutes: "minutes", taxi_out_minutes: "minutes", sfo_enplaned_trend: "count", sfo_pressure: "percentage_points" };
+  const metricUnits = { passengers: "count", seats: "count", departures: "count", passenger_growth: "percent", seat_occupancy: "percent", long_haul_share: "percent", screen_score: "score", cancellation_rate: "percent", diversion_rate: "percent", departure_delay_minutes: "minutes", taxi_out_minutes: "minutes", sfo_enplaned_trend: "count", enplaned_growth: "percent", sfo_pressure: "percentage_points" };
   const ratioMetrics = new Set(["seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"]);
   if (!isRecord(result) || !["ok", "partial"].includes(result.status)
       || typeof result.result_id !== "string" || typeof result.request_id !== "string"
@@ -994,7 +1024,7 @@ function isSafeHttpUrl(value) {
 function label(value) { return value.replaceAll("_", " "); }
 function humanDirection(value) { return ({ higher: "Higher", lower: "Lower", tied: "Tied", unavailable: "Unavailable" })[value] || "Direction unavailable"; }
 function humanMetricLabel(key) {
-  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi out", sfo_enplaned_trend: "SFO passenger trend", sfo_pressure: "Passenger growth gap" };
+  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi out", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap" };
   return names[key] || label(key);
 }
 function humanScopeMetricLabel(key) { return key === "sfo_pressure" ? "SFO demand pressure" : humanMetricLabel(key); }
@@ -1073,14 +1103,15 @@ function startNewAnalysis() {
   $("#conversation-composer").hidden = true;
   // Feedback is relocated into the result heading while a result is visible,
   // so it is not a stable insertion reference inside the controls container.
-  $("#controls").append($("#ask-trigger"));
-  $("#ask-trigger").hidden = false;
-  $("#ask-trigger").textContent = "Ask your own question →";
-  $("#ask-trigger").setAttribute("aria-expanded", "false");
+  $("#analyze").after(askTrigger);
+  askTrigger.hidden = false;
+  askTrigger.textContent = "Ask your own question →";
+  askTrigger.setAttribute("aria-expanded", "false");
   requestGeneration += 1;
   setLoading(false);
   latestSuccessfulResult = null;
   contextResultId = null;
+  explanation = null;
   resultIsPrevious = false;
   $("#hero-layout").classList.remove("has-result");
   $("#result-panel").hidden = true;
@@ -1120,9 +1151,11 @@ for (const button of document.querySelectorAll("[data-preset]")) {
   });
 }
 for (const input of document.querySelectorAll("input, select, textarea")) if (input.id !== "airport-picker") input.addEventListener("input", () => {
+  // Typing a follow-up is not a scope change: the shown result stays current
+  // and any in-flight request continues until a question is actually sent.
+  if (input.id === "question") { clearQuestionError(); return; }
   changedDraft();
   if (["action", "airports", "metric", "year", "threshold"].includes(input.id)) clearScopeError(input.id);
-  if (input.id === "question") clearQuestionError();
 });
 $("#metric").addEventListener("input", syncThresholdAvailability);
 $("#scope-form").addEventListener("submit", (event) => {
@@ -1149,13 +1182,12 @@ $("#chat-form").addEventListener("submit", (event) => {
   if (contextResultId) request.context_result_id = contextResultId;
   void submitRequest(request);
 });
-$("#ask-trigger").addEventListener("click", openQuestionComposer);
+askTrigger.addEventListener("click", openQuestionComposer);
 $("#back-to-analysis").addEventListener("click", startNewAnalysis);
 document.addEventListener?.("keydown", (event) => {
   if (event.key === "Escape" && !$("#conversation-composer").hidden) closeQuestionComposer();
 });
 $("#explain").addEventListener("click", () => {
-  positionFeedback($("#result-title"));
   if (contextResultId) void submitRequest({ analysis: { action: "explain" }, context_result_id: contextResultId });
 });
 $("#evidence-link")?.addEventListener("click", (event) => {
