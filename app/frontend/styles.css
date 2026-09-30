@@ -719,6 +719,43 @@
     .back-to-analysis span, .globe-motion-toggle [data-motion-icon] { font-size: .8125rem; }
     #feedback, .result-actions button, #result-panel .result-actions button { font-size: .875rem; }
     .prompt span, #scope-help, .airport-picker-help { font-size: .875rem; }
+
+    /* Final QA pass: secondary copy reads at >= 14px; 13px stays only on eyebrow metadata. */
+    #result .result-scope-heading .result-period, #result .legend-note, #result .kpi-airport,
+    #result .kpi-note, #result .kpi-reason, #result .kpi-threshold,
+    #result .measure-track .congestion-scale, #result .comparison-value .not-plotted { font-size: .875rem; }
+    #result .kpi-card h3 { color: var(--text); }
+    .marker-label { font-size: .8125rem; }
+    #result .key-insights .insight-coverage { margin: 8px 0 0; color: var(--text-secondary); font-size: .9375rem; line-height: 1.5; }
+    #result .result-explanation { grid-column: 1 / -1; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(13,28,66,.84); }
+    #result .result-explanation h3 { margin: 0 0 6px; }
+    #result .result-explanation p { margin: 0; color: var(--text); font-size: 1rem; line-height: 1.55; }
+    .dashboard-grid .metric-view:empty { display: none; }
+    .dashboard-grid:has(> .metric-view:empty) { grid-template-columns: minmax(0, 1fr); }
+    .dashboard-grid:has(> .metric-view:empty) > * { grid-column: 1; }
+    #result .compact-values table { min-width: 0; }
+    #result .compact-values :is(th, td):last-child { text-align: end; font-variant-numeric: tabular-nums; }
+    /* Dots at 0% / 100% overhang the plot by their radius; the gap keeps them clear of the scale labels. */
+    #result .measure-track { gap: 16px; }
+    /* Both skip links can show at once while focused; keep them apart. */
+    .skip-links:focus-within { display: flex; gap: 12px; }
+    /* Desktop: the result pane ends above the open composer, so the composer never covers result content. */
+    @media (min-width: 1000px) {
+      body.composer-open #result-panel { bottom: 104px; max-height: calc(100% - 104px); padding-bottom: 24px; }
+    }
+    /* Mobile: the fixed globe sits behind the page; results get a near-opaque backdrop so labels never sit on the Earth,
+       bottom space is reserved only while the composer is open, and the in-page "View globe" jump is dropped. */
+    @media (max-width: 999px) {
+      .hero-layout.has-result #result-panel { background: rgba(1,7,54,.94); }
+      body:has(.hero-layout.has-result) #view-globe { display: none; }
+    }
+    @media (max-width: 899px) {
+      .page.app-main { padding-bottom: 0; }
+      #result-panel { padding-bottom: 32px; }
+      body.composer-open .page.app-main { padding-bottom: 0; }
+      body.composer-open #result-panel { padding-bottom: 150px; }
+      #result .measure-track { gap: 14px; }
+    }
     @media (prefers-reduced-motion: reduce) {
       #result-panel :is(#result, #result-title, #result-actions), .globe-marker, .globe-marker::before, #result > details > summary::after { transition: none !important; }
       #feedback[data-loading="true"]::after { animation: none; transform: none; opacity: .5; }

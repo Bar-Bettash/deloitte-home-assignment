@@ -1290,30 +1290,57 @@ def test_cancelled_request_keeps_busy_slot_until_worker_finishes_without_saving_
 
 
 @pytest.mark.parametrize("year", [2024, 2025])
-def test_explain_ranked_cohort_names_every_airport_with_readable_numbers(year):
+def test_explain_ranked_cohort_is_a_short_narrative_not_a_row_dump(year):
     previous = dispatch.dispatch_analysis(
         main.AnalysisRequest(action="rank", region="new_england", metric="screen_score", year=year), uuid4()
     )
     explained = dispatch.dispatch_analysis(main.AnalysisRequest(action="explain"), uuid4(), previous=previous)
+    summary = explained.summary
+    ranked = sorted((row for row in previous.rows if row.rank is not None), key=lambda row: (row.rank, row.airport))
 
-    assert len(explained.summary) <= 2000
-    assert all(f" {row.airport} " in explained.summary for row in previous.rows)
-    assert "more airports" not in explained.summary
-    assert "e+" not in explained.summary
-    boston = next(row for row in previous.rows if row.airport == "BOS")
-    passengers = next(metric.value for metric in boston.metrics if metric.key == "passengers")
-    assert f"{passengers:,}" in explained.summary
+    # What was measured, the leaders with exact scores, and what the screen cannot prove.
+    assert "passenger growth (40%), passenger volume (30%) and seat occupancy (30%)" in summary
+    for row in ranked[:3]:
+        score = next(metric for metric in row.metrics if metric.key == "screen_score")
+        assert f"{row.airport} ({dispatch._format_value(score.value, score.unit)})" in summary
+    assert "not proof" in summary and "profitable" in summary
+    # Not a dump of every airport: exact values already live in the ranking and methodology.
+    assert not any(f"{row.airport} " in summary or f"{row.airport} (" in summary for row in ranked[3:])
+    assert 3 <= summary.count(". ") + 1 <= 6
+    assert "_" not in summary and "e+" not in summary and "Reviewed evidence" not in summary
 
 
-def test_explain_summary_keeps_whole_sentences_and_counts_omitted_airports():
-    lines = [f"A{index:02d}: " + "x" * 190 + "." for index in range(23)]
-    summary = dispatch._fit_summary(lines, ["Limitation: kept whole."])
+def test_explain_templates_stay_short_and_use_friendly_names():
+    cases = [
+        main.AnalysisRequest(action="compare", airports=["LAX", "SNA"], metric="congestion"),
+        main.AnalysisRequest(action="compare", airports=["LAX", "SNA"], metric="cancellation_rate"),
+        main.AnalysisRequest(action="metric", airports=["ANC"], metric="long_haul_share", threshold_miles=3000),
+        main.AnalysisRequest(action="metric", airports=["SFO"], metric="sfo_pressure"),
+    ]
+    for request in cases:
+        previous = dispatch.dispatch_analysis(request, uuid4())
+        summary = dispatch.dispatch_analysis(main.AnalysisRequest(action="explain"), uuid4(), previous=previous).summary
+        assert 2 <= summary.count(". ") + 1 <= 6, summary
+        assert "_" not in summary, summary
+        assert len(summary) < 700, summary
+    anc = dispatch.dispatch_analysis(cases[2], uuid4())
+    share = anc.rows[0].metrics[0]
+    anc_summary = dispatch.dispatch_analysis(main.AnalysisRequest(action="explain"), uuid4(), previous=anc).summary
+    assert f"{int(share.numerator):,} such departures out of {int(share.denominator):,}" in anc_summary
 
-    assert len(summary) <= 2000
-    kept = [line for line in lines if line in summary]
-    assert summary.startswith(" ".join(kept))
-    assert f"And {len(lines) - len(kept)} more airports (see rows)." in summary
-    assert summary.endswith("Further evidence and limitations are listed in the result.")
+
+def test_summaries_and_limitations_never_show_raw_metric_keys():
+    requests = [
+        main.AnalysisRequest(action="rank", region="new_england", metric="screen_score"),
+        main.AnalysisRequest(action="compare", airports=["LAX", "SNA"], metric="cancellation_rate"),
+        main.AnalysisRequest(action="metric", airports=["LAX"], metric="taxi_out_minutes"),
+        main.AnalysisRequest(action="metric", airports=["SFO"], metric="sfo_pressure"),
+    ]
+    for request in requests:
+        result = dispatch.dispatch_analysis(request, uuid4())
+        assert "_" not in result.summary, result.summary
+        assert all("_" not in item for item in result.limitations), result.limitations
+        assert all(not item.claim.startswith("Status unknown") for item in result.evidence)
 
 
 @pytest.mark.parametrize(

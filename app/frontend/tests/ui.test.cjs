@@ -158,14 +158,14 @@ test('renders rows, rank, backend percentages, denominator, directions, evidence
   const ui = setup(); ui.context.payload = result();
   ui.run('renderResult(validateResult(payload), false)');
   const text = resultContent(ui);
-  for (const expected of ['Partial result', '2.50%', '1 / 40', 'higher', 'Unavailable', 'Counterevidence retained', 'PVC incomplete', 'Not a causal conclusion', '<b>Plain evidence</b>']) assert.ok(text.includes(expected), expected);
+  for (const expected of ['Current result', 'Coverage · ', '2.50%', '1 / 40', 'higher', 'Unavailable', 'Counterevidence retained', 'PVC incomplete', 'Not a causal conclusion', '<b>Plain evidence</b>']) assert.ok(text.includes(expected), expected);
   assert.ok(!text.includes('250.00%'));
 });
 
 test('result heading leads with status, returned scope, and verbatim backend summary before metric details', () => {
   const ui = setup(async () => success(result())); ui.context.payload = result();
   ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
-  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result');
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Current result');
   const children = ui.nodes.get('#result').children;
   assert.equal(children[0].className, 'result-scope-heading');
   assert.equal(children[0].children[0].textContent, 'LAX');
@@ -198,10 +198,98 @@ test('typed result dispatcher keeps the complete generic fallback for other supp
   const ui = setup(async () => success(result()));
   ui.context.payload = result();
   ui.run('payload.scope.metric = "passengers"; payload.rows[0].metrics = [{ key: "passengers", value: 420, unit: "count", status: "ok", numerator: null, denominator: null, eligible_count: null, comparison_direction: null, source_ids: ["source"] }]; latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
-  assert.ok(resultContent(ui).includes('Airport metrics — values supplied by the backend'));
-  assert.ok(resultContent(ui).includes('420'));
-  assert.ok(resultContent(ui).includes('Sources'));
-  assert.ok(resultContent(ui).includes('Not a causal conclusion'));
+  const text = resultContent(ui);
+  assert.ok(!text.includes('values supplied by the backend'), 'no developer caption');
+  assert.ok(text.includes('420'));
+  const view = findDescendant(ui.nodes.get('#result'), node => node.id === 'metric-view');
+  assert.doesNotMatch(content(view), /Sources|source|Numerator/, 'source IDs and denominators never sit in the primary view');
+  const methodology = disclosureByTitle(ui.nodes.get('#result'), 'Methodology & limitations');
+  assert.match(content(methodology), /Exact values by airport/);
+  assert.ok(text.includes('Not a causal conclusion'));
+});
+
+test('a follow-up metric result leads with friendly KPI copy; exact values move to Methodology, IDs to Technical details', () => {
+  const ui = setup(async () => success(result()));
+  const payload = result();
+  payload.status = 'ok'; payload.exclusions = [];
+  payload.scope = { ...payload.scope, airports: ['LAX', 'SNA'], metric: 'cancellation_rate' };
+  payload.sources = [{ ...payload.sources[0], id: 'ontime-93a752a176debb909834' }]; payload.evidence = [];
+  payload.summary = 'Cancellation rate: SNA 1.05% versus LAX 0.69%.';
+  payload.rows = [['LAX', 0.69, 1315, 190472], ['SNA', 1.05, 471, 44997]].map(([airport, value, numerator, denominator]) => ({ airport, metrics: [
+    { key: 'cancellation_rate', value, unit: 'percent', status: 'ok', numerator, denominator, eligible_count: denominator, comparison_direction: null, source_ids: ['ontime-93a752a176debb909834'] }] }));
+  ui.context.payload = payload;
+  ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
+  const resultNode = ui.nodes.get('#result');
+  const primary = [findDescendant(resultNode, node => node.className === 'result-scope-heading'), findDescendant(resultNode, node => node.className === 'kpi-row'),
+    findDescendant(resultNode, node => node.id === 'metric-view'), findDescendant(resultNode, node => node.className === 'key-insights')].map(content).join(' ');
+  assert.match(primary, /Cancellation rate/);
+  assert.match(primary, /0\.69%/); assert.match(primary, /1\.05%/);
+  assert.doesNotMatch(primary, /ontime-|_rate|values supplied|Numerator/, 'no source IDs, raw keys or developer captions above the fold');
+  assert.equal(findDescendant(findDescendant(resultNode, node => node.id === 'metric-view'), node => node.tagName === 'table'), null, 'two airports need no table; the KPI cards carry the answer');
+  assert.match(content(disclosureByTitle(resultNode, 'Technical details')), /ontime-93a752a176debb909834/);
+});
+
+test('Enter sends the question, Shift+Enter keeps a newline, and IME composition never sends', async () => {
+  const bodies = [];
+  const ui = setup(async (_url, init) => { bodies.push(JSON.parse(init.body)); return success(result()); });
+  const question = ui.nodes.get('#question');
+  let submits = 0;
+  const form = ui.nodes.get('#chat-form');
+  const submit = form.listeners.submit;
+  form.requestSubmit = () => { submits += 1; submit({ preventDefault() {} }); };
+  const key = (init) => { let prevented = false; question.listeners.keydown({ key: 'Enter', shiftKey: false, isComposing: false, keyCode: 13, ...init, preventDefault() { prevented = true; } }); return prevented; };
+  question.value = 'Just the cancellation rates, please.';
+  assert.equal(key({ shiftKey: true }), false, 'Shift+Enter is left to the textarea (newline)');
+  assert.equal(key({ isComposing: true }), false, 'IME composition is untouched');
+  assert.equal(key({ keyCode: 229 }), false, 'IME process key is untouched');
+  assert.equal(submits, 0);
+  assert.equal(key({}), true, 'plain Enter is taken over');
+  assert.equal(submits, 1);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(bodies, [{ message: 'Just the cancellation rates, please.' }]);
+  ui.run('busy = true');
+  question.value = 'Another question';
+  assert.equal(key({}), true);
+  assert.equal(submits, 1, 'Enter never submits twice while a request is in flight');
+  ui.run('busy = false');
+  question.value = '   ';
+  key({});
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(bodies.length, 1, 'an empty question is never sent');
+  assert.equal(ui.nodes.get('#question-error').textContent, 'Enter a question before sending.');
+});
+
+test('New England ranking shows the top five once; the disclosure continues from rank 6', () => {
+  const ui = setup();
+  const payload = result();
+  payload.scope = { ...payload.scope, metric: 'screen_score', airports: ['BDL', 'HVN', 'PWM', 'BGR', 'PQI', 'RKD', 'BHB', 'AUG'] };
+  payload.rows = payload.scope.airports.map((airport, index) => ({ airport, rank: index + 1, metrics: [{ key: 'screen_score', value: 90 - index, unit: 'score', status: 'ok', source_ids: ['source'] }] }));
+  ui.context.payload = payload;
+  ui.run('renderResult(validateResult(payload), false)');
+  const view = findDescendant(ui.nodes.get('#result'), node => node.id === 'metric-view');
+  const preview = findDescendant(view, node => (node.className || '').includes('ranking-preview'));
+  const disclosure = findDescendant(view, node => node.className === 'full-ranking-disclosure');
+  assert.equal(preview.children.length, 5);
+  assert.equal(disclosure.children[0].textContent, 'Ranks 6–8 (3 more airports)');
+  const listed = findDescendant(disclosure, node => node.className === 'ranking-list full-ranking').children.map(row => row.children[1].textContent);
+  assert.deepEqual(listed, ['RKD', 'BHB', 'AUG'], 'the top five are not repeated');
+});
+
+test('a new result returns the reader to its top; the skip link exists only while a result does', async () => {
+  const ui = setup(async () => success(result()));
+  const pane = ui.run('$("#result-panel")');
+  const calls = [];
+  pane.scrollTo = (options) => calls.push(options);
+  ui.context.getComputedStyle = () => ({ overflowY: 'auto' });
+  Object.assign(pane, { scrollHeight: 2000, clientHeight: 700 });
+  const skip = ui.nodes.get('#result-skip');
+  skip.hidden = true;
+  await ui.run('submitRequest({analysis: demos["lax-sna"]})');
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].top, 0);
+  assert.equal(skip.hidden, false, 'Skip to result becomes reachable once a result exists');
+  ui.nodes.get('#back-to-analysis').click();
+  assert.equal(skip.hidden, true, 'Skip to result leaves the tab order with the result');
 });
 
 test('congestion comparison aligns both backend airport columns and preserves partial and numeric-zero states', () => {
@@ -231,7 +319,7 @@ test('congestion comparison aligns both backend airport columns and preserves pa
     ['Cancellation rate', '0.00% ↑', '1.00% ↓'],
     ['Diversion rate', '1.00% ↑', '2.00% ↓'],
     ['Departure delay', '2.00 min ↑', '3.00 min ↓'],
-    ['Taxi out', '3.00 min ↑', '4.00 min ↓'],
+    ['Taxi-out time', '3.00 min ↑', '4.00 min ↓'],
   ]);
   assert.equal(body.children[0].children[1].getAttribute('aria-label'), '0.00%, higher');
   const plot = findDescendant(view, node => node.className === 'comparison-dumbbell');
@@ -739,9 +827,9 @@ test('completion feedback remains available after setup collapses without duplic
   await ui.run('submitRequest({analysis: demos["lax-sna"]})');
   assert.equal(ui.run('$("#setup-controls").open'), false);
   assert.equal(ui.nodes.get('#feedback').parent.id, 'result-title');
-  assert.match(content(ui.nodes.get('#feedback')), /Partial result received/);
+  assert.match(content(ui.nodes.get('#feedback')), /Some airports or values were unavailable/);
   assert.equal(ui.nodes.get('#result-title').focused, false, 'success does not steal focus');
-  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result');
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Current result');
 });
 
 test('health probe times out once without implying source or model readiness', async () => {
@@ -878,11 +966,12 @@ test('current and previous result states remain labeled and keep the returned su
   const ui = setup(async () => success(result()));
   ui.context.payload = result();
   ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
-  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result');
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Current result');
   assert.equal(content(ui.nodes.get('#result')).split(result().summary).length - 1, 1);
   const evidenceGroup = findDescendant(ui.nodes.get('#result'), node => node.className === 'evidence-source-group');
   const limits = findDescendant(ui.nodes.get('#result'), node => node.className === 'methodology-group');
-  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result', 'partial status remains visible outside the closed disclosure');
+  const coverage = findDescendant(ui.nodes.get('#result'), node => node.className === 'insight-coverage');
+  assert.match(coverage.textContent, /^Coverage · PVC was excluded because required data was incomplete\.$/, 'partial coverage stays visible outside the closed disclosure');
   assert.equal(evidenceGroup.open, false);
   assert.equal(limits.open, false, 'limitations remain available inside the expandable disclosure');
   assert.equal(limits.children[0].textContent, 'Methodology & limitations');
@@ -1266,7 +1355,7 @@ test('ai_unavailable keeps the server message and says presets still work', asyn
   await new Promise(resolve => setImmediate(resolve));
   const error = ui.nodes.get('#question-error');
   assert.equal(error.hidden, false, 'the chat error is shown next to the composer');
-  assert.equal(error.textContent, 'Couldn’t interpret that question. Try again or use one of the preset analyses.');
+  assert.equal(error.textContent, 'Natural-language analysis is temporarily unavailable. Preset analyses still work.');
   assert.doesNotMatch(error.textContent, /ai_unavailable|model_incomplete|Gemini|503/);
 });
 
@@ -1294,7 +1383,7 @@ test('a shown result re-renders repeatedly (scope edits, globe marker) without t
   assert.equal(bodies.length, 2, 'the second request reached the server');
   assert.equal(ui.run('latestSuccessfulResult.result_id'), 'result-2');
   assert.equal(ui.run('busy'), false);
-  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result');
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Current result');
 });
 
 test('Back after a shown result does not throw or insert stray nodes, and a later preset still runs', async () => {
@@ -1327,17 +1416,17 @@ test('typing a follow-up keeps the result current; sending it reaches the server
   const question = ui.nodes.get('#question');
   question.value = 'Why is LAX higher?';
   question.listeners.input();
-  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result', 'typing alone does not relabel the result');
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Current result', 'typing alone does not relabel the result');
   ui.nodes.get('#chat-form').listeners.submit({ preventDefault() {} });
   await flush(); await flush();
   assert.equal(bodies.length, 2);
   assert.deepEqual(bodies[1], { message: 'Why is LAX higher?', context_result_id: 'result-1' });
   assert.equal(ui.run('busy'), false, 'no stuck loading state');
-  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result', 'the prior result stays current');
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Current result', 'the prior result stays current');
   assert.equal(ui.run('latestSuccessfulResult.result_id'), 'result-1');
   assert.ok(content(ui.nodes.get('#result')).includes('A qualified summary'));
   assert.equal(ui.nodes.get('#feedback').hidden, true, 'no stale loading message is left behind');
-  assert.equal(ui.nodes.get('#question-error').textContent, 'Couldn’t interpret that question. Try again or use one of the preset analyses.');
+  assert.equal(ui.nodes.get('#question-error').textContent, 'Natural-language analysis is temporarily unavailable. Preset analyses still work.');
   assert.equal(question.value, 'Why is LAX higher?', 'the unsent question is kept for editing');
 });
 
@@ -1354,10 +1443,10 @@ test('Explain is offered after a result, sends explain with context_result_id, a
   assert.deepEqual(bodies[1], { analysis: { action: 'explain' }, context_result_id: 'result-1' });
   const panel = findDescendant(ui.nodes.get('#result'), node => node.id === 'result-explanation');
   assert.ok(panel, 'the explanation is rendered');
-  assert.equal(panel.textContent, `Explanation · ${explained.summary}`, 'the summary text is rendered as returned');
-  assert.equal(panel.parent.className, 'key-insights', 'the explanation reuses the existing insights card');
+  assert.equal(panel.textContent, explained.summary, 'the summary text is rendered as returned');
+  assert.equal(panel.parent.className, 'result-explanation', 'the explanation has its own section, outside the Key insight card');
   assert.equal(ui.nodes.get('#result-actions').children[0], ui.nodes.get('#ask-trigger'), 'Explain sits next to the existing follow-up button');
-  assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result');
+  assert.equal(ui.nodes.get('#result-title').textContent, 'Current result');
   assert.equal(ui.run('busy'), false);
   assert.equal(ui.run('contextResultId'), 'result-1');
   assert.ok(content(ui.nodes.get('#result')).includes('A qualified summary'), 'the original result summary remains');
@@ -1434,11 +1523,11 @@ test('a new result dims the shown one, swaps, then settles; reduced motion swaps
   };
   const animated = await run(false);
   assert.deepEqual(animated.log, ['+is-leaving', '-is-leaving', '+is-entering', '-is-entering']);
-  assert.equal(animated.title, 'Partial result');
+  assert.equal(animated.title, 'Current result');
   assert.equal(animated.hidden, false, 'the result panel is never blanked during the swap');
   const reduced = await run(true);
   assert.deepEqual(reduced.log, [], 'reduced motion replaces the result without transition classes');
-  assert.equal(reduced.title, 'Partial result');
+  assert.equal(reduced.title, 'Current result');
 });
 
 test('key insight keeps the returned summary verbatim and emphasises only its lead label', () => {
@@ -1497,4 +1586,14 @@ test('a superseded result swap never leaves the shown result dimmed', async () =
     await pending;
     assert.equal(panel.classList.contains('is-leaving'), false, `${supersede} must not leave the result dimmed`);
   }
+});
+
+test('model-unavailable copy differs from the unsupported-scope message and exposes no provider detail', () => {
+  const ui = setup();
+  const unavailable = ui.run('chatErrorMessage({ code: "ai_unavailable", message: "AI interpretation is unavailable.", requestId: "x" })');
+  const unsupported = ui.run('chatErrorMessage({ code: "unsupported_scope", message: "That question is outside the supported airport analyses and periods.", requestId: "x" })');
+  assert.equal(unavailable, 'Natural-language analysis is temporarily unavailable. Preset analyses still work.');
+  assert.equal(unsupported, 'That question is outside the supported airport analyses and periods.');
+  assert.notEqual(unavailable, unsupported);
+  assert.doesNotMatch(unavailable, /Gemini|adapter|ai_unavailable|503/);
 });
