@@ -1,9 +1,10 @@
 # Free-text model admission — 2026-09-30
 
 **Admitted:** `gemini-3.8-flash` with adapter SHA-256
-`d617c5fb6120b37903cd2b32dfcc1f5ea4de174552bca1929558f44368d7e670`
-(prompt SHA-256 `eebcd6faae26ead70add11eb4fb65479444a53fbac6230a8fc4805ab7f1cabca`),
-from the follow-up revision at the end of this file. It replaces
+`1873f9e4304110be438fa69d79f0e09948f863a138a3cdd9fa1be6f327f9451d`
+(prompt SHA-256 `3924072bea206b5a54ebca4f0c12d31089a1d8e0897001fe6023a4c5c1335dd7`),
+from the pending-clarification revision at the end of this file. It replaces
+`d617c5fb6120b37903cd2b32dfcc1f5ea4de174552bca1929558f44368d7e670` (follow-up revision, never deployed),
 `ecd2c0d8508a2006a102fa5ee3dc279632f50f7a08f04129a87966369ac4977f` (chat-robustness revision) and the
 first admitted adapter `7046f4504ec467191451525c9ccc0e21ef41ba7e481f6155e94cf88baa616124`; their results
 are kept below. Deploying this adapter while `MODEL_ADMITTED_ADAPTER_SHA256` still holds the previous hash
@@ -15,7 +16,7 @@ Free text turns on only where these are set (see `app/README.md`, "Enable free t
 GEMINI_MODEL=gemini-3.8-flash
 MODEL_RUNTIME_ENABLED=true
 MODEL_ADMITTED_NAME=gemini-3.8-flash
-MODEL_ADMITTED_ADAPTER_SHA256=d617c5fb6120b37903cd2b32dfcc1f5ea4de174552bca1929558f44368d7e670
+MODEL_ADMITTED_ADAPTER_SHA256=1873f9e4304110be438fa69d79f0e09948f863a138a3cdd9fa1be6f327f9451d
 ```
 
 Any change to `app/backend/app/model_adapter.py` changes the hash and turns free text off until the evaluations are rerun.
@@ -106,7 +107,7 @@ An earlier interim adapter in the same revision (`1c9fdfa8...`, which forwarded 
 
 **Fix (prompt wording only):** the out-of-scope list now includes "a named airport that is not a supported airport code" and "arbitrary data access such as running SQL or reading files"; the ambiguity rule now reads "names no specific airport". After the fix: NRT 8 of 8 `unsupported_scope` at about 220 output tokens; the SQL question 1.6 to 2.0 s (3 of 3); the nearest clarification cases unchanged ("the Maine airport" 3 of 3, "LA airports" 3 of 3).
 
-**Final adapter `d617c5fb...`, one run each (no reruns):**
+**Adapter `d617c5fb...`, one run each (no reruns); admitted, then replaced by the revision below before any deploy:**
 
 | Set | File | Result | Errors | Cost (USD) | Latency p50 / p95 |
 |---|---|---|---|---|---|
@@ -119,3 +120,26 @@ An earlier interim adapter in the same revision (`1c9fdfa8...`, which forwarded 
 `unknown_cost_calls` and rejected-output calls are 0 in all five. In the corpus run `safety-04` took 1.7 s and `safety-06` 1.3 s; the slowest call in all 80 was 5.8 s. The follow-up set was written before its first run; the other four sets were used during development, so they are regression evidence and the assignment and follow-up sets carry the generalisation claim. The prompt is about 270 input tokens longer than `ecd2c0d8`'s.
 
 Known latency observation: provider latency depends on wording that the model's output does not reveal (the "Run SQL" case above). The prompt fix removed the one case measured, but a future phrasing could still approach the 20 s timeout; a timeout returns a safe `query_timeout` and keeps the previous result.
+
+## Pending-clarification revision (2026-09-30, same day)
+
+**Why the adapter changed (PR #9 review):** after SFO demand pressure, "Compare it with LAX" correctly asks which measure to compare, but the natural reply "congestion" reached the model with only the SFO context: the pending SFO/LAX pair was lost. The 422 clarification now carries the validated pair (`error.pending_comparison`); the browser keeps it in memory and sends it once with the next typed message (`pending_comparison` on `/api/query`, checked by the contract: two different supported codes, typed messages only). The adapter adds it to the model input only when present, so every other call's input is byte-for-byte unchanged, and the prompt gained a short "Pending comparison" paragraph: a reply that names only a measure compares those two airports; a new question ignores the pair; a measure that cannot be compared asks again. The browser drops the pair after any answer, on a preset or new analysis, and on reload; a failed send keeps it for Retry. No session store, no extra model call. Scoring, contract results, dispatcher and data are unchanged.
+
+**New set:** [`app/backend/tests/fixtures/intent_pending_2025.json`](../../../app/backend/tests/fixtures/intent_pending_2025.json), 10 replies sent with a pending pair: 2 demonstrations (the review's example: SFO pressure, pending SFO/LAX, "congestion" must give compare SFO/LAX congestion; and "Passenger growth, please."), 5 ordinary (other pairs and measures, an explicit year, a new question that must ignore the pair) and 3 safety cases (congestion at BOS/PVD, SFO demand pressure, ROI). Policy `pending`: at least 9/10, every demonstration and safety case, 0 errors (`--policy pending`). Written before its first run.
+
+**Adapter `d45d2f45...` (not admitted).** All six sets passed with 0 errors ([pending-10-v5.json](pending-10-v5.json) 10/10, [followup-10-v5.json](followup-10-v5.json) 10/10, [corpus-30-v5.json](corpus-30-v5.json) 30/30, [holdout-12-v5.json](holdout-12-v5.json) 12/12, [assignment-8-v5.json](assignment-8-v5.json) 8/8, [regression-20-v5.json](regression-20-v5.json) 20/20; $0.162). It was replaced because its new prompt paragraph gave "congestion", "passenger growth" and "the cancellation rate" as examples, which are also replies in the new set. The examples were removed (wording only) and every set was rerun; the set itself was not changed.
+
+**Final adapter `1873f9e4...`, one run each (no reruns):**
+
+| Set | File | Result | Errors | Cost (USD) | Latency p50 / p95 |
+|---|---|---|---|---|---|
+| 10-case pending replies | [pending-10-v6.json](pending-10-v6.json) | 10/10, pass | 0 | 0.0210 | 2.22 s / 5.09 s |
+| 10-case follow-ups | [followup-10-v6.json](followup-10-v6.json) | 10/10, pass | 0 | 0.0224 | 2.28 s / 10.02 s |
+| 30-case development corpus | [corpus-30-v6.json](corpus-30-v6.json) | 30/30, pass | 0 | 0.0506 | 1.74 s / 3.44 s |
+| 12-case holdout | [holdout-12-v6.json](holdout-12-v6.json) | 12/12, pass | 0 | 0.0226 | 1.71 s / 3.19 s |
+| 8-case assignment wording | [assignment-8-v6.json](assignment-8-v6.json) | 8/8, pass | 0 | 0.0138 | 1.65 s / 7.50 s |
+| 20-case chat regression | [regression-20-v6.json](regression-20-v6.json) | 20/20, pass | 0 | 0.0344 | 1.77 s / 3.45 s |
+
+`unknown_cost_calls` and rejected-output calls are 0 in all six ($0.165 in total). The pending pair is sent only by the pending set, so the other five sets exercise exactly the inputs they did before.
+
+Latency observation: 5 of the 90 calls took 5 to 10 s (the slowest, `fu-mht-passengers-swap-pwm`, returned 74 output tokens in 10.0 s; the same cases took under 3 s on `d45d2f45`), so the spread is provider-side rather than prompt-driven. All are well inside the 20 s timeout, and a timeout still returns a safe `query_timeout` that keeps the previous result.

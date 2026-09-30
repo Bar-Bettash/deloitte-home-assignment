@@ -35,9 +35,13 @@ let methodologyExtras = [];
 const metricRenderers = Object.create(null);
 // The chat transcript lives only in this page's memory: a refresh clears it,
 // while closing the card, presets, Back and new analyses keep it. It is never
-// persisted and never sent — a follow-up still carries only the question and
-// the signed context_result_id.
+// persisted and never sent — a follow-up still carries only the question, the
+// signed context_result_id and, after a "which measure?" reply, its two airports.
 let conversation = [];
+// The two airports of an unanswered "which measure?" clarification. Sent once,
+// with the next typed message, then cleared; presets, a new analysis and a reload
+// clear it too. It holds two supported codes and nothing else.
+let pendingComparison = null;
 const presetLabels = {
   "new-england": "New England expansion", "lax-sna": "LAX vs SNA congestion", "anc-long-haul": "ANC long-haul share",
   "sfo-pressure": "SFO demand pressure", "sfo-trend": "SFO passenger trend", "bos-pvd": "BOS vs PVD growth", "growth": "New England growth ranking",
@@ -207,10 +211,12 @@ const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_t
 
 function parseErrorResponse(payload) {
   if (!isRecord(payload) || payload.success !== false || !isRecord(payload.error)) return null;
-  const { code, message, request_id: requestId } = payload.error;
+  const { code, message, request_id: requestId, pending_comparison: pair } = payload.error;
   if (!errorCodes.has(code) || typeof message !== "string" || !message || message.length > 500
       || typeof requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) return null;
-  return { code, message, requestId };
+  const validPair = code === "clarification_required" && Array.isArray(pair) && pair.length === 2 && pair[0] !== pair[1]
+    && pair.every((airport) => supportedAirports.has(airport));
+  return { code, message, requestId, pendingComparison: validPair ? [...pair] : null };
 }
 
 function errorRecovery(detail, status) {
@@ -359,6 +365,8 @@ function requestKind(request) {
 async function submitRequest(request, chat = {}) {
   if (busy) return;
   const kind = requestKind(request);
+  // A preset or scoped analysis is a new question: no clarification is pending.
+  if (kind === "analysis") pendingComparison = null;
   const generation = ++requestGeneration;
   const controller = new AbortController();
   let timeout = null;
@@ -386,8 +394,11 @@ async function submitRequest(request, chat = {}) {
         const message = chatErrorMessage(detail);
         // An unsupported or unclear question is an answer, not a failure; a model,
         // service or timeout failure stays on the question with an inline Retry.
-        if (detail && chatReplyCodes.has(detail.code)) settleChatReply(turn, message, "note");
-        else failChatTurn(turn, message);
+        // An answer uses up the pending pair; only a new "which measure?" sets one.
+        if (detail && chatReplyCodes.has(detail.code)) {
+          pendingComparison = detail.pendingComparison;
+          settleChatReply(turn, message, "note");
+        } else failChatTurn(turn, message);
         showChatError(message, chatExpanded());
         return;
       }
@@ -397,6 +408,7 @@ async function submitRequest(request, chat = {}) {
       return;
     }
     const result = validateResult(payload);
+    if (kind !== "explain") pendingComparison = null;
     // A typed "why?" can come back as an explanation: the same result, recomputed,
     // with an explanatory summary. It is answered like Explain, never shown as new.
     const explained = kind === "explain" || (kind === "followup" && result.result_id === latestSuccessfulResult?.result_id);
@@ -965,6 +977,7 @@ function failChatTurn(turn, reason) {
 function followUpRequest(text) {
   const request = { message: text };
   if (contextResultId) request.context_result_id = contextResultId;
+  if (pendingComparison) request.pending_comparison = [...pendingComparison];
   return request;
 }
 // Retry re-sends the same text on the same turn; one request stays in flight.
@@ -1014,6 +1027,8 @@ function compactReply(result) {
   const usable = (item) => item?.status === "ok" && Number.isFinite(item.value);
   const fallback = result.summary || "The analysis is ready in the result panel.";
   if (metric === "sfo_pressure") {
+    // The backend's direct answer also names the reported delay causes (the "why").
+    if (result.summary) return result.summary;
     // The gap is passenger growth minus seat growth, in percentage points: seats
     // outpacing passengers is not a seat shortage; only a positive gap is pressure.
     const row = rowFor("SFO");
@@ -1642,6 +1657,7 @@ function startNewAnalysis() {
   setLoading(false);
   latestSuccessfulResult = null;
   contextResultId = null;
+  pendingComparison = null;
   explanation = null;
   resultIsPrevious = false;
   $("#hero-layout").classList.remove("has-result");

@@ -1650,11 +1650,16 @@ test('compact chat replies are formatted from returned values for each analysis 
   assert.equal(reply(laxSnaCongestion()), 'No single airport is uniformly more congested. LAX has the higher diversion rate and average taxi-out time, while SNA has the higher cancellation rate and average departure delay.', 'the backend congestion headline is used verbatim');
   assert.equal(reply(laxSnaCancellation()), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
   assert.equal(reply(ancLongHaul()), '2.77% of eligible ANC departures were at least 3,000 miles: 999 of 36,040.');
-  assert.equal(reply(sfoPressure(0.8)), 'Passengers grew 0.8 percentage points faster than seats (4.70%), with seat occupancy at 82.31%: a demand-pressure signal, not a measured unmet demand.');
-  assert.equal(reply(sfoPressure(-1.2247)), 'No sign that seat supply fell behind: seats grew 1.22 percentage points faster than passengers (4.70%), with seat occupancy at 82.31%. Traffic data cannot show travellers who could not fly.',
+  const sfoAnswer = sfoPressure(-1.2247);
+  sfoAnswer.summary = 'No sign in 2025 that airline seat supply at SFO fell behind passenger traffic. Reported delays on SFO departures were mostly attributed to late-arriving aircraft (42.4%). These shares explain operational delays, not latent demand or terminal capacity.';
+  assert.equal(reply(sfoAnswer), sfoAnswer.summary, 'the SFO reply is the backend direct answer, delay causes included');
+  const computed = (gap) => { const payload = sfoPressure(gap); payload.summary = null; return payload; };
+  assert.equal(reply(computed(0.8)), 'Passengers grew 0.8 percentage points faster than seats (4.70%), with seat occupancy at 82.31%: a demand-pressure signal, not a measured unmet demand.', 'without a backend answer the reply is computed from the values');
+  assert.equal(reply(computed(-1.2247)), 'No sign that seat supply fell behind: seats grew 1.22 percentage points faster than passengers (4.70%), with seat occupancy at 82.31%. Traffic data cannot show travellers who could not fly.',
     'seats outpacing passengers is never described as pressure or a shortage');
-  assert.equal(reply(sfoPressure(0.001)), 'Passengers and seats grew at the same pace (4.70%), with seat occupancy at 82.31%. Traffic data cannot show travellers who could not fly.');
-  assert.doesNotMatch(reply(sfoPressure(-1.2247)), /pressure|shortage/);
+  assert.equal(reply(computed(0.001)), 'Passengers and seats grew at the same pace (4.70%), with seat occupancy at 82.31%. Traffic data cannot show travellers who could not fly.');
+  assert.doesNotMatch(reply(computed(-1.2247)), /pressure|shortage/);
+  assert.doesNotMatch(reply(sfoAnswer), /pressure|shortage/);
   const trend = chatResult('trend', chatScope(['SFO'], 'sfo_enplaned_trend'), [{ airport: 'SFO', metrics: [chatMetric('sfo_enplaned_trend', 27250806, 'count')] }], 'SFO enplaned passengers in 2025: 27,250,806.');
   assert.equal(reply(trend), 'SFO enplaned passengers in 2025: 27,250,806.', 'other analyses fall back to the deterministic backend summary');
   const oneSided = laxSnaCongestion(); for (const metric of oneSided.rows[1].metrics) metric.value = 0;
@@ -1737,6 +1742,73 @@ test('the transcript survives re-renders, presets, Back, and closing and reopeni
   assert.match(composerMarkup, /id="chat-status"[^>]*role="status"[^>]*aria-live="polite"/, 'outcomes are announced once in a separate status region');
   assert.match(composerMarkup, /aria-labelledby="chat-title"/);
   assert.match(composerMarkup, /<h2 id="chat-title"[^>]*>Airport analyst<\/h2>/);
+});
+
+function sfoLaxCongestion() {
+  const payload = laxSnaCongestion();
+  payload.result_id = 'sfo-lax';
+  payload.scope.airports = ['SFO', 'LAX'];
+  payload.rows[0].airport = 'SFO'; payload.rows[1].airport = 'LAX';
+  return payload;
+}
+const measureQuestion = (pair) => ({ ok: false, status: 422, json: async () => {
+  const body = errorEnvelope('clarification_required', 'SFO demand pressure is measured only for SFO. Which measure should I compare for SFO and LAX: passenger growth, seat occupancy, passengers, long-haul share or congestion?');
+  if (pair) body.error.pending_comparison = pair;
+  return body;
+} });
+
+test('a short reply to a which-measure question carries its two airports once', async () => {
+  const { query, bodies } = queuedFetch([success(sfoPressure(-1.2247)), measureQuestion(['SFO', 'LAX']), success(sfoLaxCongestion()), success(laxSnaCancellation())]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["sfo-pressure"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'Compare it with LAX');
+  await flush(); await flush();
+  sendChat(ui, 'congestion');
+  await flush(); await flush();
+  assert.deepEqual(bodies[1], { message: 'Compare it with LAX', context_result_id: 'sfo' });
+  assert.deepEqual(bodies[2], { message: 'congestion', context_result_id: 'sfo', pending_comparison: ['SFO', 'LAX'] }, 'the reply keeps the SFO/LAX pair');
+  assert.equal(ui.run('latestSuccessfulResult.result_id'), 'sfo-lax');
+  assert.deepEqual(ui.run('latestSuccessfulResult.scope.airports'), ['SFO', 'LAX']);
+  sendChat(ui, 'Just the cancellation rates, please.');
+  await flush(); await flush();
+  assert.deepEqual(bodies[3], { message: 'Just the cancellation rates, please.', context_result_id: 'sfo-lax' }, 'the pair is used once');
+  assert.equal(bodies.length, 4, 'one request per typed message');
+});
+
+test('a pending pair survives a failed send and Retry, and is dropped by an answer, a preset or an invalid pair', async () => {
+  const failed = { ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') };
+  const unsupported = { ok: false, status: 422, json: async () => errorEnvelope('unsupported_scope', 'That question is outside the supported airport analyses and periods.') };
+  const { query, bodies } = queuedFetch([success(sfoPressure(-1.2247)), measureQuestion(['SFO', 'LAX']), failed, success(sfoLaxCongestion()),
+    measureQuestion(['SFO', 'LAX']), unsupported, success(sfoPressure(-1.2247)), measureQuestion(['SFO', 'LAX']), success(sfoPressure(-1.2247)),
+    success(laxSnaCancellation()), measureQuestion(['SFO', 'XXX']), success(laxSnaCancellation())]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["sfo-pressure"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'Compare it with LAX'); await flush(); await flush();
+  sendChat(ui, 'congestion'); await flush(); await flush();
+  const [, , , user] = chatItems(ui);
+  assert.equal(user.getAttribute('data-state'), 'failed');
+  findDescendant(user, node => node.className === 'chat-retry').click();
+  await flush(); await flush();
+  assert.deepEqual(bodies[2], { message: 'congestion', context_result_id: 'sfo', pending_comparison: ['SFO', 'LAX'] });
+  assert.deepEqual(bodies[3], bodies[2], 'Retry re-sends the pair with the same text');
+  // An unrelated question answered in words uses the pair up.
+  sendChat(ui, 'Compare it with LAX'); await flush(); await flush();
+  sendChat(ui, 'What is its return on investment?'); await flush(); await flush();
+  assert.deepEqual(bodies[5].pending_comparison, ['SFO', 'LAX']);
+  sendChat(ui, 'congestion'); await flush(); await flush();
+  assert.equal('pending_comparison' in bodies[6], false, 'the answered pair is not sent again');
+  // A preset starts over: the pair from before it is not sent.
+  sendChat(ui, 'Compare it with LAX'); await flush(); await flush();
+  await ui.run('runPreset(demos["sfo-pressure"])');
+  sendChat(ui, 'congestion'); await flush(); await flush();
+  assert.deepEqual(bodies[9], { message: 'congestion', context_result_id: 'sfo' });
+  // A clarification whose pair is not two supported airports sets nothing.
+  sendChat(ui, 'Compare it with somewhere'); await flush(); await flush();
+  sendChat(ui, 'congestion'); await flush(); await flush();
+  assert.equal('pending_comparison' in bodies[11], false);
+  assert.equal(bodies.length, 12);
 });
 
 test('the transcript is in memory only: no browser storage is read or written', async () => {

@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app import model_adapter
-from app.contracts import AnalysisRequest
+from app.contracts import AIRPORTS, AnalysisRequest
 from app.intent import parse_intent
 from app.settings import Settings, load_settings
 from pydantic import ValidationError
@@ -63,8 +63,14 @@ REGRESSION_POLICY = AcceptancePolicy(
 # contract allows run; others must clarify, never swap in a metric. >=9/10, every safety case, 0 errors.
 FOLLOWUP_POLICY = AcceptancePolicy(
     "followup", {"safety_clarification": 4, "ordinary": 6}, 9, ("safety_clarification",))
+# 10 replies to a "which measure?" clarification, sent with its pending airport pair:
+# a measure alone compares those airports; a new question ignores the pair.
+# >=9/10, every demonstration and safety case, 0 errors.
+PENDING_POLICY = AcceptancePolicy(
+    "pending", {"demonstration": 2, "safety_clarification": 3, "ordinary": 5}, 9,
+    ("demonstration", "safety_clarification"))
 POLICIES = {policy.name: policy for policy in (
-    CORPUS_POLICY, HOLDOUT_POLICY, ASSIGNMENT_POLICY, REGRESSION_POLICY, FOLLOWUP_POLICY)}
+    CORPUS_POLICY, HOLDOUT_POLICY, ASSIGNMENT_POLICY, REGRESSION_POLICY, FOLLOWUP_POLICY, PENDING_POLICY)}
 
 
 class CorpusValidationError(ValueError):
@@ -97,8 +103,12 @@ def load_and_validate_cases(path: Path, policy: AcceptancePolicy = CORPUS_POLICY
         counts[category] += 1
 
         input_value = case["input"]
-        if not isinstance(input_value, dict) or set(input_value) != {"text", "context"}:
+        if not isinstance(input_value, dict) or set(input_value) - {"pending_comparison"} != {"text", "context"}:
             raise CorpusValidationError(f"case {case_id} input must contain text and context")
+        pair = input_value.get("pending_comparison")
+        if "pending_comparison" in input_value and (
+                not isinstance(pair, list) or len(pair) != 2 or len(set(pair)) != 2 or not set(pair) <= AIRPORTS):
+            raise CorpusValidationError(f"case {case_id} pending_comparison must name two supported airports")
         text = input_value["text"]
         if not isinstance(text, str) or not text.strip() or len(text) > 4000:
             raise CorpusValidationError(f"case {case_id} has invalid input text")
@@ -221,7 +231,9 @@ def evaluate_cases(
         usage = None
         error = None
         try:
-            returned = parser(case["input"]["text"], case["input"]["context"])
+            # A pending pair is passed only by the cases that carry one.
+            pending = {key: case["input"][key] for key in ("pending_comparison",) if key in case["input"]}
+            returned = parser(case["input"]["text"], case["input"]["context"], **pending)
             if isinstance(returned, dict) and "outcome" in returned and set(returned) <= {"outcome", "usage"}:
                 actual = returned["outcome"]
                 usage = _safe_usage(returned.get("usage"))
@@ -323,10 +335,12 @@ def evaluate_live_candidate(
     """
     costs: list[float | None] = []
 
-    def candidate(text: str, context: dict[str, Any] | None) -> dict[str, Any]:
+    def candidate(text: str, context: dict[str, Any] | None,
+                  pending_comparison: list[str] | None = None) -> dict[str, Any]:
         costs.append(None)
         try:
-            interpreted = asyncio.run(model_adapter.interpret_message(text, context=context, settings=settings))
+            pending = {"pending_comparison": pending_comparison} if pending_comparison is not None else {}
+            interpreted = asyncio.run(model_adapter.interpret_message(text, context=context, settings=settings, **pending))
         except model_adapter.ModelAdapterError as exc:
             if exc.usage is not None:
                 costs[-1] = _cost_usd(exc.usage, input_usd_per_million_tokens, output_usd_per_million_tokens)
@@ -386,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", choices=("baseline", "candidate"), required=True)
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--policy", choices=sorted(POLICIES), default=CORPUS_POLICY.name,
-                        help="acceptance policy: corpus (30 cases, >=29), holdout (12 cases, >=11), assignment (8 cases, 8/8), regression (20 cases, >=19) or followup (10 cases, >=9)")
+                        help="acceptance policy: corpus (30 cases, >=29), holdout (12 cases, >=11), assignment (8 cases, 8/8), regression (20 cases, >=19), followup (10 cases, >=9) or pending (10 cases, >=9)")
     parser.add_argument("--acceptance", action="store_true")
     parser.add_argument("--live", action="store_true", help="call the configured model for candidate evaluation")
     parser.add_argument("--input-usd-per-mtok", type=_rate,
@@ -404,7 +418,9 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(str(exc))
 
     if args.mode == "baseline":
-        report = evaluate_cases(cases, parse_intent, mode="baseline", policy=policy)
+        # The rule-based baseline has no notion of a pending clarification.
+        report = evaluate_cases(cases, lambda text, context, **_pending: parse_intent(text, context),
+                                mode="baseline", policy=policy)
     elif args.live:
         settings = load_settings()
         if (settings.model_access_available
@@ -417,14 +433,14 @@ def main(argv: list[str] | None = None) -> int:
                 policy=policy,
             )
         else:
-            def unconfigured_live(_text, _context):
+            def unconfigured_live(_text, _context, **_pending):
                 raise RuntimeError("candidate model or prices are not configured")
 
             report = evaluate_cases(cases, unconfigured_live, mode="candidate", policy=policy)
             report["candidate_status"] = "missing_model_configuration_no_provider_call_made"
             report["aggregate_cost_usd"] = 0.0
     else:
-        def unconfigured(_text, _context):
+        def unconfigured(_text, _context, **_pending):
             raise RuntimeError("candidate adapter is not configured")
 
         report = evaluate_cases(cases, unconfigured, mode="candidate", policy=policy)

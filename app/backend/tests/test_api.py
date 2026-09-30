@@ -577,6 +577,63 @@ def test_follow_up_comparison_clarification_reaches_the_client_as_worded_by_the_
     assert context_claims(client).result_id == UUID(first.json()["result_id"])
 
 
+
+def test_short_reply_to_a_comparison_clarification_keeps_the_pending_pair(monkeypatch):
+    """SFO pressure -> "Compare it with LAX" -> which measure? -> "congestion" compares SFO and LAX."""
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+    first = client.post("/api/query", json={"analysis": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}})
+    assert first.status_code == 200, first.text
+    calls = []
+
+    async def interpret(message, *, settings, context, pending_comparison=None):
+        calls.append((message, context, pending_comparison))
+        if pending_comparison is None:
+            return ModelInterpretation("clarification_required", None, "provider prose", ModelUsage(10, 5), ("SFO", "LAX"))
+        analysis = main.AnalysisRequest(action="compare", airports=list(pending_comparison), metric="congestion")
+        return ModelInterpretation("analysis", analysis, None, ModelUsage(10, 5))
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    context_id = first.json()["result_id"]
+    asked = client.post("/api/query", json={"message": "Compare it with LAX", "context_result_id": context_id})
+    assert asked.status_code == 422
+    error = asked.json()["error"]
+    assert error["code"] == "clarification_required"
+    assert error["pending_comparison"] == ["SFO", "LAX"]
+    # The clarification does not replace the signed context: the SFO result stays current.
+    assert context_claims(client).result_id == UUID(context_id)
+
+    answered = client.post("/api/query", json={
+        "message": "congestion", "context_result_id": context_id, "pending_comparison": error["pending_comparison"]})
+    assert answered.status_code == 200, answered.text
+    assert answered.json()["scope"]["airports"] == ["SFO", "LAX"]
+    assert answered.json()["scope"]["metric"] == "congestion"
+    # One model call per typed message; the reply reached the model with the pair and the SFO context.
+    assert [call[0] for call in calls] == ["Compare it with LAX", "congestion"]
+    assert calls[1][1]["metric"] == "sfo_pressure" and calls[1][2] == ["SFO", "LAX"]
+    assert context_claims(client).request.airports == ["SFO", "LAX"]
+
+
+@pytest.mark.parametrize("body", [
+    {"analysis": {"action": "metric", "airports": ["SFO"], "metric": "passengers"}, "pending_comparison": ["SFO", "LAX"]},
+    {"message": "congestion", "pending_comparison": ["SFO"]},
+    {"message": "congestion", "pending_comparison": ["SFO", "SFO"]},
+    {"message": "congestion", "pending_comparison": ["SFO", "XXX"]},
+    {"message": "congestion", "pending_comparison": ["sfo", "LAX"]},
+    {"message": "congestion", "pending_comparison": ["SFO", "LAX", "SNA"]},
+    {"message": "congestion", "pending_comparison": "SFO,LAX"},
+])
+def test_pending_comparison_is_validated_before_any_model_call(monkeypatch, body):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def interpret(*_args, **_kwargs):
+        raise AssertionError("no model call for an invalid request")
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    response = client.post("/api/query", json=body)
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_request"
+    assert "pending_comparison" not in response.json()["error"]
+
 def test_each_model_call_logs_metadata_without_question_text(monkeypatch, caplog):
     monkeypatch.setattr(main, "load_settings", admitted_settings)
 

@@ -33,8 +33,8 @@ Open <http://127.0.0.1:8000/>. The presets, the "Adjust scope" controls and "Exp
 Run these commands from the repository root:
 
 ```sh
-PYTHONPATH=app/backend python -m pytest app/backend/tests -q   # 827 passed, 1 skipped (one author-local raw input)
-node --test app/frontend/tests/*.cjs                           # 128 passed
+PYTHONPATH=app/backend python -m pytest app/backend/tests -q   # 843 passed, 1 skipped (one author-local raw input)
+node --test app/frontend/tests/*.cjs                           # 130 passed
 ruff check app/backend --ignore EXE002,SIM905                  # optional; ruff is not in the requirements
 ```
 
@@ -109,6 +109,6 @@ Each model call writes one log line with the model, outcome, latency and token c
 
 ## What's left
 
-- [x] **Admit the live model.** `gemini-3.8-flash` was admitted on 2026-09-30 ([evidence](../docs/evidence/model-admission-20260930/README.md)). The current admitted adapter hash is `d617c5fb6120b37903cd2b32dfcc1f5ea4de174552bca1929558f44368d7e670`; set it with the other admission variables wherever free text should be on (an older hash turns free text off).
+- [x] **Admit the live model.** `gemini-3.8-flash` was admitted on 2026-09-30 ([evidence](../docs/evidence/model-admission-20260930/README.md)). The current admitted adapter hash is `1873f9e4304110be438fa69d79f0e09948f863a138a3cdd9fa1be6f327f9451d`; set it with the other admission variables wherever free text should be on (an older hash turns free text off).
 - [ ] **Deploy to Vercel.** Follow the section above, then run the smoke test.
 - [ ] **Recheck data freshness before the demo.** From `app/backend/`, run `python -m scripts.check_source_status --bundle annual-2025-r1 --output <receipt.json>` on a host that can reach BTS, DataSF and FAA. Re-promoting `annual-2025-r1` after **2026-10-04T17:17Z** requires a new freshness receipt. Serving the current bundle does not depend on this, and the date is not a rebuild deadline: a rebuilt bundle needs its own fresh receipt whenever it is promoted. As of 2026-09-29 the check blocks on FAA, which replaced its preliminary CY2025 PDF with the final edition; see [the FAA impact check](../docs/evidence/faa-final-cy2025-impact-20260929.md).

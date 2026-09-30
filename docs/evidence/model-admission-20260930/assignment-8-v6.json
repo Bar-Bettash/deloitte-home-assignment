@@ -1,0 +1,278 @@
+{
+  "mode": "candidate",
+  "case_count": 8,
+  "correct_count": 8,
+  "accuracy": 1.0,
+  "category_accuracy": {
+    "ordinary": 1.0,
+    "safety_clarification": 1.0
+  },
+  "error_count": 0,
+  "candidate_acceptance": true,
+  "acceptance_policy": {
+    "name": "assignment",
+    "case_count_required": 8,
+    "category_counts_required": {
+      "safety_clarification": 2,
+      "ordinary": 6
+    },
+    "overall_correct_min": 8,
+    "safety_correct_required": 2,
+    "ordinary_correct_required": 6,
+    "errors_max": 0
+  },
+  "results": [
+    {
+      "id": "assignment-01",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1525.596,
+      "usage": {
+        "input_tokens": 1630,
+        "output_tokens": 72,
+        "cost_usd": 0.0014925
+      },
+      "error": null,
+      "cost_usd": 0.0014925
+    },
+    {
+      "id": "assignment-02",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2089.803,
+      "usage": {
+        "input_tokens": 1629,
+        "output_tokens": 211,
+        "cost_usd": 0.002013
+      },
+      "error": null,
+      "cost_usd": 0.002013
+    },
+    {
+      "id": "assignment-03",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "SFO"
+          ],
+          "metric": "sfo_pressure"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "SFO"
+          ],
+          "metric": "sfo_pressure"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1646.477,
+      "usage": {
+        "input_tokens": 1628,
+        "output_tokens": 71,
+        "cost_usd": 0.00148725
+      },
+      "error": null,
+      "cost_usd": 0.00148725
+    },
+    {
+      "id": "assignment-04",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1870.513,
+      "usage": {
+        "input_tokens": 1629,
+        "output_tokens": 72,
+        "cost_usd": 0.00149175
+      },
+      "error": null,
+      "cost_usd": 0.00149175
+    },
+    {
+      "id": "assignment-05",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      },
+      "correct": true,
+      "latency_ms": 7503.895,
+      "usage": {
+        "input_tokens": 1626,
+        "output_tokens": 205,
+        "cost_usd": 0.00198825
+      },
+      "error": null,
+      "cost_usd": 0.00198825
+    },
+    {
+      "id": "assignment-06",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "departure_delay_minutes",
+          "year": 2025
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "departure_delay_minutes",
+          "year": 2025
+        }
+      },
+      "correct": true,
+      "latency_ms": 2047.785,
+      "usage": {
+        "input_tokens": 1658,
+        "output_tokens": 297,
+        "cost_usd": 0.00235725
+      },
+      "error": null,
+      "cost_usd": 0.00235725
+    },
+    {
+      "id": "assignment-07",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Return on investment is not identifiable from this demo's data."
+      },
+      "actual": {
+        "kind": "unsupported_scope",
+        "message": "That question is outside the supported airport analyses and periods."
+      },
+      "correct": true,
+      "latency_ms": 1570.617,
+      "usage": {
+        "input_tokens": 1626,
+        "output_tokens": 133,
+        "cost_usd": 0.00171825
+      },
+      "error": null,
+      "cost_usd": 0.00171825
+    },
+    {
+      "id": "assignment-08",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Only 2023, 2024 and 2025 are supported."
+      },
+      "actual": {
+        "kind": "unsupported_scope",
+        "message": "That question is outside the supported airport analyses and periods."
+      },
+      "correct": true,
+      "latency_ms": 1469.394,
+      "usage": {
+        "input_tokens": 1629,
+        "output_tokens": 20,
+        "cost_usd": 0.00129675
+      },
+      "error": null,
+      "cost_usd": 0.00129675
+    }
+  ],
+  "candidate_status": "evaluated",
+  "model": "gemini-3.8-flash",
+  "prompt_sha256": "3924072bea206b5a54ebca4f0c12d31089a1d8e0897001fe6023a4c5c1335dd7",
+  "adapter_sha256": "1873f9e4304110be438fa69d79f0e09948f863a138a3cdd9fa1be6f327f9451d",
+  "corpus_sha256": "290933f8d7ad17beeb59c8fa4ff99ed6a2bd3a3db6e73cf398ee9b9fa1e18a9b",
+  "rate_card_usd_per_million_tokens": {
+    "input": 0.75,
+    "output": 3.75
+  },
+  "aggregate_cost_usd": 0.013845,
+  "rejected_output_costed_calls": 0,
+  "unknown_cost_calls": 0,
+  "latency_ms_p50": 1646.477,
+  "latency_ms_p95": 7503.895
+}

@@ -56,7 +56,7 @@ The design has no agent loop, no SQL generation, no database server, no queue an
 |---|---|
 | `GET /` and `/static/*` | The analyst screen and its assets, served from `app/frontend/`. Both sit behind the HostGuard. |
 | `GET /health` and `HEAD /health` | Liveness only. Always open, with no data or model check. |
-| `POST /api/query` | Exactly one of `message` (free text) or `analysis` (structured), plus an optional `context_result_id` |
+| `POST /api/query` | Exactly one of `message` (free text) or `analysis` (structured), plus an optional `context_result_id`; a message may also carry the two airports of a pending comparison clarification (`pending_comparison`) |
 
 - There are no OpenAPI or docs routes.
 - A success is a bare `AnalysisResult` whose status is `ok` or `partial`.
@@ -216,8 +216,8 @@ ruff check app/backend --ignore EXE002,SIM905
 - **Integrated acceptance at `104acfc`:** 583 passed, 2 skipped; 88/88 Node tests; 41 real-HTTP calls with 0 figure discrepancies.
 - **Rerun at `fbd2342` during the docs update:** 679 passed, 2 skipped; 96/96 Node tests.
 - **Offline Vercel package check:** 86.4 MB uncompressed, and the four workflows ran on a read-only filesystem ([vercel-package-check.md](evidence/vercel-package-check.md)).
-- **Answer-quality pass (2026-09-30, `fix/answer-quality`):** 827 passed, 1 skipped; 128/128 Node tests (98 UI, 30 globe). The reconciliation receipt was regenerated and only its code hashes changed; every figure is unchanged.
-- **Live model admission:** adapter `d617c5fb…` passed all five sets with 0 errors, one run each: 10/10 follow-ups, 30/30 corpus, 12/12 holdout, 8/8 assignment wording and 20/20 chat regression ([admission evidence](evidence/model-admission-20260930/README.md)).
+- **Answer-quality pass (2026-09-30, `fix/answer-quality`):** 843 passed, 1 skipped; 130/130 Node tests (100 UI, 30 globe), including the two-turn "Compare it with LAX" → "congestion" flow. The reconciliation receipt was regenerated and only its code hashes changed; every figure is unchanged.
+- **Live model admission:** adapter `1873f9e4…` passed all six sets with 0 errors, one run each: 10/10 replies to a pending comparison question, 10/10 follow-ups, 30/30 corpus, 12/12 holdout, 8/8 assignment wording and 20/20 chat regression ([admission evidence](evidence/model-admission-20260930/README.md)).
 - **Screen weight sensitivity (offline, documented only):** re-weighting the same percentiles 11 ways (growth 30–60 %) kept HVN in the top four every time and first in 6 of 11; the top five sit within about 4 points. The screen is a shortlist, not a strict order. The shipped weights are unchanged.
 
 **Not yet done.**

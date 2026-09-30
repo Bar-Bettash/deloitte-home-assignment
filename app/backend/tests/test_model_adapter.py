@@ -484,3 +484,30 @@ async def test_malformed_comparison_hints_fail_closed(outcome) -> None:
     with pytest.raises(ModelAdapterError) as exc:
         await _clarify(outcome, None)
     assert exc.value.code == "model_invalid_response"
+
+
+@run_async
+async def test_pending_comparison_is_sent_only_when_supplied_and_validated_before_the_call() -> None:
+    sent_inputs = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent_inputs.append(json.loads(json.loads(request.content)["contents"][0]["parts"][0]["text"]))
+        outcome = {"kind": "analysis", "analysis": {**_analysis(), "action": "compare", "airports": ["SFO", "LAX"],
+                                                    "metric": "congestion", "year": 2025, "threshold_miles": None}}
+        return httpx.Response(200, json=_response(outcome))
+
+    context = {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}
+    async with _client(handler) as client:
+        answered = await interpret_message("congestion", settings=_settings(), context=context, client=client,
+                                           pending_comparison=["SFO", "LAX"])
+        await interpret_message("congestion", settings=_settings(), context=context, client=client)
+        for pair in (["SFO"], ["SFO", "SFO"], ["SFO", "XXX"], ["sfo", "LAX"], ["SFO", "LAX", "SNA"]):
+            with pytest.raises(ModelAdapterError) as exc:
+                await interpret_message("congestion", settings=_settings(), context=context, client=client,
+                                        pending_comparison=pair)
+            assert exc.value.code == "model_invalid_response"
+    assert answered.analysis.airports == ["SFO", "LAX"] and answered.analysis.metric == "congestion"
+    assert sent_inputs[0] == {"question": "congestion", "previous_analysis": context, "pending_comparison": ["SFO", "LAX"]}
+    # Without a pending clarification the model input is exactly as before.
+    assert sent_inputs[1] == {"question": "congestion", "previous_analysis": context}
+    assert len(sent_inputs) == 2

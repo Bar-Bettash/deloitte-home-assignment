@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -109,6 +109,17 @@ Previous analysis. previous_analysis, when supplied, is the result on screen.
 - When the previous metric cannot be compared at those two airports, never
   substitute another metric: return clarification_required with analysis set to
   action compare and the two airports, every other field null.
+
+Pending comparison. pending_comparison, when supplied, holds the two airports the
+application just asked about: it asked which measure to compare for them.
+- A message that names only a measure or topic answers that question: return
+  compare with those two airports, in that order, and that metric, keeping the
+  year of previous_analysis unless the user names one. This takes precedence over
+  continuing previous_analysis.
+- If that measure cannot be compared at those two airports, return the
+  two-airport clarification above for the same two airports.
+- A message that names its own airports or asks for a different analysis is a new
+  question: ignore pending_comparison.
 
 Metric scope. sfo_pressure and sfo_enplaned_trend exist only for SFO and cannot be
 compared. congestion and the four operational metrics cover only LAX, SNA and
@@ -212,7 +223,8 @@ class ModelInterpretation:
         return {"kind": self.kind, "message": self.message}
 
 
-def _make_input(message: str, context: Mapping[str, object] | None, settings: Settings) -> str:
+def _make_input(message: str, context: Mapping[str, object] | None, settings: Settings,
+                pending_comparison: Sequence[str] | None = None) -> str:
     if not isinstance(message, str) or not message.strip() or len(message) > settings.max_query_chars:
         raise ModelAdapterError("model_prompt_too_large")
     previous = None
@@ -221,7 +233,14 @@ def _make_input(message: str, context: Mapping[str, object] | None, settings: Se
             previous = AnalysisRequest.model_validate(context).model_dump(mode="json", exclude_none=True)
         except (ValidationError, TypeError, ValueError) as exc:
             raise ModelAdapterError("model_invalid_response") from exc
-    payload = json.dumps({"question": message, "previous_analysis": previous}, ensure_ascii=False, separators=(",", ":"))
+    fields: dict[str, object] = {"question": message, "previous_analysis": previous}
+    # Present only while a comparison clarification awaits its answer.
+    if pending_comparison is not None:
+        pair = list(pending_comparison)
+        if len(pair) != 2 or len(set(pair)) != 2 or not all(isinstance(code, str) for code in pair) or not set(pair) <= AIRPORTS:
+            raise ModelAdapterError("model_invalid_response")
+        fields["pending_comparison"] = pair
+    payload = json.dumps(fields, ensure_ascii=False, separators=(",", ":"))
     # UTF-8 bytes give a conservative token upper bound without a tokenizer.
     if len(SYSTEM_PROMPT.encode("utf-8")) + len(payload.encode("utf-8")) > settings.model_max_prompt_tokens:
         raise ModelAdapterError("model_prompt_too_large")
@@ -375,11 +394,12 @@ async def interpret_message(
     settings: Settings,
     client: httpx.AsyncClient | None = None,
     context: Mapping[str, object] | None = None,
+    pending_comparison: Sequence[str] | None = None,
 ) -> ModelInterpretation:
     """Make exactly one request. An injected client supports offline MockTransport tests."""
     if not settings.model_access_available:
         raise ModelAdapterError("ai_unavailable")
-    user_input = _make_input(message, context, settings)
+    user_input = _make_input(message, context, settings, pending_comparison)
     request_json = _request_json(settings, user_input)
     headers = {"x-goog-api-key": settings.model_api_key.get_secret_value(), "Content-Type": "application/json"}
     url = GEMINI_URL.format(model=quote(settings.model_name, safe=""))
