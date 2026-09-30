@@ -50,7 +50,7 @@ All settings are environment variables. For a local run the backend also reads `
 | `ALLOWED_HOSTS` | Optional. A comma-separated list of hostnames, needed only for a custom domain. Vercel's own hostnames are allowed automatically. |
 | `MAX_CONCURRENT_QUERIES` | Optional. The limit is per instance: 1–16, default 4 when hosted. |
 | `GEMINI_API_KEY` | Needed for free text and for the live evaluation. A key alone never turns free text on. |
-| `GEMINI_MODEL` | Optional. Default `gemini-2.5-flash`. |
+| `GEMINI_MODEL` | Optional. Default `gemini-3.8-flash`, the admitted model. |
 | `GEMINI_THINKING_BUDGET` | Optional. Default `0` (thinking off, so answers fit the 512-token cap). `default` lets the model decide. |
 | `MODEL_RUNTIME_ENABLED`, `MODEL_ADMITTED_NAME`, `MODEL_ADMITTED_ADAPTER_SHA256` | Free text only, and only after the model passes the evaluation. See below. |
 
@@ -60,7 +60,7 @@ Free text is off by default. It turns on only when all of the following are true
 
 - `GEMINI_API_KEY` is set
 - `MODEL_RUNTIME_ENABLED=true`
-- `MODEL_ADMITTED_NAME` equals the model in use (`GEMINI_MODEL`, or the default `gemini-2.5-flash`)
+- `MODEL_ADMITTED_NAME` equals the model in use (`GEMINI_MODEL`, or the default `gemini-3.8-flash`)
 - `MODEL_ADMITTED_ADAPTER_SHA256` equals `sha256sum app/backend/app/model_adapter.py`
 
 Any change to `model_adapter.py` (its prompt, schema or code) changes the hash and turns free text off again. The model only turns the question into a structured request; every number still comes from the deterministic engine.

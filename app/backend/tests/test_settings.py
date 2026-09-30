@@ -23,7 +23,7 @@ def test_defaults_enforce_documented_prototype_limits() -> None:
     assert settings.model_timeout_seconds == 20
     assert settings.model_max_output_tokens == 512
     assert settings.model_max_prompt_tokens == 8000
-    assert settings.model_name == DEFAULT_GEMINI_MODEL == "gemini-2.5-flash"
+    assert settings.model_name == DEFAULT_GEMINI_MODEL == "gemini-3.8-flash"
     assert settings.model_thinking_budget == 0
     assert settings.model_access_available is False
     assert settings.model_runtime_enabled is False

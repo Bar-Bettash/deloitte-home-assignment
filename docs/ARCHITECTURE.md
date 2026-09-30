@@ -129,7 +129,7 @@ A `message` request reaches the model only when `settings.model_runtime_admitted
 
 - `GEMINI_API_KEY` is set
 - `MODEL_RUNTIME_ENABLED=true`
-- `MODEL_ADMITTED_NAME` equals the model in use (`GEMINI_MODEL`, default `gemini-2.5-flash`)
+- `MODEL_ADMITTED_NAME` equals the model in use (`GEMINI_MODEL`, default `gemini-3.8-flash`)
 - `MODEL_ADMITTED_ADAPTER_SHA256` equals the SHA-256 of `model_adapter.py`
 
 If any of these fails, the request gets `503 ai_unavailable`, and structured requests are unaffected. A key alone never enables free text; it only lets `scripts/eval_intents.py --live` evaluate a candidate. Any change to the adapter's prompt, schema or code changes its hash and turns free text off until it is re-admitted. A local run also reads `backend/.env` through `settings.load_local_env`; shell variables win, and the file is ignored on Vercel and in tests.

@@ -16,7 +16,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 
 
 class Settings(BaseModel):
