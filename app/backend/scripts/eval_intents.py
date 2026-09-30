@@ -218,7 +218,7 @@ def evaluate_cases(
         except TimeoutError:
             error = "timeout"
         except Exception as exc:  # noqa: BLE001 - evaluator records candidate failures instead of aborting
-            error = f"error:{type(exc).__name__}"
+            error = _error_label(exc)
         latency_ms = round((time.perf_counter() - started) * 1000, 3)
         actual = _project_actual(actual)
         correct = error is None and _matches(case["expected"], actual)
@@ -280,6 +280,16 @@ def _percentile(values: list[float], fraction: float) -> float | None:
     rank = max(1, math.ceil(fraction * len(ordered)))
     return ordered[rank - 1]
 
+
+def _error_label(exc: Exception) -> str:
+    """Name a failed case without provider payloads: the exception type plus, for
+    adapter errors, its sanitized code and any provider HTTP status."""
+    label = f"error:{type(exc).__name__}"
+    if isinstance(exc, model_adapter.ModelAdapterError):
+        label += f":{exc.code}"
+        if isinstance(exc.provider_status, int):
+            label += f":http_{exc.provider_status}"
+    return label
 
 def evaluate_live_candidate(
     cases: list[dict[str, Any]],

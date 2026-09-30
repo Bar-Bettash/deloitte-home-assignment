@@ -401,8 +401,11 @@ def test_rejected_output_is_costed_and_only_no_response_calls_are_unknown(monkey
     report = eval_intents.evaluate_live_candidate(
         cases, settings, "a" * 64, input_usd_per_million_tokens=1.0, output_usd_per_million_tokens=10.0)
     first = report["results"][0]
-    assert first["error"] == "error:ModelAdapterError" and first["cost_usd"] == pytest.approx(300 / 1_000_000)
+    assert first["error"] == "error:ModelAdapterError:model_invalid_response"
+    assert first["cost_usd"] == pytest.approx(300 / 1_000_000)
+    assert report["results"][1]["error"] == "error:ModelAdapterError:ai_unavailable:http_500"
     assert report["results"][1]["cost_usd"] is None
+    assert report["results"][2]["error"] == "timeout"
     assert report["aggregate_cost_usd"] == pytest.approx(300 / 1_000_000)
     assert report["rejected_output_costed_calls"] == 1
     assert report["unknown_cost_calls"] == 29
