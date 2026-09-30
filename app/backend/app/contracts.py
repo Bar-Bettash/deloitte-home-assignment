@@ -180,7 +180,7 @@ class MetricValue(StrictModel):
         "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
         "long_haul_share", "screen_score", "cancellation_rate", "diversion_rate",
         "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "enplaned_growth",
-        "sfo_pressure",
+        "sfo_pressure", "growth_points", "volume_points", "occupancy_points",
     ]
     value: WireNumber | None
     unit: Literal["count", "percent", "percentage_points", "minutes", "score"]
@@ -219,6 +219,8 @@ class MetricValue(StrictModel):
             "departure_delay_minutes": "minutes", "taxi_out_minutes": "minutes",
             "sfo_enplaned_trend": "count", "enplaned_growth": "percent",
             "sfo_pressure": "percentage_points",
+            # Weighted screen-score components: points out of 40, 30 and 30.
+            "growth_points": "score", "volume_points": "score", "occupancy_points": "score",
         }[self.key]
         if self.unit != expected_unit:
             raise ValueError(f"{self.key} must use {expected_unit}")

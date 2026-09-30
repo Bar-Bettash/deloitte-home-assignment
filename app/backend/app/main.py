@@ -15,6 +15,7 @@ from app.context_token import (
     result_digest,
 )
 from app.contracts import (
+    AIRPORTS,
     MAX_REQUEST_BYTES,
     AnalysisRequest,
     AnalysisResult,
@@ -24,7 +25,7 @@ from app.contracts import (
     validate_request_body_size,
 )
 from app.dispatch import DispatchFailure, dispatch_analysis
-from app.model_adapter import ADAPTER_SHA256, ModelAdapterError, interpret_message
+from app.model_adapter import ADAPTER_SHA256, ModelAdapterError, comparison_question, interpret_message
 from app.query_slots import QuerySlots
 from app.settings import HostingConfig, HostingConfigError, load_hosting, load_local_env, load_settings
 from fastapi import FastAPI, Request
@@ -92,6 +93,25 @@ def origin_allowed(origin: str | None, host_header: str, hosting: HostingConfig)
     return bool(parsed.netloc) and parsed.netloc.lower() == host_header.lower()
 
 
+# Every response: no MIME sniffing, and the app is never rendered inside a frame.
+_SECURITY_HEADERS = (
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"DENY"),
+    (b"content-security-policy", b"frame-ancestors 'none'"),
+)
+
+
+def _with_security_headers(send: Send) -> Send:
+    async def wrapped(message: Message) -> None:
+        if message["type"] == "http.response.start":
+            names = {name for name, _value in _SECURITY_HEADERS}
+            headers = [(key, value) for key, value in message.get("headers", []) if key.lower() not in names]
+            message = {**message, "headers": [*headers, *_SECURITY_HEADERS]}
+        await send(message)
+
+    return wrapped
+
+
 def _no_store(send: Send) -> Send:
     async def wrapped(message: Message) -> None:
         if message["type"] == "http.response.start":
@@ -108,7 +128,7 @@ class HostGuard:
 
     Order: always-open health check; hosting configuration (503 when unsafe);
     Host allowlist; same-origin check for unsafe methods. Hosted responses are
-    marked ``Cache-Control: no-store``.
+    marked ``Cache-Control: no-store``; every response forbids MIME sniffing and framing.
     """
 
     def __init__(self, app: ASGIApp) -> None:
@@ -121,6 +141,7 @@ class HostGuard:
                 return
             await self.app(scope, receive, send)
             return
+        send = _with_security_headers(send)
         if (scope["method"], scope["path"]) in _ALWAYS_OPEN:
             await self.app(scope, receive, send)
             return
@@ -304,6 +325,12 @@ async def _interpret_and_dispatch(
                     input_tokens=interpreted.usage.input_tokens, output_tokens=interpreted.usage.output_tokens)
     if interpreted.analysis is None:
         code = interpreted.kind if interpreted.kind in {"clarification_required", "unsupported_scope"} else "ai_unavailable"
+        # Wording is fixed here; the adapter's message is never forwarded. A comparison
+        # clarification is worded from the two airport codes, re-checked against the contract.
+        pair = interpreted.compare_airports
+        if code == "clarification_required" and pair is not None and len(set(pair)) == 2 and set(pair) <= AIRPORTS:
+            raise _ModelOutcome(code, comparison_question(
+                list(pair), claims.request.model_dump(mode="json", exclude_none=True) if claims is not None else None))
         raise _ModelOutcome(code, (
             "Please name the airport, metric, and supported period you want to analyze."
             if code == "clarification_required" else

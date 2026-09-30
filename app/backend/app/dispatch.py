@@ -375,7 +375,13 @@ def _long_haul(
                    _long_haul_summary(rows, threshold),
                    threshold_miles=threshold,
                    bundle=bundle,
-                   limitations=["The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."])
+                   limitations=[_LONG_HAUL_SCOPE,
+                                "The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."])
+
+
+# Matches the T-100 filter: service class F (scheduled passenger/cargo) with seats > 0.
+_LONG_HAUL_SCOPE = ("Long-haul share is based on scheduled passenger-service departures with reported seats; "
+                    "cargo-only and charter operations are outside this measure.")
 
 
 def _operations(
@@ -567,6 +573,14 @@ def _rank(
                             source_ids=[source_id]),
                 level_metrics["seat_occupancy"],
             ]
+            if request.metric == "screen_score" and item is not None:
+                # The weighted parts of the existing score, so a reader can see why it ranks.
+                metrics += [
+                    MetricValue(key=key, value=value, unit="score", status="ok", source_ids=[source_id])
+                    for key, value in (("growth_points", item.growth_points),
+                                       ("volume_points", item.volume_points),
+                                       ("occupancy_points", item.occupancy_points))
+                ]
         rows.append({"airport": airport, "rank": ranks[airport], "metrics": [metric.model_dump() for metric in metrics]})
     source = _t100_source(next(iter(traffic.values())).source)
     evidence, evidence_sources, evidence_limitations = _rank_evidence(
@@ -594,7 +608,9 @@ def _rank(
                    "partial" if exclusions or has_unavailable_values or unreviewed else "ok", summary,
                    bundle=bundle,
                    evidence=evidence, exclusions=exclusions,
-                   limitations=["Screen scores are heuristic traffic pressure, not terminal capacity or investment success.", *evidence_limitations])
+                   limitations=[_SCREEN_LIMITATION if request.metric == "screen_score" else
+                                "Rankings describe reported traffic, not terminal capacity or investment success.",
+                                *evidence_limitations])
 
 
 def _rank_evidence(
@@ -711,12 +727,67 @@ def _sfo_pressure(
     for source in evidence_sources:
         if source["id"] not in {item["id"] for item in sources}:
             sources.append(source)
+    by_key = {item.key: item for item in metrics}
+    answer = _sfo_answer(by_key, comparison_year)
+    causes = pressure.operations.result.delay_causes if pressure.operations.result is not None else None
+    cause_sentence = _delay_cause_sentence("SFO", causes)
+    summary = (" ".join(item for item in (answer, cause_sentence) if item) if answer else
+               "SFO transported-traffic growth, occupancy and operational indicators are descriptive only; "
+               "precise unmet demand is not identifiable.")
     return _result(request, request_id, [{"airport": "SFO", "metrics": [item.model_dump() for item in metrics]}],
                    sources, "partial" if pressure.status != "ok" or any(item.status != "ok" for item in metrics) else "ok",
-                   "SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable.",
+                   summary,
                    bundle=bundle,
                    series=series, evidence=evidence,
-                   limitations=[pressure.limitation, "Profitability and quantitative unmet demand cannot be identified from these data.", *evidence_limits])
+                   limitations=[pressure.limitation, "Profitability and quantitative unmet demand cannot be identified from these data.",
+                                *([_DELAY_CAUSE_SCOPE] if cause_sentence else []), *evidence_limits])
+
+
+_DELAY_CAUSE_SCOPE = ("Delay-cause shares use the minutes reporting carriers attribute to five BTS causes on flights "
+                      "that arrived 15 or more minutes late; they explain reported delays, not latent demand or terminal capacity.")
+_DELAY_CAUSE_LABELS = {
+    "carrier_delay": "carrier issues",
+    "weather_delay": "extreme weather",
+    "nas_delay": "national airspace system factors such as air traffic control and traffic volume",
+    "security_delay": "security",
+    "late_aircraft_delay": "late-arriving aircraft",
+}
+
+
+def _sfo_answer(by_key: dict[str, MetricValue], year: int) -> str | None:
+    """A direct answer from the growth gap: seats outpacing passengers is not a seat shortage."""
+    gap, growth, occupancy = by_key.get("sfo_pressure"), by_key.get("passenger_growth"), by_key.get("seat_occupancy")
+    if gap is None or gap.value is None or growth is None or growth.value is None:
+        return None
+    occupied = (f", and seat occupancy was {_format_value(occupancy.value, occupancy.unit)}"
+                if occupancy is not None and occupancy.value is not None else "")
+    points = f"{abs(gap.value):.2f}"
+    passengers = f"passenger growth {_format_value(growth.value, growth.unit)}"
+    if round(gap.value, 2) < 0:
+        return (f"No sign in {year} that airline seat supply at SFO fell behind passenger traffic: supplied seats grew "
+                f"{points} percentage points faster than transported passengers ({passengers}){occupied}. "
+                "That does not rule out latent demand, because traffic data counts only passengers who flew.")
+    if round(gap.value, 2) > 0:
+        return (f"Passenger traffic at SFO outpaced airline seat supply in {year}: passengers grew {points} percentage "
+                f"points faster than supplied seats ({passengers}){occupied}. That is a demand-pressure signal, "
+                "not a measured unmet demand; traffic data counts only passengers who flew.")
+    return (f"Passenger traffic and airline seat supply at SFO grew at the same pace in {year} ({passengers}){occupied}. "
+            "Traffic data counts only passengers who flew, so latent demand cannot be measured.")
+
+
+def _delay_cause_sentence(airport: str, mix) -> str | None:
+    """Name the causes behind most attributed delay minutes, with their exact shares."""
+    if mix is None or mix.status != "ok" or not mix.causes:
+        return None
+    ordered = sorted(mix.causes, key=lambda item: (-item[2], item[0]))
+    named = [f"{_DELAY_CAUSE_LABELS[field]} ({share:.1f}%)" for field, _minutes, share in ordered if share >= 5]
+    minor = [f"{_DELAY_CAUSE_LABELS[field]} {share:.1f}%" for field, _minutes, share in ordered if share < 5]
+    if not named:
+        return None
+    text = f"Reported delays on {airport} departures were mostly attributed to {_join_and(named)}"
+    if minor:
+        text += f"; {_join_and(minor)}"
+    return text + ". These shares explain operational delays, not latent demand or terminal capacity."
 
 
 _SUMMARY_LIMIT = 2000
@@ -737,7 +808,7 @@ def _explain(request: AnalysisRequest, previous: AnalysisResult, request_id: UUI
     elif metric == "long_haul_share":
         sentences = _explain_long_haul(rows, previous.scope.threshold_miles)
     elif metric == "sfo_pressure":
-        sentences = _explain_sfo_pressure(rows)
+        sentences = _explain_sfo_pressure(rows, previous.scope)
     else:
         sentences = _explain_values(metric, rows)
     summary = " ".join(_sentence(item) for item in sentences if item)
@@ -773,12 +844,14 @@ def _explain_ranking(metric: str, rows, previous: AnalysisResult) -> list[str]:
         if rest:
             lead += f", followed by {' and '.join(rest)}"
         sentences.append(f"{lead}, out of {len(ranked)} assessed airports")
+    if metric == "screen_score" and len(ranked) > 1 and ranked[0].rank == 1:
+        # Component points for every airport are shown in the ranking itself.
+        sentences.append(_screen_leader_reason(ranked[0], ranked[1]))
     if previous.exclusions:
         count = len(previous.exclusions)
         sentences.append(f"{count} airport{'s were' if count > 1 else ' was'} excluded because required data was incomplete")
     if metric == "screen_score":
-        sentences.append("A higher score means stronger traffic pressure relative to the rest of the New England cohort")
-        sentences.append("It is a screening signal, not proof that a terminal is capacity-constrained or that an expansion would be profitable")
+        sentences.append(_SCREEN_LIMITATION)
     else:
         sentences.append("Growth describes transported traffic; it does not show terminal capacity, unmet demand or profitability")
     return sentences
@@ -788,17 +861,7 @@ def _explain_congestion(rows) -> list[str]:
     sentences = ["The comparison uses four operational indicators from scheduled domestic departures: cancellation rate, "
                  "diversion rate, average departure delay and average taxi-out time"]
     if len(rows) == 2:
-        a, b = rows
-        pairs = [(_find_metric(a, key), _find_metric(b, key)) for key in CONGESTION_KEYS]
-        pairs = [(x, y) for x, y in pairs if x and y and x.value is not None and y.value is not None]
-        a_higher = sum(x.value > y.value for x, y in pairs)
-        b_higher = sum(y.value > x.value for x, y in pairs)
-        if a_higher and b_higher:
-            sentences.append(f"The picture is mixed: {a.airport} is higher on {a_higher} indicator{'s' if a_higher > 1 else ''} "
-                             f"and {b.airport} on {b_higher}, so the data does not point to one uniformly more strained airport")
-        elif a_higher or b_higher:
-            leader, count = (a.airport, a_higher) if a_higher else (b.airport, b_higher)
-            sentences.append(f"{leader} is higher on {count} of {len(pairs)} comparable indicators")
+        sentences.append(_comparison_summary("congestion", [row.model_dump() for row in rows]))
     sentences.append("These measures describe day-to-day operations, not terminal capacity or investment return")
     return sentences
 
@@ -819,21 +882,37 @@ def _explain_long_haul(rows, threshold_miles) -> list[str]:
     return sentences
 
 
-def _explain_sfo_pressure(rows) -> list[str]:
+def _explain_sfo_pressure(rows, scope) -> list[str]:
     row = rows[0] if rows else None
-    growth = _shown(_find_metric(row, "passenger_growth")) if row else None
-    gap = _find_metric(row, "sfo_pressure") if row else None
-    occupancy = _shown(_find_metric(row, "seat_occupancy")) if row else None
-    sentences = ["SFO demand pressure compares how fast transported passengers grew with how fast supplied seats grew"]
-    if growth and gap is not None and gap.value is not None:
-        direction = "slower" if gap.value < 0 else "faster"
-        sentences.append(f"Passengers grew {growth}, {_format_value(abs(gap.value), 'percent').rstrip('%')} percentage points "
-                         f"{direction} than seats")
-    if occupancy:
-        sentences.append(f"Seat occupancy was {occupancy}; delay, taxi-out and cancellation figures are shown alongside as operational context")
-    sentences.append("Transported passengers and supplied seats cannot show travellers who could not fly, "
-                     "so the app reports pressure signals rather than a quantified unmet demand")
+    by_key = {item.key: item for item in row.metrics} if row else {}
+    gap, growth, occupancy = by_key.get("sfo_pressure"), by_key.get("passenger_growth"), by_key.get("seat_occupancy")
+    sentences = []
+    if gap is not None and gap.value is not None and growth is not None and growth.value is not None:
+        # The gap is defined as passenger growth minus seat growth (calculations/sfo.py).
+        seat_growth = growth.value - gap.value
+        sentences.append(f"The answer compares two {scope.year} growth rates from BTS T-100: transported passengers grew "
+                         f"{_format_value(growth.value, 'percent')} and supplied seats grew {_format_value(seat_growth, 'percent')}, "
+                         f"a gap of {_format_value(gap.value, 'percentage_points')}"
+                         + (f"; seat occupancy was {_format_value(occupancy.value, occupancy.unit)}"
+                            if occupancy is not None and occupancy.value is not None else ""))
+        if round(gap.value, 2) < 0:
+            sentences.append("Airlines added seats faster than passengers arrived, so these data show no seat shortage")
+        elif round(gap.value, 2) > 0:
+            sentences.append("Passengers arrived faster than airlines added seats, which is a demand-pressure signal")
+    sentences.append("Traffic data count only passengers who flew, so latent demand is neither measured nor ruled out")
+    sentences.append(_delay_cause_sentence("SFO", _sfo_delay_causes(scope)))
     return sentences
+
+
+def _sfo_delay_causes(scope):
+    """Recompute the SFO delay-cause mix for the explained result's own period."""
+    try:
+        bundle = _read_accepted_bundle(scope.bundle_id) if scope.bundle_id is not None else None
+        result = (calculate_operations("SFO") if bundle is None
+                  else calculate_operations("SFO", year=scope.year, bundle=bundle))
+    except (BundleRegistryError, DispatchFailure, OperationsCalculationError):
+        return None
+    return result.delay_causes
 
 
 def _explain_values(metric: str, rows) -> list[str]:
@@ -958,6 +1037,10 @@ def _capitalized(text: str) -> str:
     return text[:1].upper() + text[1:]
 
 
+def _join_and(items: list[str]) -> str:
+    return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
+
+
 def _row_value(row, key: str) -> str | None:
     metric = next((item for item in row["metrics"] if item["key"] == key), None)
     return None if metric is None or metric["value"] is None else _format_value(metric["value"], metric["unit"])
@@ -982,7 +1065,44 @@ def _rank_summary(metric, year, rows) -> str:
     basis = {"screen_score": "scores are normalized against the full eligible cohort",
              "passenger_growth": "ranks use raw growth across the full eligible cohort"}.get(
         metric, "rank positions are against the full eligible cohort")
-    return f"Top of {len(ranked)} ranked airports on {_metric_label(metric)}{period}: {', '.join(named)}; {basis}."
+    summary = f"Top of {len(ranked)} ranked airports on {_metric_label(metric)}{period}: {', '.join(named)}; {basis}."
+    if metric == "screen_score" and not subset and len(ranked) > 1:
+        reason = _screen_leader_reason(ranked[0], ranked[1])
+        if reason:
+            summary += f" {reason}"
+    return summary
+
+
+_SCREEN_WEIGHTS = (("growth_points", "passenger growth", 40), ("volume_points", "passenger volume", 30),
+                   ("occupancy_points", "seat occupancy", 30))
+_SCREEN_LIMITATION = ("This is a relative traffic-pressure screen: it does not directly include terminal "
+                      "square footage or flight-frequency pressure, and it is not a profitability model.")
+
+
+def _screen_points(row) -> dict[str, float] | None:
+    """The weighted components of a returned screen row, from either wire or model rows."""
+    metrics = row["metrics"] if isinstance(row, dict) else [item.model_dump() for item in row.metrics]
+    points = {item["key"]: item["value"] for item in metrics
+              if item["key"] in {key for key, _label, _weight in _SCREEN_WEIGHTS} and item["value"] is not None}
+    return points if len(points) == len(_SCREEN_WEIGHTS) else None
+
+
+def _screen_leader_reason(first, second) -> str | None:
+    """Why the top airport leads: its component points against the next airport's."""
+    lead, runner = _screen_points(first), _screen_points(second)
+    if lead is None or runner is None:
+        return None
+    name = (lambda row: row["airport"] if isinstance(row, dict) else row.airport)
+    a, b = name(first), name(second)
+    ahead = [f"{label} ({lead[key]:.1f} vs {runner[key]:.1f})" for key, label, _w in _SCREEN_WEIGHTS if lead[key] > runner[key]]
+    behind = [f"{label} ({runner[key]:.1f} vs {lead[key]:.1f})" for key, label, _w in _SCREEN_WEIGHTS if lead[key] < runner[key]]
+    if not ahead:
+        return None
+    gap = sum(lead.values()) - sum(runner.values())
+    text = f"{a} ranks first, {gap:.2f} points ahead of {b}, on higher {_join_and(ahead)} points"
+    if behind:
+        text += f", which outweighs {b}'s higher {_join_and(behind)}"
+    return text + "."
 
 
 def _comparison_summary(metric, rows) -> str:
@@ -991,23 +1111,26 @@ def _comparison_summary(metric, rows) -> str:
     if metric == "congestion":
         a, b = rows
         comparable = 0
-        first_higher = 0
-        second_higher = 0
+        first_higher: list[str] = []
+        second_higher: list[str] = []
         for left, right in zip(a["metrics"], b["metrics"]):
             if left["value"] is None or right["value"] is None:
                 continue
             comparable += 1
-            first_higher += left["value"] > right["value"]
-            second_higher += right["value"] > left["value"]
+            if left["value"] > right["value"]:
+                first_higher.append(_metric_label(left["key"]))
+            elif right["value"] > left["value"]:
+                second_higher.append(_metric_label(right["key"]))
         if comparable == 0:
             return "Insufficient comparable operational indicators for a congestion comparison."
         if first_higher and second_higher:
-            return (f"Mixed picture: {a['airport']} is higher on {first_higher} and {b['airport']} on "
-                    f"{second_higher} of {comparable} comparable operational-strain indicators.")
-        if first_higher:
-            return f"{a['airport']} is higher on {first_higher} of {comparable} comparable operational-strain indicators."
-        if second_higher:
-            return f"{b['airport']} is higher on {second_higher} of {comparable} comparable operational-strain indicators."
+            return (f"No single airport is uniformly more congested. {a['airport']} has the higher "
+                    f"{_join_and(first_higher)}, while {b['airport']} has the higher {_join_and(second_higher)}.")
+        if first_higher or second_higher:
+            higher, lower, labels = (a, b, first_higher) if first_higher else (b, a, second_higher)
+            tied = comparable - len(labels)
+            return (f"{higher['airport']} is higher than {lower['airport']} on {len(labels)} of {comparable} comparable "
+                    f"operational indicators: {_join_and(labels)}" + (f"; {tied} {'is' if tied == 1 else 'are'} tied." if tied else "."))
         return f"{a['airport']} and {b['airport']} are tied on {comparable} comparable operational indicators."
     a, b = rows
     first, second = a["metrics"][0]["value"], b["metrics"][0]["value"]

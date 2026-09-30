@@ -39,6 +39,23 @@ class OperationalMetric:
     reason: str | None = None
 
 
+# BTS delay-cause fields, in the order the source defines them. Carriers report
+# cause minutes only for flights that arrive 15 or more minutes late.
+DELAY_CAUSES = ("carrier_delay", "weather_delay", "nas_delay", "security_delay", "late_aircraft_delay")
+
+
+@dataclass(frozen=True, slots=True)
+class DelayCauseMix:
+    """Share of carrier-attributed delay minutes by BTS cause; never imputed."""
+
+    status: Literal["ok", "unavailable"]
+    delayed_flights: int
+    total_minutes: float
+    # (field, minutes, percent of total_minutes), in DELAY_CAUSES order.
+    causes: tuple[tuple[str, float, float], ...]
+    reason: str | None = None
+
+
 @dataclass(frozen=True, slots=True)
 class OperationsResult:
     airport: str
@@ -54,6 +71,7 @@ class OperationsResult:
     departure_delay_minutes: OperationalMetric
     taxi_out_minutes: OperationalMetric
     population: str = "Domestic reporting-carrier scheduled departures at origin; not all airlines or international traffic"
+    delay_causes: DelayCauseMix | None = None
 
 
 def calculate_operations(
@@ -79,7 +97,9 @@ def calculate_operations(
         try:
             rows = connection.execute(
                 "SELECT month, reporting_airline, cancelled, diverted, flights, "
-                "dep_delay_minutes, taxi_out FROM read_parquet(?) WHERE origin = ? AND year = ?",
+                "dep_delay_minutes, taxi_out, "
+                + ", ".join(DELAY_CAUSES)
+                + " FROM read_parquet(?) WHERE origin = ? AND year = ?",
                 [str(parquet), airport, selected_year],
             ).fetchall()
         except duckdb.Error as exc:
@@ -99,7 +119,28 @@ def calculate_operations(
         _metric(sum(row[2] for row in valid), len(valid), len(valid), reason, percent=True),
         _metric(sum(row[3] for row in valid), len(valid), len(valid), reason, percent=True),
         _mean(eligible, 5, reason), _mean(eligible, 6, reason),
+        delay_causes=_delay_causes(eligible, reason),
     )
+
+
+def _delay_causes(rows, reason: str | None) -> DelayCauseMix:
+    """Shares of attributed delay minutes over completed flights that report causes."""
+    first = 7
+    reported = [row[first:first + len(DELAY_CAUSES)] for row in rows
+                if all(value is not None for value in row[first:first + len(DELAY_CAUSES)])]
+    values = [value for causes in reported for value in causes]
+    if any(not math.isfinite(value) or value < 0 for value in values):
+        return DelayCauseMix("unavailable", len(reported), 0.0, (), "insufficient data: invalid delay-cause field")
+    # fsum keeps totals independent of scan order, like the means above.
+    minutes = [math.fsum(causes[index] for causes in reported) for index in range(len(DELAY_CAUSES))]
+    total = math.fsum(minutes)
+    if reason is None and total <= 0:
+        reason = "insufficient data: no attributed delay minutes"
+    if reason is not None:
+        return DelayCauseMix("unavailable", len(reported), total, (), reason)
+    causes = tuple((field, value, 100.0 * value / total)
+                   for field, value in zip(DELAY_CAUSES, minutes, strict=True))
+    return DelayCauseMix("ok", len(reported), total, causes)
 
 
 def _selected_year(year: int | None, bundle: BundleContext | None) -> int:

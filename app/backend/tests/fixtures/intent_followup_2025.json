@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "fu-bos-growth-vs-pvd",
+      "category": "ordinary",
+      "input": {"text": "How does BOS stack up against PVD?", "context": {"action": "metric", "airports": ["BOS"], "metric": "passenger_growth"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["BOS", "PVD"], "metric": "passenger_growth"}}
+    },
+    {
+      "id": "fu-pvd-occupancy-beside-bdl",
+      "category": "ordinary",
+      "input": {"text": "Put that side by side with BDL.", "context": {"action": "metric", "airports": ["PVD"], "metric": "seat_occupancy"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["PVD", "BDL"], "metric": "seat_occupancy"}}
+    },
+    {
+      "id": "fu-lax-cancellations-vs-sfo",
+      "category": "ordinary",
+      "input": {"text": "How does that compare with San Francisco?", "context": {"action": "metric", "airports": ["LAX"], "metric": "cancellation_rate"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "cancellation_rate"}}
+    },
+    {
+      "id": "fu-anc-long-haul-vs-lax",
+      "category": "ordinary",
+      "input": {"text": "Stack it up against LAX.", "context": {"action": "metric", "airports": ["ANC"], "metric": "long_haul_share", "threshold_miles": 3000}},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["ANC", "LAX"], "metric": "long_haul_share", "threshold_miles": 3000}}
+    },
+    {
+      "id": "fu-sna-congestion-vs-lax",
+      "category": "ordinary",
+      "input": {"text": "Now versus LAX, please.", "context": {"action": "metric", "airports": ["SNA"], "metric": "congestion"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["SNA", "LAX"], "metric": "congestion"}}
+    },
+    {
+      "id": "fu-mht-passengers-swap-pwm",
+      "category": "ordinary",
+      "input": {"text": "Same thing for PWM?", "context": {"action": "metric", "airports": ["MHT"], "metric": "passengers"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "metric", "airports": ["PWM"], "metric": "passengers"}}
+    },
+    {
+      "id": "fu-sfo-pressure-vs-lax-clarifies",
+      "category": "safety_clarification",
+      "input": {"text": "How does it measure up against LAX?", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}},
+      "expected": {"kind": "clarification_required", "message": "Ask which comparable measure to use for SFO and LAX."}
+    },
+    {
+      "id": "fu-screen-bos-pvd-clarifies",
+      "category": "safety_clarification",
+      "input": {"text": "Line BOS up against PVD.", "context": {"action": "rank", "region": "new_england", "metric": "screen_score"}},
+      "expected": {"kind": "clarification_required", "message": "Ask which comparable measure to use for BOS and PVD."}
+    },
+    {
+      "id": "fu-lax-sna-congestion-vs-bos-clarifies",
+      "category": "safety_clarification",
+      "input": {"text": "And compared with BOS?", "context": {"action": "compare", "airports": ["LAX", "SNA"], "metric": "congestion"}},
+      "expected": {"kind": "clarification_required", "message": "Ask which airport and a measure available at BOS."}
+    },
+    {
+      "id": "fu-lax-cancellations-vs-bos-clarifies",
+      "category": "safety_clarification",
+      "input": {"text": "Compare that one with BOS.", "context": {"action": "metric", "airports": ["LAX"], "metric": "cancellation_rate"}},
+      "expected": {"kind": "clarification_required", "message": "Cancellation rates cover LAX, SNA and SFO only; ask for a measure available at BOS."}
+    }
+  ]
+}

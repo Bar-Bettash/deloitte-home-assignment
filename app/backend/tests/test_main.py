@@ -105,6 +105,26 @@ def test_unlisted_host_is_rejected(hosted):
     assert http.get("/health").status_code == 200
 
 
+def _assert_security_headers(response) -> None:
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "DENY"
+    assert response.headers["content-security-policy"] == "frame-ancestors 'none'"
+
+
+def test_every_response_forbids_sniffing_and_framing(hosted):
+    http = _client()
+    for response in (http.get("/"), http.get("/static/app.js"), http.get("/health"), _post_query(http, PRESET),
+                     TestClient(main.app, base_url="http://attacker.example.net").get("/")):
+        _assert_security_headers(response)
+
+
+def test_local_responses_carry_the_same_security_headers():
+    # Only no-store is hosted-only.
+    home = TestClient(main.app).get("/")
+    _assert_security_headers(home)
+    assert home.headers.get("cache-control") != "no-store"
+
+
 @pytest.mark.parametrize("base_url", ["http://localhost", "http://testserver", "http://127.0.0.1"])
 def test_loopback_hosts_are_rejected_when_hosted(hosted, base_url):
     http = TestClient(main.app, base_url=base_url)

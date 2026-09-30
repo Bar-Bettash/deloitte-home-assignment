@@ -23,7 +23,7 @@ const resultPanel = $("#result");
 // because every render replaces that container's children.
 const askTrigger = $("#ask-trigger");
 const resultActions = $("#result-actions");
-const connectionFailureMessage = "The backend is unavailable or returned an invalid response. The previous result is retained. Check the local server and retry explicitly.";
+const connectionFailureMessage = "The analysis service is unavailable or returned an invalid response. The previous result is kept; try again in a moment.";
 let latestSuccessfulResult = null;
 let contextResultId = null;
 let requestGeneration = 0;
@@ -397,13 +397,21 @@ async function submitRequest(request, chat = {}) {
       return;
     }
     const result = validateResult(payload);
-    if (kind === "explain") {
+    // A typed "why?" can come back as an explanation: the same result, recomputed,
+    // with an explanatory summary. It is answered like Explain, never shown as new.
+    const explained = kind === "explain" || (kind === "followup" && result.result_id === latestSuccessfulResult?.result_id);
+    if (explained) {
       // Explain recomputes the referenced result; it never replaces it.
       if (!latestSuccessfulResult || result.result_id !== latestSuccessfulResult.result_id) throw new Error("Explanation does not match the displayed result");
       explanation = { resultId: result.result_id, text: result.summary || "No explanation was returned." };
       renderResult(latestSuccessfulResult, resultIsPrevious);
-      showFeedback("Explanation received.", false, resultActions);
-      feedback.setAttribute("data-complete", "true");
+      if (kind === "followup") {
+        if ($("#question").value.trim() === request.message) { $("#question").value = ""; fitComposer(); }
+        settleChatReply(turn, explanation.text, "done", result.result_id);
+      } else {
+        showFeedback("Explanation received.", false, resultActions);
+        feedback.setAttribute("data-complete", "true");
+      }
       return;
     }
     const panelWasHidden = $("#result-panel").hidden;
@@ -963,6 +971,9 @@ function followUpRequest(text) {
 function retryChatTurn(turn) {
   if (busy || !turn || turn.user.state !== "failed") return;
   clearQuestionError();
+  // The Retry button hides once the turn is re-sent; keep focus in the composer
+  // instead of letting it fall back to the page.
+  $("#question").focus({ preventScroll: true });
   void submitRequest(followUpRequest(turn.user.text), { retryOf: turn });
 }
 // Every reply that produced a result keeps its link row, so a newer answer never
@@ -1003,35 +1014,22 @@ function compactReply(result) {
   const usable = (item) => item?.status === "ok" && Number.isFinite(item.value);
   const fallback = result.summary || "The analysis is ready in the result panel.";
   if (metric === "sfo_pressure") {
-    // The gap is passenger growth minus seat growth, in percentage points. Only a
-    // positive gap reads as demand pressure; otherwise the returned values are stated.
-    const gap = valueOf(rowFor("SFO"), "sfo_pressure");
-    const growth = valueOf(rowFor("SFO"), "passenger_growth");
-    if (!usable(gap)) return fallback;
-    if (gap.value > 0) return "The data shows demand pressure, but it cannot quantify precise unmet demand.";
-    if (!usable(growth)) return fallback;
-    const pace = gap.value === 0 ? "at the same pace as seats" : `${formatNumber(Math.abs(gap.value))} percentage points slower than seats`;
-    return `Passengers grew ${formatMetric(growth)}, ${pace}. The data shows pressure signals but cannot quantify precise unmet demand.`;
+    // The gap is passenger growth minus seat growth, in percentage points: seats
+    // outpacing passengers is not a seat shortage; only a positive gap is pressure.
+    const row = rowFor("SFO");
+    const gap = valueOf(row, "sfo_pressure");
+    const growth = valueOf(row, "passenger_growth");
+    const occupancy = valueOf(row, "seat_occupancy");
+    if (!usable(gap) || !usable(growth)) return fallback;
+    const points = `${formatNumber(Math.abs(gap.value))} percentage points`;
+    const occupied = usable(occupancy) ? `, with seat occupancy at ${formatMetric(occupancy)}` : "";
+    const rounded = Math.round(gap.value * 100) / 100;
+    if (rounded < 0) return `No sign that seat supply fell behind: seats grew ${points} faster than passengers (${formatMetric(growth)})${occupied}. Traffic data cannot show travellers who could not fly.`;
+    if (rounded > 0) return `Passengers grew ${points} faster than seats (${formatMetric(growth)})${occupied}: a demand-pressure signal, not a measured unmet demand.`;
+    return `Passengers and seats grew at the same pace (${formatMetric(growth)})${occupied}. Traffic data cannot show travellers who could not fly.`;
   }
-  if (metric === "sfo_enplaned_trend") return fallback;
-  if (metric === "congestion") {
-    if (airports.length !== 2) return fallback;
-    const [first, second] = airports.map(rowFor);
-    let comparable = 0, firstHigher = 0, secondHigher = 0;
-    for (const key of ["cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"]) {
-      const a = valueOf(first, key), b = valueOf(second, key);
-      if (!usable(a) || !usable(b)) continue;
-      comparable += 1;
-      if (a.value > b.value) firstHigher += 1;
-      else if (b.value > a.value) secondHigher += 1;
-    }
-    const [codeA, codeB] = airports;
-    const indicators = (count) => `${count} indicator${count === 1 ? "" : "s"}`;
-    if (!comparable) return fallback;
-    if (firstHigher && secondHigher) return `The operational picture is mixed: ${codeA} is higher on ${indicators(firstHigher)} and ${codeB} on ${secondHigher}.`;
-    if (firstHigher || secondHigher) return `${firstHigher ? codeA : codeB} is higher on ${firstHigher || secondHigher} of ${indicators(comparable)}.`;
-    return `${codeA} and ${codeB} are level on all ${indicators(comparable)}.`;
-  }
+  // The backend's congestion headline already names which airport is higher on what.
+  if (metric === "sfo_enplaned_trend" || metric === "congestion") return fallback;
   if (metric === "long_haul_share" && airports.length === 1) {
     const share = valueOf(rowFor(airports[0]), "long_haul_share");
     if (!usable(share) || share.numerator == null || share.denominator == null || result.scope.threshold_miles == null) return fallback;
@@ -1309,6 +1307,14 @@ function renderScreeningView(result, target) {
       fill.setAttribute("style", `width:${Math.max(0, Math.min(100, score.value))}%`); scoreBar.append(fill); item.append(scoreBar);
       paragraph(item, compact ? formatNumber(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
     } else if (score?.status === "ok") paragraph(item, compact ? formatNumber(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
+    // Where the score comes from: growth (of 40), volume (of 30) and occupancy (of 30) points.
+    const parts = ["growth_points", "volume_points", "occupancy_points"].map((key) => row.metrics.find((value) => value.key === key));
+    if (score?.status === "ok" && parts.every((part) => part?.status === "ok")) {
+      const [growth, volume, occupancy] = parts.map((part) => part.value.toFixed(1));
+      const breakdown = paragraph(item, `Growth ${growth} · Volume ${volume} · Occupancy ${occupancy}`);
+      breakdown.className = "ranking-detail score-parts";
+      breakdown.setAttribute("aria-label", `${growth} of 40 growth points, ${volume} of 30 volume points, ${occupancy} of 30 occupancy points`);
+    }
     // Supporting values and source IDs for every row are listed once in the
     // methodology and technical disclosures.
     list.append(item);
@@ -1480,7 +1486,7 @@ function renderGenericMetricTable(result, target) {
 function validateResult(result) {
   const fail = () => { throw new Error("Invalid analysis response"); };
   const scopeMetrics = new Set(["passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share", "screen_score", "congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "sfo_pressure"]);
-  const metricUnits = { passengers: "count", seats: "count", departures: "count", passenger_growth: "percent", seat_occupancy: "percent", long_haul_share: "percent", screen_score: "score", cancellation_rate: "percent", diversion_rate: "percent", departure_delay_minutes: "minutes", taxi_out_minutes: "minutes", sfo_enplaned_trend: "count", enplaned_growth: "percent", sfo_pressure: "percentage_points" };
+  const metricUnits = { passengers: "count", seats: "count", departures: "count", passenger_growth: "percent", seat_occupancy: "percent", long_haul_share: "percent", screen_score: "score", cancellation_rate: "percent", diversion_rate: "percent", departure_delay_minutes: "minutes", taxi_out_minutes: "minutes", sfo_enplaned_trend: "count", enplaned_growth: "percent", sfo_pressure: "percentage_points", growth_points: "score", volume_points: "score", occupancy_points: "score" };
   const ratioMetrics = new Set(["seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"]);
   if (!isRecord(result) || !["ok", "partial"].includes(result.status)
       || typeof result.result_id !== "string" || typeof result.request_id !== "string"
@@ -1544,7 +1550,7 @@ function isSafeHttpUrl(value) {
 function label(value) { return value.replaceAll("_", " "); }
 function humanDirection(value) { return ({ higher: "Higher", lower: "Lower", tied: "Tied", unavailable: "Unavailable" })[value] || "Direction unavailable"; }
 function humanMetricLabel(key) {
-  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi-out time", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap" };
+  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi-out time", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap", growth_points: "Growth points", volume_points: "Volume points", occupancy_points: "Occupancy points" };
   return names[key] || label(key);
 }
 function humanScopeMetricLabel(key) { return key === "sfo_pressure" ? "SFO demand pressure" : humanMetricLabel(key); }
@@ -1576,7 +1582,10 @@ $("#scope-panel").insertBefore(draftSummary, $("#scope-form"));
 renderDraftSummary();
 function yearLabel(value) { return value === String(DEFAULT_YEAR) ? `${DEFAULT_YEAR} (vs 2024)` : value; }
 function formatNumber(value) { return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value); }
+// Weighted screen-score components and the most points each can contribute.
+const screenPointMax = { growth_points: 40, volume_points: 30, occupancy_points: 30 };
 function formatMetric(metric) {
+  if (screenPointMax[metric.key]) return `${metric.value.toFixed(1)} of ${screenPointMax[metric.key]} points`;
   const value = metric.unit === "count" ? formatNumber(metric.value) : metric.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (metric.unit === "percentage_points") return `${value} pp`;
   return `${value}${({ percent: "%", percentage_points: " percentage points", minutes: " min", score: " / 100", count: "" })[metric.unit]}`;
@@ -1701,6 +1710,13 @@ $("#chat-form").addEventListener("submit", (event) => {
   if (!request.message) {
     showQuestionError("Enter a question before sending.");
     $("#question").focus();
+    return;
+  }
+  // Sending the text of the latest failed turn again is that turn's Retry, not a
+  // second copy of the question in the transcript.
+  const failed = [...conversation].reverse().find((message) => message.role === "user" && message.state === "failed");
+  if (failed?.turn && failed.text === request.message) {
+    retryChatTurn(failed.turn);
     return;
   }
   void submitRequest(request);

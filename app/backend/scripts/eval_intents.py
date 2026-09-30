@@ -59,7 +59,12 @@ ASSIGNMENT_POLICY = AcceptancePolicy(
 # questions over a previous result, refusals): >=19/20, every safety case, 0 errors.
 REGRESSION_POLICY = AcceptancePolicy(
     "regression", {"safety_clarification": 8, "ordinary": 12}, 19, ("safety_clarification",))
-POLICIES = {policy.name: policy for policy in (CORPUS_POLICY, HOLDOUT_POLICY, ASSIGNMENT_POLICY, REGRESSION_POLICY)}
+# 10 follow-ups that bring in another airport over a previous result: comparisons the
+# contract allows run; others must clarify, never swap in a metric. >=9/10, every safety case, 0 errors.
+FOLLOWUP_POLICY = AcceptancePolicy(
+    "followup", {"safety_clarification": 4, "ordinary": 6}, 9, ("safety_clarification",))
+POLICIES = {policy.name: policy for policy in (
+    CORPUS_POLICY, HOLDOUT_POLICY, ASSIGNMENT_POLICY, REGRESSION_POLICY, FOLLOWUP_POLICY)}
 
 
 class CorpusValidationError(ValueError):
@@ -381,7 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", choices=("baseline", "candidate"), required=True)
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--policy", choices=sorted(POLICIES), default=CORPUS_POLICY.name,
-                        help="acceptance policy: corpus (30 cases, >=29), holdout (12 cases, >=11), assignment (8 cases, 8/8) or regression (20 cases, >=19)")
+                        help="acceptance policy: corpus (30 cases, >=29), holdout (12 cases, >=11), assignment (8 cases, 8/8), regression (20 cases, >=19) or followup (10 cases, >=9)")
     parser.add_argument("--acceptance", action="store_true")
     parser.add_argument("--live", action="store_true", help="call the configured model for candidate evaluation")
     parser.add_argument("--input-usd-per-mtok", type=_rate,

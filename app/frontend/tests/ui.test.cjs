@@ -735,7 +735,7 @@ test('parses only the declared error envelope fields', () => {
 test('malformed HTTP error uses only the local connection message', async () => {
   const ui = setup(async () => ({ ok: false, status: 503, json: async () => ({ raw: 'upstream traceback' }) }));
   await ui.run('submitRequest({analysis: demos["lax-sna"]})');
-  assert.equal(ui.nodes.get('#feedback').textContent, 'The backend is unavailable or returned an invalid response. The previous result is retained. Check the local server and retry explicitly.');
+  assert.equal(ui.nodes.get('#feedback').textContent, 'The analysis service is unavailable or returned an invalid response. The previous result is kept; try again in a moment.');
   assert.ok(!ui.nodes.get('#feedback').textContent.includes('traceback'));
 });
 
@@ -1618,7 +1618,7 @@ function laxSnaCongestion() {
   return chatResult('lax-sna', chatScope(['LAX', 'SNA'], 'congestion'), ['LAX', 'SNA'].map((airport) => ({ airport, metrics: keys.map(([key, unit], index) => {
     const [value, numerator, denominator] = values[airport][index];
     return chatMetric(key, value, unit, { numerator, denominator });
-  }) })), 'Mixed picture: LAX is higher on 2 and SNA on 2 of 4 comparable operational-strain indicators.');
+  }) })), 'No single airport is uniformly more congested. LAX has the higher diversion rate and average taxi-out time, while SNA has the higher cancellation rate and average departure delay.');
 }
 function laxSnaCancellation() {
   return chatResult('lax-sna-cancel', chatScope(['LAX', 'SNA'], 'cancellation_rate'), [['LAX', 0.6904, 1315, 190472], ['SNA', 1.0467, 471, 44997]].map(([airport, value, numerator, denominator]) => ({ airport,
@@ -1631,7 +1631,7 @@ function ancLongHaul() {
 function sfoPressure(gap) {
   return chatResult('sfo', chatScope(['SFO'], 'sfo_pressure'), [{ airport: 'SFO', metrics: [chatMetric('passenger_growth', 4.7017, 'percent'),
     chatMetric('seat_occupancy', 82.31, 'percent', { numerator: 26477602, denominator: 32169113 }), chatMetric('sfo_pressure', gap, 'percentage_points')] }],
-  'SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable.');
+  'No sign in 2025 that airline seat supply at SFO fell behind passenger traffic: supplied seats grew 1.22 percentage points faster than transported passengers.');
 }
 const chatItems = (ui) => ui.nodes.get('#chat-transcript').children;
 const chatText = (item) => findDescendant(item, node => node.className === 'chat-text')?.textContent;
@@ -1647,16 +1647,19 @@ test('compact chat replies are formatted from returned values for each analysis 
   const ui = setup();
   const reply = (payload) => { ui.context.payload = payload; return ui.run('compactReply(validateResult(payload))'); };
   assert.equal(reply(newEnglandScreen()), 'HVN ranks highest in the current screen, followed by BGR and PWM. 22 of 23 airports were assessable.');
-  assert.equal(reply(laxSnaCongestion()), 'The operational picture is mixed: LAX is higher on 2 indicators and SNA on 2.');
+  assert.equal(reply(laxSnaCongestion()), 'No single airport is uniformly more congested. LAX has the higher diversion rate and average taxi-out time, while SNA has the higher cancellation rate and average departure delay.', 'the backend congestion headline is used verbatim');
   assert.equal(reply(laxSnaCancellation()), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
   assert.equal(reply(ancLongHaul()), '2.77% of eligible ANC departures were at least 3,000 miles: 999 of 36,040.');
-  assert.equal(reply(sfoPressure(0.8)), 'The data shows demand pressure, but it cannot quantify precise unmet demand.');
-  assert.equal(reply(sfoPressure(-1.2247)), 'Passengers grew 4.70%, 1.22 percentage points slower than seats. The data shows pressure signals but cannot quantify precise unmet demand.',
-    'a negative growth gap is not described as demand pressure');
+  assert.equal(reply(sfoPressure(0.8)), 'Passengers grew 0.8 percentage points faster than seats (4.70%), with seat occupancy at 82.31%: a demand-pressure signal, not a measured unmet demand.');
+  assert.equal(reply(sfoPressure(-1.2247)), 'No sign that seat supply fell behind: seats grew 1.22 percentage points faster than passengers (4.70%), with seat occupancy at 82.31%. Traffic data cannot show travellers who could not fly.',
+    'seats outpacing passengers is never described as pressure or a shortage');
+  assert.equal(reply(sfoPressure(0.001)), 'Passengers and seats grew at the same pace (4.70%), with seat occupancy at 82.31%. Traffic data cannot show travellers who could not fly.');
+  assert.doesNotMatch(reply(sfoPressure(-1.2247)), /pressure|shortage/);
   const trend = chatResult('trend', chatScope(['SFO'], 'sfo_enplaned_trend'), [{ airport: 'SFO', metrics: [chatMetric('sfo_enplaned_trend', 27250806, 'count')] }], 'SFO enplaned passengers in 2025: 27,250,806.');
   assert.equal(reply(trend), 'SFO enplaned passengers in 2025: 27,250,806.', 'other analyses fall back to the deterministic backend summary');
   const oneSided = laxSnaCongestion(); for (const metric of oneSided.rows[1].metrics) metric.value = 0;
-  assert.equal(reply(oneSided), 'LAX is higher on 4 of 4 indicators.');
+  oneSided.summary = 'LAX is higher than SNA on 4 of 4 comparable operational indicators: cancellation rate, diversion rate, average departure delay and average taxi-out time.';
+  assert.equal(reply(oneSided), oneSided.summary);
   for (const text of [reply(newEnglandScreen()), reply(laxSnaCongestion()), reply(ancLongHaul())]) assert.doesNotMatch(text, /_rate|screen_score|src-|request-/, 'no raw keys or identifiers');
 });
 
@@ -1667,7 +1670,7 @@ test('a follow-up shows the question, then Analyzing…, then the compact reply 
   await ui.run('runPreset(demos["lax-sna"])');
   assert.equal(chatItems(ui).length, 1, 'a preset adds one assistant line and no user bubble');
   assert.equal(findDescendant(chatItems(ui)[0], node => node.className === 'chat-context').textContent, 'Preset · LAX vs SNA congestion');
-  assert.equal(chatText(chatItems(ui)[0]), 'The operational picture is mixed: LAX is higher on 2 indicators and SNA on 2.');
+  assert.equal(chatText(chatItems(ui)[0]), 'No single airport is uniformly more congested. LAX has the higher diversion rate and average taxi-out time, while SNA has the higher cancellation rate and average departure delay.');
   ui.nodes.get('#ask-trigger').click();
   sendChat(ui, 'Just the cancellation rates, please.');
   const composer = ui.nodes.get('#conversation-composer');
@@ -1836,7 +1839,9 @@ test('Retry re-sends the same text on the same turn, and the in-flight composer 
   await flush(); await flush();
   assert.equal(user.getAttribute('data-state'), 'failed');
   assert.equal(send.getAttribute('aria-disabled'), 'false');
+  question.focused = false;
   findDescendant(user, node => node.className === 'chat-retry').click();
+  assert.equal(question.focused, true, 'focus stays in the composer when the Retry button disappears');
   assert.equal(chatItems(ui).length, 3, 'Retry reuses the failed turn');
   assert.equal(user.getAttribute('data-state'), 'sent');
   assert.equal(reply.getAttribute('data-state'), 'pending');
@@ -1937,4 +1942,61 @@ test('View analysis focuses the result title the reply produced', async () => {
   link.click();
   assert.equal(ui.nodes.get('#result-title').focused, true);
   assert.equal(chatItems(ui).length, 1, 'viewing the analysis sends nothing and adds no message');
+});
+
+test('a typed "why" answered with an explanation fills the Explanation and the reply, and keeps the result', async () => {
+  const bodies = [];
+  const sfo = sfoPressure(-1.2247);
+  const explained = { ...sfoPressure(-1.2247), request_id: 'request-explain',
+    summary: 'The answer compares two 2025 growth rates from BTS T-100: transported passengers grew 4.7% and supplied seats grew 5.93%.' };
+  const responses = [sfo, explained];
+  const ui = setup((_url, init) => { bodies.push(JSON.parse(init.body)); return Promise.resolve(success(responses.shift())); });
+  await ui.run('runPreset(demos["sfo-pressure"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'Why? Is SFO running out of capacity?');
+  await flush(); await flush(); await flush();
+  assert.deepEqual(bodies[1], { message: 'Why? Is SFO running out of capacity?', context_result_id: 'sfo' });
+  const reply = chatItems(ui)[chatItems(ui).length - 1];
+  assert.equal(chatText(reply), explained.summary, 'the reply is the explanation, not the earlier summary');
+  assert.equal(reply.getAttribute('data-state'), 'done');
+  assert.equal(ui.run('latestSuccessfulResult.summary'), sfo.summary, 'the result on screen is not replaced by its explanation');
+  assert.equal(findDescendant(ui.nodes.get('#result'), node => node.id === 'result-explanation').textContent, explained.summary);
+  assert.equal(ui.nodes.get('#question').value, '', 'the answered question leaves the composer');
+});
+
+test('sending a failed question again retries its turn instead of adding a copy', async () => {
+  const bodies = [];
+  const pending = [];
+  const ui = setup((_url, init) => { bodies.push(JSON.parse(init.body)); return new Promise(resolve => pending.push(resolve)); });
+  const preset = ui.run('runPreset(demos["lax-sna"])');
+  pending.shift()(success(laxSnaCongestion()));
+  await preset;
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'Just the cancellation rates, please.');
+  pending.shift()({ ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') });
+  await flush(); await flush();
+  const [, user, reply] = chatItems(ui);
+  assert.equal(user.getAttribute('data-state'), 'failed');
+  assert.equal(ui.nodes.get('#question').value, 'Just the cancellation rates, please.', 'the failed text stays editable');
+  sendChat(ui, 'Just the cancellation rates, please.');
+  assert.equal(chatItems(ui).length, 3, 'no second copy of the question');
+  assert.equal(user.getAttribute('data-state'), 'sent');
+  assert.equal(reply.getAttribute('data-state'), 'pending');
+  assert.equal(bodies.length, 3);
+  pending.shift()(success(laxSnaCancellation()));
+  await flush(); await flush();
+  assert.equal(chatText(reply), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
+  assert.equal(ui.nodes.get('#question').value, '', 'a successful retry clears the sent text');
+});
+
+test('the screening list shows where each score comes from', async () => {
+  const payload = newEnglandScreen();
+  payload.rows[0].metrics.push(chatMetric('growth_points', 30.476, 'score'), chatMetric('volume_points', 24.286, 'score'), chatMetric('occupancy_points', 20, 'score'));
+  const ui = setup(async () => success(payload));
+  await ui.run('runPreset(demos["new-england"])');
+  const parts = findDescendant(ui.nodes.get('#result'), node => node.className === 'ranking-detail score-parts');
+  assert.equal(parts.textContent, 'Growth 30.5 · Volume 24.3 · Occupancy 20.0');
+  assert.equal(parts.getAttribute('aria-label'), '30.5 of 40 growth points, 24.3 of 30 volume points, 20.0 of 30 occupancy points');
+  ui.context.metric = chatMetric('volume_points', 24.286, 'score');
+  assert.equal(ui.run('formatMetric(metric)'), '24.3 of 30 points', 'points are never shown as a score out of 100');
 });

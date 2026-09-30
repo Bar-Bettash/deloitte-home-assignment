@@ -35,8 +35,9 @@ Choose the outcome in this order:
 1. unsupported_scope only when the analysis itself is outside the product:
    profitability, return on investment, cost or how much to invest, valuation or
    what an airport is worth, forecasts of future years, rankings outside New
-   England, arbitrary data access, several analyses in one message, or an
-   unqualified period.
+   England, a named airport that is not a supported airport code, arbitrary data
+   access such as running SQL or reading files, several analyses in one message,
+   or an unqualified period.
 2. clarification_required when one missing or ambiguous detail (which airport,
    which second airport, which metric, or prior context that was not supplied)
    would make the question supported.
@@ -82,8 +83,8 @@ Scope rules.
 - One analysis per message. A message that asks for several analyses at once
   (for example two metrics, or two separate questions) is unsupported_scope; the
   user must submit one analysis at a time.
-- When a place could mean more than one supported airport, or names no specific
-  supported airport, return clarification_required. Never guess an airport.
+- When a place could mean more than one supported airport, or the question names
+  no specific airport, return clarification_required. Never guess an airport.
 
 Previous analysis. previous_analysis, when supplied, is the result on screen.
 - A new question names its own airport or airports and its own metric or topic.
@@ -99,13 +100,29 @@ Previous analysis. previous_analysis, when supplied, is the result on screen.
   user changes them. A follow-up that only narrows or switches the metric (for
   example to one operational measure) after a comparison stays a comparison of the
   same two airports.
+- A follow-up may bring in another airport and leave the metric implicit, such as
+  "compare it with LAX" or "how does BOS compare with PVD?". "It", "this airport"
+  or "there" means the previous analysis's single airport. Return compare with the
+  two airports, keeping the previous metric and year, when that metric can be
+  compared at both airports. "And PVD?" or "what about PVD?" asks for the same
+  analysis at the named airport instead.
+- When the previous metric cannot be compared at those two airports, never
+  substitute another metric: return clarification_required with analysis set to
+  action compare and the two airports, every other field null.
+
+Metric scope. sfo_pressure and sfo_enplaned_trend exist only for SFO and cannot be
+compared. congestion and the four operational metrics cover only LAX, SNA and
+SFO. screen_score ranks New England airports; it is not a two-airport comparison.
+passengers, seats, departures, passenger_growth, seat_occupancy and
+long_haul_share can be compared between any two supported airports.
 
 Periods. Supported periods are calendar years 2023, 2024 and 2025. If the user
 names no year, set year to null: the server then uses the newest accepted period
 (2025, compared with 2024). Growth and screen scores need a comparison year (2024
 or 2025); operational and SFO metrics support 2024 and 2025. Any other year is
 unsupported. The server independently validates every analysis and supplies all
-user-visible wording. When kind is not analysis, set analysis to null."""
+user-visible wording. When kind is not analysis, set analysis to null, except for
+the two-airport clarification above."""
 # Recorded in evaluation reports so a result names the exact prompt and adapter.
 PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()
 ADAPTER_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -185,6 +202,9 @@ class ModelInterpretation:
     analysis: AnalysisRequest | None
     message: str | None
     usage: ModelUsage
+    # Two validated airport codes when a clarification only lacks a comparable metric;
+    # the server words that question itself (comparison_question).
+    compare_airports: tuple[str, str] | None = None
 
     def as_outcome(self) -> dict[str, object]:
         if self.analysis is not None:
@@ -271,18 +291,59 @@ def _response_text(body: dict[str, object]) -> str:
     return "".join(texts)
 
 
-def _parse_response(body: object) -> ModelInterpretation:
+def _parse_response(body: object, context: Mapping[str, object] | None = None) -> ModelInterpretation:
     if not isinstance(body, dict):
         raise ModelAdapterError("model_invalid_response")
     usage = _parse_usage(body)
     try:
-        return _interpret(body, usage)
+        return _interpret(body, usage, context)
     except ModelAdapterError as exc:
         exc.usage = usage
         raise
 
 
-def _interpret(body: dict[str, object], usage: ModelUsage) -> ModelInterpretation:
+_OPERATIONAL_AIRPORTS = frozenset({"LAX", "SNA", "SFO"})
+_OPERATIONAL_METRICS = frozenset({"congestion", "cancellation_rate", "diversion_rate",
+                                  "departure_delay_minutes", "taxi_out_minutes"})
+_NOT_COMPARABLE = {
+    "sfo_pressure": "SFO demand pressure is measured only for SFO.",
+    "sfo_enplaned_trend": "The SFO passenger trend covers SFO only.",
+    "screen_score": "The screening score ranks New England airports rather than comparing two.",
+}
+
+
+def _comparison_hint(proposed: object) -> list[str] | None:
+    """Two named airports from a clarification that lacks only a comparable metric."""
+    if not isinstance(proposed, dict) or not set(proposed) <= set(_ANALYSIS_FIELDS) or proposed.get("action") != "compare":
+        return None
+    if any(proposed.get(field) is not None for field in _ANALYSIS_FIELDS if field not in {"action", "airports"}):
+        return None
+    airports = proposed.get("airports")
+    if not isinstance(airports, list) or len(airports) != 2 or not all(isinstance(code, str) for code in airports):
+        return None
+    codes = [code.upper() for code in airports]
+    return codes if len(set(codes)) == 2 and set(codes) <= AIRPORTS else None
+
+
+def comparison_question(airports: list[str], context: Mapping[str, object] | None) -> str:
+    """Server-worded clarification naming only measures the contract can compare."""
+    first, second = airports
+    operational = set(airports) <= _OPERATIONAL_AIRPORTS
+    measures = ["passenger growth", "seat occupancy", "passengers", "long-haul share"]
+    if operational:
+        measures.append("congestion")
+    previous = context.get("metric") if isinstance(context, Mapping) else None
+    lead = _NOT_COMPARABLE.get(previous) if isinstance(previous, str) else None
+    if lead is None and previous in _OPERATIONAL_METRICS and not operational:
+        lead = "Operational measures cover only LAX, SNA and SFO."
+    example = "congestion" if operational else "passenger growth"
+    question = (f"Which measure should I compare for {first} and {second}: {', '.join(measures[:-1])} or {measures[-1]}? "
+                f"For example: “Compare {first} and {second} {example}.”")
+    return f"{lead} {question}" if lead else question
+
+
+def _interpret(body: dict[str, object], usage: ModelUsage,
+               context: Mapping[str, object] | None = None) -> ModelInterpretation:
     try:
         parsed = json.loads(_response_text(body))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
@@ -302,6 +363,9 @@ def _interpret(body: dict[str, object], usage: ModelUsage) -> ModelInterpretatio
     empty = proposed is None or (isinstance(proposed, dict) and all(value is None for value in proposed.values()))
     if kind in _SAFE_MESSAGES and empty:
         return ModelInterpretation(kind, None, _SAFE_MESSAGES[kind], usage)
+    # A clarification may name the two airports to compare; only they reach the wording.
+    if kind == "clarification_required" and (airports := _comparison_hint(proposed)) is not None:
+        return ModelInterpretation(kind, None, comparison_question(airports, context), usage, (airports[0], airports[1]))
     raise ModelAdapterError("model_invalid_response")
 
 
@@ -345,4 +409,4 @@ async def interpret_message(
         raise ModelAdapterError("model_timeout") from exc
     except httpx.HTTPError as exc:
         raise ModelAdapterError("ai_unavailable") from exc
-    return _parse_response(body)
+    return _parse_response(body, context)

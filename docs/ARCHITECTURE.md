@@ -112,6 +112,7 @@ Any instance with the same `APP_SIGNING_KEY` can verify the cookie, so no server
 - Requests with unsafe methods need an `Origin` whose scheme and `host:port` exactly match the request, and the scheme must be HTTPS on Vercel.
 - A missing Origin is tolerated only outside hosted mode.
 - Hosted responses carry `Cache-Control: no-store`, and there is no CORS.
+- Every response, local or hosted, carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Content-Security-Policy: frame-ancestors 'none'`, so the app cannot be framed.
 
 **Local runs.** A loopback run without a key uses a random per-process key, so follow-up context ends when the process restarts.
 
@@ -138,12 +139,13 @@ The adapter makes one streamed POST to `https://generativelanguage.googleapis.co
 
 - `generationConfig.responseFormat.text` with `mimeType: APPLICATION_JSON` and a JSON Schema (the documented replacement for the deprecated `responseSchema`), temperature 0. The analysis object is fixed-shape: all six fields (`action`, `airports`, `region`, `metric`, `year`, `threshold_miles`) are required, unused ones are null, extra properties are not allowed, and enums mirror the contract. `AnalysisRequest` remains the authoritative validator.
 - The system instruction states general contract rules: rank is New England only; compare takes exactly two airports and metric exactly one; explain carries only the action; follow-ups keep the previous airports, action and year unless the user changes them; several analyses in one message are unsupported; an ambiguous place needs clarification.
-- It uses the settings caps: 512 output tokens, 8,000 prompt bytes, a 20 s timeout and a 64 KiB response limit.
+- A follow-up that brings in another airport ("compare it with LAX") becomes a comparison with the previous metric only when the contract allows that metric at both airports. Otherwise the model returns `clarification_required` naming just the two airports, never a substitute metric. The adapter checks those codes and the server words the question itself, listing only measures the contract can compare (for example, after SFO demand pressure: "SFO demand pressure is measured only for SFO. Which measure should I compare for SFO and LAX: passenger growth, seat occupancy, passengers, long-haul share or congestion?"). Provider text never reaches the client.
+- It uses the settings caps: 1,024 output tokens, 8,000 prompt bytes, a 20 s timeout and a 64 KiB response limit.
 - `thinkingConfig.thinkingBudget` is 0 by default so thinking tokens do not eat the output cap; `GEMINI_THINKING_BUDGET=default` omits it.
 - A blocked prompt or a safety stop becomes `model_refusal`; `MAX_TOKENS` becomes `model_incomplete`; thought parts are ignored.
 - It logs only metadata, never question text. A provider HTTP error is logged as, for example, `ai_unavailable:http_404`, and never returned to the client.
 
-Every provider failure is mapped to a sanitized code. **No live Gemini call has been made yet.**
+Every provider failure is mapped to a sanitized code. The admitted configuration (`gemini-3.8-flash` and the adapter SHA-256), with every live evaluation run behind it, is recorded in [model-admission-20260930](evidence/model-admission-20260930/README.md). Each natural-language message makes exactly one model call; presets, Adjust scope and Explain make none.
 
 ## Scope and data bundles
 
@@ -166,16 +168,17 @@ Every provider failure is mapped to a sanitized code. **No live Gemini call has 
 
 | Calculation | Definition and missing-data rule |
 |---|---|
-| T-100 annual levels | Sum of origin passengers, seats and **performed** departures. The importer keeps rows with service class A, C, E or F and positive seats. An airport-year missing any month is unavailable, not zero. |
+| T-100 annual levels | Sum of origin passengers, seats and **performed** departures. The importer keeps rows with service class A, C, E or F and positive seats; in the accepted data only class F (scheduled passenger service) occurs, so all-cargo (G, P) and charter (L) rows are excluded. An airport-year missing any month is unavailable, not zero. |
 | Occupancy | `100 × passengers / seats`. Seats must be positive. |
 | Passenger growth | `100 × (P_cmp − P_base) / P_base`. A zero or missing baseline makes the value unavailable. |
-| Screen score | See `calculations/screen.py`. An airport is eligible when both years are complete, counts are valid, baseline passengers are positive and comparison-year seats are positive. Each input gets a mid-rank percentile `(2·lower + tied − 1)/(2(n − 1))`. Score = `100 × (0.40 growth + 0.30 volume + 0.30 occupancy)`. Fewer than two eligible airports gives `insufficient_data`. Ranks use competition ranking; ties are displayed in airport-code order. |
+| Screen score | See `calculations/screen.py`. An airport is eligible when both years are complete, counts are valid, baseline passengers are positive and comparison-year seats are positive. Each input gets a mid-rank percentile `(2·lower + tied − 1)/(2(n − 1))`. Score = `100 × (0.40 growth + 0.30 volume + 0.30 occupancy)`. Fewer than two eligible airports gives `insufficient_data`. Ranks use competition ranking; ties are displayed in airport-code order. Each ranked row also returns its weighted parts (`growth_points` of 40, `volume_points` of 30, `occupancy_points` of 30), which sum to the score, and the summary says why the leader is ahead of the next airport component by component. |
 | Long-haul share | Performed departures with `distance ≥ threshold` ÷ all performed departures. The default threshold is 3,000 miles, and a request may use any value in (0, 12000]. Rows with a null distance count as unknown, and the result gives lower and upper bounds. A single value is given only when the unknown count is 0. An invalid distance, or an incomplete year, gives `insufficient_data`. Zero total departures makes the share unavailable. |
 | Cancellation and diversion | `100 × flagged / valid scheduled flights` at each origin. Valid rows have binary flags and `flights = 1`. |
 | Departure delay and taxi-out | Separate means of non-null `DepDelayMinutes` (early departures count as 0) and `TaxiOut`, over flights that were neither cancelled nor diverted. Each mean keeps its own denominator. |
-| Comparison | Raw values are compared, and only the display is rounded. Each indicator gets a direction: higher, lower, tied or unavailable. The summary counts these directions, and says "mixed picture" when they are split. There is no composite index and no causal claim. |
+| Comparison | Raw values are compared, and only the display is rounded. Each indicator gets a direction: higher, lower, tied or unavailable. The congestion summary names which airport is higher on which indicator; when they split it says "No single airport is uniformly more congested". There is no composite index, no winner and no causal claim. |
 | SFO enplaned trend | Enplaned passengers only. All 24 months × Domestic/International cells must be present; they are combined into one monthly series. |
-| SFO pressure | T-100 passenger growth % minus seat growth %, in percentage points, over the matched SFO origin population. It is shown alongside the trend and the on-time indicators. Profitability and quantitative unmet demand are `not_identifiable`. |
+| SFO pressure | T-100 passenger growth % minus seat growth %, in percentage points, over the matched SFO origin population. The summary answers directly from its sign: a negative gap (seats grew faster, −1.22 pp in 2025) is stated as no sign that seat supply fell behind, with occupancy, and that latent demand is not ruled out. It is shown alongside the trend and the on-time indicators. Profitability and quantitative unmet demand are `not_identifiable`. |
+| Delay-cause mix | For completed flights at an origin that report BTS cause minutes (flights arriving 15+ minutes late): each cause's minutes ÷ all attributed minutes, summed with `math.fsum`. Invalid or negative minutes, or incomplete coverage, make the mix unavailable. It explains reported delays only, never latent demand or terminal capacity. |
 
 ## Data refresh (offline operator steps)
 
@@ -213,10 +216,12 @@ ruff check app/backend --ignore EXE002,SIM905
 - **Integrated acceptance at `104acfc`:** 583 passed, 2 skipped; 88/88 Node tests; 41 real-HTTP calls with 0 figure discrepancies.
 - **Rerun at `fbd2342` during the docs update:** 679 passed, 2 skipped; 96/96 Node tests.
 - **Offline Vercel package check:** 86.4 MB uncompressed, and the four workflows ran on a read-only filesystem ([vercel-package-check.md](evidence/vercel-package-check.md)).
+- **Answer-quality pass (2026-09-30, `fix/answer-quality`):** 827 passed, 1 skipped; 128/128 Node tests (98 UI, 30 globe). The reconciliation receipt was regenerated and only its code hashes changed; every figure is unchanged.
+- **Live model admission:** adapter `d617c5fb…` passed all five sets with 0 errors, one run each: 10/10 follow-ups, 30/30 corpus, 12/12 holdout, 8/8 assignment wording and 20/20 chat regression ([admission evidence](evidence/model-admission-20260930/README.md)).
+- **Screen weight sensitivity (offline, documented only):** re-weighting the same percentiles 11 ways (growth 30–60 %) kept HVN in the top four every time and first in 6 of 11; the top five sit within about 4 points. The screen is a shortlist, not a strict order. The shipped weights are unchanged.
 
 **Not yet done.**
 
-- A live Gemini evaluation (30-case corpus and 12-case holdout) and model admission.
 - A deployed smoke test.
 - A live freshness recheck after 2026-09-27.
 

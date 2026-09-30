@@ -17,10 +17,11 @@ def publish(root, rows, *, accepted=True, year=2024, origins=None):
         connection.execute(
             "CREATE TABLE flights(year INTEGER, month INTEGER, origin VARCHAR, dest VARCHAR, "
             "reporting_airline VARCHAR, cancelled INTEGER, diverted INTEGER, flights INTEGER, "
-            "dep_delay_minutes DOUBLE, taxi_out DOUBLE, dep_delay DOUBLE)"
+            "dep_delay_minutes DOUBLE, taxi_out DOUBLE, dep_delay DOUBLE, carrier_delay DOUBLE, "
+            "weather_delay DOUBLE, nas_delay DOUBLE, security_delay DOUBLE, late_aircraft_delay DOUBLE)"
         )
         if rows:
-            connection.executemany("INSERT INTO flights VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
+            connection.executemany("INSERT INTO flights VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
         escaped = str(parquet).replace("'", "''")
         connection.execute(f"COPY flights TO '{escaped}' (FORMAT PARQUET)")
     manifest = {
@@ -68,9 +69,9 @@ def bundle_for(root, parquet, *, year=2025):
 
 
 def row(month=1, *, origin="LAX", year=2024, carrier="AA", cancel=0, divert=0,
-        delay=0, taxi=10, flights=1):
+        delay=0, taxi=10, flights=1, causes=(None,) * 5):
     return (year, month, origin, "LAX" if origin != "LAX" else "SFO", carrier,
-            cancel, divert, flights, delay, taxi, -15)
+            cancel, divert, flights, delay, taxi, -15, *causes)
 
 
 def complete(**kwargs):
@@ -245,3 +246,41 @@ def test_real_packaged_2025_candidate_uses_bundle_ref() -> None:
     assert result.missing_months == ()
     assert result.scheduled_count > 0
     assert result.departure_delay_minutes.denominator <= result.departure_delay_minutes.eligible_count
+
+
+def test_delay_cause_mix_is_hand_calculated_from_attributed_minutes(tmp_path):
+    # Cause minutes (carrier, weather, NAS, security, late aircraft) on two late flights;
+    # rows without causes, and a cancelled row that carries some, do not count.
+    rows = complete() + [
+        row(delay=40, causes=(10.0, 0.0, 20.0, 0.0, 10.0)),
+        row(delay=30, causes=(5.0, 5.0, 0.0, 0.0, 30.0)),
+        row(cancel=1, causes=(500.0, 0.0, 0.0, 0.0, 0.0)),
+    ]
+    publish(tmp_path, rows)
+    mix = calculate_operations("LAX", tmp_path).delay_causes
+    assert mix.status == "ok" and mix.reason is None
+    assert mix.delayed_flights == 2
+    assert mix.total_minutes == 80
+    assert [field for field, _minutes, _share in mix.causes] == [
+        "carrier_delay", "weather_delay", "nas_delay", "security_delay", "late_aircraft_delay"]
+    assert [minutes for _field, minutes, _share in mix.causes] == [15, 5, 20, 0, 40]
+    assert [share for _field, _minutes, share in mix.causes] == [18.75, 6.25, 25.0, 0.0, 50.0]
+
+
+@pytest.mark.parametrize("causes, reason", [
+    ((None,) * 5, "insufficient data: no attributed delay minutes"),
+    ((-1.0, 0.0, 0.0, 0.0, 0.0), "insufficient data: invalid delay-cause field"),
+    ((float("nan"), 0.0, 0.0, 0.0, 0.0), "insufficient data: invalid delay-cause field"),
+])
+def test_delay_cause_mix_without_valid_minutes_is_unavailable(tmp_path, causes, reason):
+    publish(tmp_path, complete() + [row(delay=20, causes=causes)])
+    mix = calculate_operations("LAX", tmp_path).delay_causes
+    assert (mix.status, mix.causes, mix.reason) == ("unavailable", (), reason)
+
+
+def test_delay_cause_mix_is_unavailable_for_incomplete_coverage(tmp_path):
+    rows = [row(month, causes=(1.0, 0.0, 0.0, 0.0, 1.0)) for month in range(1, 12)]
+    publish(tmp_path, rows)
+    mix = calculate_operations("LAX", tmp_path).delay_causes
+    assert mix.status == "unavailable"
+    assert mix.reason == "insufficient data: incomplete annual origin coverage"

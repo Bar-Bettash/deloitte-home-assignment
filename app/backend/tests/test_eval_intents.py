@@ -459,3 +459,22 @@ def test_regression_policy_needs_19_of_20_every_safety_case_and_no_errors():
 
     assert missing(ordinary_miss)["candidate_acceptance"] is True
     assert missing(safety_miss)["candidate_acceptance"] is False
+
+
+FOLLOWUP = Path(__file__).parent / "fixtures" / "intent_followup_2025.json"
+
+
+def test_followup_cases_load_under_their_policy_and_are_new():
+    cases = load_and_validate_cases(FOLLOWUP, eval_intents.FOLLOWUP_POLICY)
+    assert Counter(case["category"] for case in cases) == {"safety_clarification": 4, "ordinary": 6}
+    seen = {case["input"]["text"].lower() for path, policy in (
+        (CORPUS, eval_intents.CORPUS_POLICY), (HOLDOUT, eval_intents.HOLDOUT_POLICY),
+        (ASSIGNMENT, eval_intents.ASSIGNMENT_POLICY), (REGRESSION, eval_intents.REGRESSION_POLICY))
+        for case in load_and_validate_cases(path, policy)}
+    assert not {case["input"]["text"].lower() for case in cases} & seen
+    # Every case is a follow-up over a validated previous result, and none copies the prompt.
+    assert all(case["input"]["context"] is not None for case in cases)
+    assert not any(case["input"]["text"].lower().rstrip("?.") in eval_intents.model_adapter.SYSTEM_PROMPT.lower()
+                   for case in cases)
+    policy = eval_intents.FOLLOWUP_POLICY
+    assert (policy.case_count, policy.overall_correct_min, policy.all_correct) == (10, 9, ("safety_clarification",))
