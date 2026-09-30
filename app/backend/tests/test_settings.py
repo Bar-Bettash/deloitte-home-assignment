@@ -21,7 +21,7 @@ def test_defaults_enforce_documented_prototype_limits() -> None:
     assert settings.source_page_size == 5000
     assert settings.source_max_bytes == 10 * 1024 * 1024
     assert settings.model_timeout_seconds == 20
-    assert settings.model_max_output_tokens == 512
+    assert settings.model_max_output_tokens == 1024
     assert settings.model_max_prompt_tokens == 8000
     assert settings.model_name == DEFAULT_GEMINI_MODEL == "gemini-3.8-flash"
     assert settings.model_thinking_budget == 0

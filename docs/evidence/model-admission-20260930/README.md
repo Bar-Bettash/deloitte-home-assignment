@@ -36,6 +36,18 @@ The reports contain the test questions and the model's structured outputs only; 
 | What share of Anchorage traffic goes on long-haul routes? | ANC `long_haul_share`, 2025 |
 | Is there unmet passenger demand at San Francisco International? | SFO `sfo_pressure`, 2025 |
 
+## Re-run at the 1,024-token output cap (2026-09-30, same day)
+
+A browser acceptance pass turned up an intermittent `model_incomplete`: a typed question asked while a New England result was on screen came back unanswered. Safe metadata from the reproduced failure (no question, key or model output was recorded): finish reason `MAX_TOKENS`, 790 prompt tokens, 7 answer tokens, 491 thinking tokens, a 512-token cap, previous analysis present. `thinkingBudget: 0` does not fully stop `gemini-3.8-flash` from thinking; 72 to 491 thinking tokens were measured. The failure hit 1 of 8 calls with the previous analysis and 0 of 8 without it.
+
+`MODEL_MAX_OUTPUT_TOKENS` now defaults to 1,024 (in `app/backend/app/settings.py`). The adapter file is unchanged, so the admitted SHA-256 above still applies. The same case then passed 12 of 12 calls. All three sets were re-run at the new cap:
+
+| Set | File | Result | Errors | Cost (USD) | Latency p50 / p95 |
+|---|---|---|---|---|---|
+| 30-case development corpus | [corpus-30-cap1024.json](corpus-30-cap1024.json) | 30/30, pass | 0 | 0.0341 | 1.59 s / 3.52 s |
+| 12-case holdout | [holdout-12-cap1024.json](holdout-12-cap1024.json) | 12/12, pass | 0 | 0.0144 | 1.70 s / 2.48 s |
+| 8-case assignment wording | [assignment-8-cap1024.json](assignment-8-cap1024.json) | 8/8, pass | 0 | 0.0097 | 1.85 s / 4.16 s |
+
 ## How we got here
 
 1. `gemini-2.5-flash` with the first Gemini prompt: 22/30 (5 contract rejections, 3 wrong kinds). Not admitted.

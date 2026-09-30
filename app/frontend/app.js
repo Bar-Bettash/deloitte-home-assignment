@@ -222,6 +222,20 @@ function showQuestionError(text) {
   question.setAttribute("aria-invalid", "true");
 }
 
+// A failed chat request is reported next to the composer, which stays open with
+// the question kept for editing; the previous result is left untouched.
+function showChatError(text) {
+  feedback.hidden = true;
+  showQuestionError(text);
+  $("#question-error").scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+}
+
+function chatErrorMessage(detail) {
+  if (!detail) return connectionFailureMessage;
+  if (detail.code === "ai_unavailable") return "Couldn’t interpret that question. Try again or use one of the preset analyses.";
+  return detail.message;
+}
+
 function showScopeErrors(errors) {
   for (const field of ["action", "airports", "metric", "year", "threshold"]) clearScopeError(field);
   const shown = new Set();
@@ -285,6 +299,7 @@ async function submitRequest(request) {
     if (generation !== requestGeneration) return;
     if (!response.ok) {
       const detail = parseErrorResponse(payload);
+      if (kind === "followup") { showChatError(chatErrorMessage(detail)); return; }
       if (detail) showRequestError(detail, response.status);
       else showFeedback(connectionFailureMessage, true);
       if (latestSuccessfulResult && kind === "analysis") renderResult(latestSuccessfulResult, true);
@@ -309,9 +324,11 @@ async function submitRequest(request) {
     showResultReady(result.status === "partial" ? "Partial result received. Review unavailable metrics, exclusions, and limitations." : "Analysis received.");
   } catch (error) {
     if (generation !== requestGeneration) return;
-    showFeedback(error.name === "AbortError"
+    const failure = error.name === "AbortError"
       ? "Request timed out. The previous result is retained. Retry explicitly; no retry was sent."
-      : connectionFailureMessage, true);
+      : connectionFailureMessage;
+    if (kind === "followup") { showChatError(failure); return; }
+    showFeedback(failure, true);
     if (latestSuccessfulResult && kind === "analysis") renderResult(latestSuccessfulResult, true);
   } finally {
     clearTimeout(timeout);

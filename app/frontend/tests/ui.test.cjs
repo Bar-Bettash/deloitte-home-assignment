@@ -1235,9 +1235,10 @@ test('ai_unavailable keeps the server message and says presets still work', asyn
   ui.nodes.get('#question').value = 'Which airport is busiest?';
   ui.nodes.get('#chat-form').listeners.submit({ preventDefault() {} });
   await new Promise(resolve => setImmediate(resolve));
-  const text = ui.nodes.get('#feedback').textContent;
-  assert.match(text, /^AI interpretation is unavailable\. /);
-  assert.match(text, /Presets and Adjust scope still work/);
+  const error = ui.nodes.get('#question-error');
+  assert.equal(error.hidden, false, 'the chat error is shown next to the composer');
+  assert.equal(error.textContent, 'Couldn’t interpret that question. Try again or use one of the preset analyses.');
+  assert.doesNotMatch(error.textContent, /ai_unavailable|model_incomplete|Gemini|503/);
 });
 
 // Regressions for the detached follow-up trigger, follow-up/explain flow and KPI rendering.
@@ -1306,9 +1307,8 @@ test('typing a follow-up keeps the result current; sending it reaches the server
   assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result', 'the prior result stays current');
   assert.equal(ui.run('latestSuccessfulResult.result_id'), 'result-1');
   assert.ok(content(ui.nodes.get('#result')).includes('A qualified summary'));
-  const text = ui.nodes.get('#feedback').textContent;
-  assert.match(text, /^AI interpretation is unavailable\./);
-  assert.match(text, /Presets and Adjust scope still work/);
+  assert.equal(ui.nodes.get('#feedback').hidden, true, 'no stale loading message is left behind');
+  assert.equal(ui.nodes.get('#question-error').textContent, 'Couldn’t interpret that question. Try again or use one of the preset analyses.');
   assert.equal(question.value, 'Why is LAX higher?', 'the unsent question is kept for editing');
 });
 

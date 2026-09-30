@@ -566,3 +566,14 @@
       #result .fullwidth-insights .table-region th,#result .fullwidth-insights .table-region td { min-width: 0; padding-inline: .4rem; }
       #result .fullwidth-insights .table-region td:last-child { overflow-wrap: anywhere; }
     }
+    /* A chat error sits directly above the composer so it is visible without scrolling the result panel. */
+    .conversation-composer .chat-error { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); margin: 0; padding: 10px 14px; border: 1px solid rgba(255, 170, 165, .45); border-radius: 12px; background: rgba(13, 28, 66, .97); color: #ffaaa5; font-size: .92rem; line-height: 1.4; box-shadow: 0 8px 24px rgba(0, 0, 0, .25); }
+    .conversation-composer .chat-error:focus { outline: 2px solid var(--focus); outline-offset: 2px; }
+    /* The generic metrics table takes the full result width, and its last column is never cut off. */
+    .dashboard-grid:has(> .metric-view > .table-region) { grid-template-columns: minmax(0, 1fr); }
+    .dashboard-grid:has(> .metric-view > .table-region) > * { grid-column: 1; }
+    #result .table-region { scrollbar-gutter: stable; }
+    #result .table-region th:last-child,#result .table-region td:last-child { padding-right: 1rem; }
+    #result .metric-view > .table-region table { min-width: 0; }
+    #result .metric-view > .table-region th,#result .metric-view > .table-region td { min-width: 0; padding-inline: .45rem; }
+    #result .metric-view > .table-region td:last-child { overflow-wrap: anywhere; padding-right: 1rem; }
