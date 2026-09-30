@@ -29,14 +29,37 @@ Return only one structured outcome. Choose analysis only when the user's request
 unambiguously maps to the supplied analysis fields and supported periods. Never
 invent an airport, year, metric, threshold, source result, or business quantity.
 Ask for clarification when the request is ambiguous. Mark unsupported business
-claims, arbitrary data access, and unqualified periods unsupported. One analysis
-per question. A follow-up may use only the validated previous analysis supplied
-in context; if it needs prior context and none is supplied, ask for clarification.
-A follow-up keeps the previous analysis's year unless the user names another.
-Supported periods are calendar years 2023, 2024 and 2025. If the user names no
-year, set year to null: the server then uses the newest accepted period (2025,
-compared with 2024). Growth and screen scores need a comparison year (2024 or
-2025); operational and SFO metrics support 2024 and 2025. Any other year is
+claims, arbitrary data access, and unqualified periods unsupported.
+
+Analysis field rules. Every analysis field is always present; set each field the
+action does not use to null.
+- rank: region new_england or a list of New England airports, one metric. Ranking
+  is limited to New England airports; a ranking of any other airport is
+  unsupported_scope.
+- compare: exactly two airports and one metric; region null.
+- metric: exactly one airport and one metric; region null.
+- explain: explains the previous result. Set action to explain and every other
+  field to null.
+- threshold_miles is used only with long_haul_share; otherwise null.
+
+Scope rules.
+- One analysis per message. A message that asks for several analyses at once
+  (for example two metrics, or two separate questions) is unsupported_scope; the
+  user must submit one analysis at a time.
+- When a place could mean more than one supported airport, or names no specific
+  supported airport, return clarification_required. Never guess an airport.
+
+Follow-ups. A follow-up may use only the validated previous analysis supplied in
+context; if it needs prior context and none is supplied, ask for clarification.
+A follow-up keeps the previous analysis's airports, action and year unless the
+user changes them. A follow-up that only narrows or switches the metric (for
+example to one operational measure) after a comparison stays a comparison of the
+same two airports.
+
+Periods. Supported periods are calendar years 2023, 2024 and 2025. If the user
+names no year, set year to null: the server then uses the newest accepted period
+(2025, compared with 2024). Growth and screen scores need a comparison year (2024
+or 2025); operational and SFO metrics support 2024 and 2025. Any other year is
 unsupported. The server independently validates every analysis and supplies all
 user-visible wording. When kind is not analysis, set analysis to null."""
 # Recorded in evaluation reports so a result names the exact prompt and adapter.
@@ -49,30 +72,38 @@ _METRICS = [
     "diversion_rate", "departure_delay_minutes", "taxi_out_minutes",
     "sfo_enplaned_trend", "sfo_pressure",
 ]
-# Gemini responseSchema uses the OpenAPI subset: upper-case types, `nullable`,
-# and string-only enums. The contract re-validates everything the model returns.
-_ANALYSIS_FIELDS = {
-    "action": {"type": "STRING", "enum": ["rank", "compare", "metric", "explain"]},
-    "airports": {"type": "ARRAY", "nullable": True, "items": {"type": "STRING", "enum": sorted(AIRPORTS)}},
-    "region": {"type": "STRING", "nullable": True, "enum": ["new_england"]},
-    "metric": {"type": "STRING", "nullable": True, "enum": _METRICS},
-    "year": {"type": "INTEGER", "nullable": True},
-    "threshold_miles": {"type": "NUMBER", "nullable": True},
+
+
+def _nullable(schema: dict[str, object]) -> dict[str, object]:
+    return {"anyOf": [schema, {"type": "null"}]}
+
+
+# JSON Schema for generationConfig.responseFormat.text.schema (responseSchema is
+# deprecated). The analysis object is fixed-shape: every field is required and
+# unused ones are null, with no extra properties. The contract (AnalysisRequest)
+# stays the authoritative validator and re-checks everything the model returns.
+_ANALYSIS_FIELDS: dict[str, dict[str, object]] = {
+    "action": {"type": "string", "enum": ["rank", "compare", "metric", "explain"]},
+    "airports": _nullable({"type": "array", "items": {"type": "string", "enum": sorted(AIRPORTS)}}),
+    "region": _nullable({"type": "string", "enum": ["new_england"]}),
+    "metric": _nullable({"type": "string", "enum": _METRICS}),
+    "year": {"type": ["integer", "null"]},
+    "threshold_miles": {"type": ["number", "null"]},
+}
+_ANALYSIS_SCHEMA = {
+    "type": "object",
+    "properties": _ANALYSIS_FIELDS,
+    "required": list(_ANALYSIS_FIELDS),
+    "additionalProperties": False,
 }
 OUTPUT_SCHEMA = {
-    "type": "OBJECT",
+    "type": "object",
     "properties": {
-        "kind": {"type": "STRING", "enum": ["analysis", "clarification_required", "unsupported_scope"]},
-        "analysis": {
-            "type": "OBJECT",
-            "nullable": True,
-            "properties": _ANALYSIS_FIELDS,
-            "required": ["action"],
-            "propertyOrdering": list(_ANALYSIS_FIELDS),
-        },
+        "kind": {"type": "string", "enum": ["analysis", "clarification_required", "unsupported_scope"]},
+        "analysis": _nullable(_ANALYSIS_SCHEMA),
     },
     "required": ["kind", "analysis"],
-    "propertyOrdering": ["kind", "analysis"],
+    "additionalProperties": False,
 }
 _REFUSAL_FINISH = frozenset({"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY"})
 
@@ -88,10 +119,13 @@ class ModelAdapterError(Exception):
     def __init__(self, code: Literal[
         "ai_unavailable", "model_timeout", "model_incomplete", "model_refusal",
         "model_invalid_response", "model_prompt_too_large",
-    ], provider_status: int | None = None) -> None:
+    ], provider_status: int | None = None, usage: ModelUsage | None = None) -> None:
         self.code = code
         # HTTP status from the provider, for the server log only (never the client).
         self.provider_status = provider_status
+        # Token usage of a call that succeeded over HTTP but whose output was
+        # rejected; evaluation uses it to cost billed-but-rejected calls.
+        self.usage = usage
         super().__init__(code)
 
 
@@ -132,8 +166,7 @@ def _make_input(message: str, context: Mapping[str, object] | None, settings: Se
 
 def _request_json(settings: Settings, user_input: str) -> dict[str, object]:
     generation: dict[str, object] = {
-        "responseMimeType": "application/json",
-        "responseSchema": OUTPUT_SCHEMA,
+        "responseFormat": {"text": {"mimeType": "APPLICATION_JSON", "schema": OUTPUT_SCHEMA}},
         "maxOutputTokens": settings.model_max_output_tokens,
         "temperature": 0,
     }
@@ -198,6 +231,14 @@ def _parse_response(body: object) -> ModelInterpretation:
     if not isinstance(body, dict):
         raise ModelAdapterError("model_invalid_response")
     usage = _parse_usage(body)
+    try:
+        return _interpret(body, usage)
+    except ModelAdapterError as exc:
+        exc.usage = usage
+        raise
+
+
+def _interpret(body: dict[str, object], usage: ModelUsage) -> ModelInterpretation:
     try:
         parsed = json.loads(_response_text(body))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:

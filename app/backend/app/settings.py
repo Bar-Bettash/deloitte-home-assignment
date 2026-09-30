@@ -34,13 +34,18 @@ class Settings(BaseModel):
     model_max_output_tokens: Annotated[int, Field(strict=True, gt=0, le=512)] = 512
     model_max_prompt_tokens: Annotated[int, Field(strict=True, gt=0, le=8000)] = 8000
 
-    # Free text is on exactly when a Gemini API key is configured. Spend is capped
-    # by the Google project's quota and budget, not by process-local accounting.
+    # Candidate evaluation may use model_access_available (a key is set). Runtime
+    # free text additionally requires the separate, exact admission record below;
+    # a key alone never enables chat. Spend is capped by the Google project's
+    # quota and budget, not by process-local accounting.
     model_api_key: SecretStr | None = None
     model_name: Annotated[str, Field(min_length=1, max_length=100)] = DEFAULT_GEMINI_MODEL
     # Gemini thinking tokens count against the output cap; 0 turns thinking off on
     # Flash models. None omits thinkingConfig for models that reject a budget.
     model_thinking_budget: Annotated[int, Field(strict=True, ge=0, le=24576)] | None = 0
+    model_runtime_enabled: Annotated[bool, Field(strict=True)] = False
+    model_admitted_name: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    model_admitted_adapter_sha256: Annotated[str, Field(min_length=64, max_length=64)] | None = None
 
     @field_validator("model_api_key", mode="before")
     @classmethod
@@ -57,16 +62,33 @@ class Settings(BaseModel):
             raise ValueError("model API key is malformed")
         return value
 
-    @field_validator("model_name")
+    @field_validator("model_name", "model_admitted_name")
     @classmethod
     def validate_model_name(cls, value: str | None) -> str | None:
         if value is not None and not re.fullmatch(r"[A-Za-z0-9._:-]{1,100}", value):
             raise ValueError("model name is malformed")
         return value
 
+    @field_validator("model_admitted_adapter_sha256")
+    @classmethod
+    def validate_admitted_adapter_hash(cls, value: str | None) -> str | None:
+        if value is not None and not re.fullmatch(r"[0-9a-f]{64}", value):
+            raise ValueError("admitted adapter hash must be lowercase SHA-256 hex")
+        return value
+
     @property
     def model_access_available(self) -> bool:
         return self.model_api_key is not None
+
+    def model_runtime_admitted(self, adapter_hash: str) -> bool:
+        """Fail closed unless the exact model and adapter are admitted."""
+        return (
+            self.model_runtime_enabled
+            and self.model_access_available
+            and self.model_admitted_name == self.model_name
+            and self.model_admitted_adapter_sha256 is not None
+            and self.model_admitted_adapter_sha256 == adapter_hash
+        )
 
 
 _ENV_FIELDS = {
@@ -82,6 +104,9 @@ _ENV_FIELDS = {
     "GEMINI_API_KEY": "model_api_key",
     "GEMINI_MODEL": "model_name",
     "GEMINI_THINKING_BUDGET": "model_thinking_budget",
+    "MODEL_RUNTIME_ENABLED": "model_runtime_enabled",
+    "MODEL_ADMITTED_NAME": "model_admitted_name",
+    "MODEL_ADMITTED_ADAPTER_SHA256": "model_admitted_adapter_sha256",
 }
 
 _INTEGER_FIELDS = {
@@ -135,6 +160,11 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
         if "model_thinking_budget" in values:
             budget = str(values["model_thinking_budget"]).strip().lower()
             values["model_thinking_budget"] = None if budget in {"", "default"} else int(budget)
+        if "model_runtime_enabled" in values:
+            enabled = values["model_runtime_enabled"]
+            if not isinstance(enabled, str) or enabled.lower() not in {"true", "false"}:
+                raise ValueError("MODEL_RUNTIME_ENABLED must be true or false")
+            values["model_runtime_enabled"] = enabled.lower() == "true"
     except (TypeError, ValueError) as exc:
         raise ValueError("numeric setting is malformed") from exc
     return Settings.model_validate(values)

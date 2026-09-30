@@ -152,7 +152,7 @@ AI is used in **exactly one place**: `app/backend/app/model_adapter.py` turns a 
 | **What the model never does** | It never produces numbers, SQL, citations or text shown to the analyst. Everything shown comes from the deterministic engine and fixed templates. |
 | **Validation** | The model's output is checked by the same strict contract used for presets: a closed list of airports, metrics and years, and no extra fields. Anything outside that list is refused with a clear message. |
 | **Limits** | Up to 4,000 characters in; up to 512 output tokens; temperature 0; thinking off by default; a 20 s timeout; spend capped by the Google project's quota or budget. |
-| **Switch and check** | Free text is on only when `GEMINI_API_KEY` is set. A 30-question evaluation script (`scripts/eval_intents.py`) measures how well the model maps questions to requests. |
+| **Admission gate** | Free text stays off until the chosen model passes a 30-case evaluation (at least 29 of 30) and an unseen 12-case holdout (at least 11 of 12), both with zero errors (`scripts/eval_intents.py`). The server then calls the model only if `MODEL_RUNTIME_ENABLED=true`, the model name matches the admitted name, and the SHA-256 of the adapter file matches the admitted hash, so an unreviewed change to the prompt or code turns the feature off. A Gemini key alone never enables free text. |
 | **Failure** | Any provider error becomes a safe `ai_unavailable` or `query_timeout` response. Presets and the scope controls work without the model. |
 
 The design keeps AI where it adds value, which is understanding loosely worded questions. It keeps AI out of places where it could make up a figure.
@@ -185,7 +185,7 @@ The design keeps AI where it adds value, which is understanding loosely worded q
 |---|---|
 | Four workflows, follow-ups and error paths | Locally tested. Python: 724 passed, 0 skipped on the author's Mac; 722 passed, 2 skipped on hosts without the two author-local raw inputs. UI: 102 passed. Every figure was recomputed independently. 23,474 API cases ran with no server errors. ([evidence](docs/evidence/)) |
 | Packaged data matches the official sources | Source-checked on 2026-09-27 ([activation review](docs/evidence/recent-data-activation-review.md)). The 2026-09-29 recheck blocked on FAA's final CY2025 file, which leaves the New England cohort and figures unchanged ([FAA impact check](docs/evidence/faa-final-cy2025-impact-20260929.md)). The app serves the frozen accepted snapshot. |
-| Free-text model | Gemini adapter implemented and tested offline against the documented API shape. Not yet run with a real key; without `GEMINI_API_KEY`, free text returns `503 ai_unavailable`. |
+| Free-text model | Gemini adapter implemented and tested offline against the documented API shape. Not yet admitted: free text returns `503 ai_unavailable` until a model passes both evaluations and the admission variables are set. |
 | Hosted deployment | Packaged for Vercel and checked offline. Not deployed yet ([package check](docs/evidence/vercel-package-check.md)). |
 
 For more detail, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (modules, numerical definitions, how data is refreshed) and [docs/API_UI_MAP.md](docs/API_UI_MAP.md) (the HTTP contract).

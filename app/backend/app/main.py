@@ -24,7 +24,7 @@ from app.contracts import (
     validate_request_body_size,
 )
 from app.dispatch import DispatchFailure, dispatch_analysis
-from app.model_adapter import ModelAdapterError, interpret_message
+from app.model_adapter import ADAPTER_SHA256, ModelAdapterError, interpret_message
 from app.query_slots import QuerySlots
 from app.settings import HostingConfig, HostingConfigError, load_hosting, load_local_env, load_settings
 from fastapi import FastAPI, Request
@@ -370,7 +370,9 @@ async def query(request: Request) -> AnalysisResult | JSONResponse:
     if analysis is None:
         try:
             settings = load_settings()
-            admitted = settings.model_access_available
+            # Fail closed: a key alone never enables free text. The exact model
+            # and this adapter file's hash must also be admitted.
+            admitted = settings.model_runtime_admitted(ADAPTER_SHA256)
         except (ValueError, ValidationError):
             admitted = False
         if not admitted:

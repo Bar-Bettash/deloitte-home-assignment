@@ -26,6 +26,8 @@ def test_defaults_enforce_documented_prototype_limits() -> None:
     assert settings.model_name == DEFAULT_GEMINI_MODEL == "gemini-2.5-flash"
     assert settings.model_thinking_budget == 0
     assert settings.model_access_available is False
+    assert settings.model_runtime_enabled is False
+    assert settings.model_runtime_admitted("a" * 64) is False
 
 
 def test_missing_model_access_keeps_settings_usable_for_presets() -> None:
@@ -58,12 +60,67 @@ def test_validated_environment_overrides_are_typed() -> None:
     assert settings.model_api_key.get_secret_value() == "test-key-value"
     assert settings.model_name == "gemini-test.model-v1"
     assert settings.model_thinking_budget == 256
+    assert settings.model_runtime_admitted("a" * 64) is False
 
 
-def test_free_text_is_available_exactly_when_a_key_is_set() -> None:
+def test_model_access_means_a_key_is_set_not_that_runtime_is_admitted() -> None:
     assert load_settings({"GEMINI_API_KEY": "fake-key"}).model_access_available is True
+    assert load_settings({"GEMINI_API_KEY": "fake-key"}).model_runtime_admitted("a" * 64) is False
     assert load_settings({"GEMINI_API_KEY": "   "}).model_access_available is False
     assert load_settings({"GEMINI_MODEL": "gemini-2.5-pro"}).model_access_available is False
+
+
+_ADMITTED = {
+    "GEMINI_API_KEY": "fake-key",
+    "GEMINI_MODEL": "demo.model-v1",
+    "MODEL_RUNTIME_ENABLED": "true",
+    "MODEL_ADMITTED_NAME": "demo.model-v1",
+    "MODEL_ADMITTED_ADAPTER_SHA256": "a" * 64,
+}
+
+
+def test_exact_runtime_admission_requires_explicit_model_and_adapter() -> None:
+    admitted = load_settings({**_ADMITTED, "MODEL_RUNTIME_ENABLED": "TrUe"})
+    assert admitted.model_runtime_admitted("a" * 64) is True
+    assert admitted.model_runtime_admitted("b" * 64) is False
+    assert admitted.model_runtime_enabled is True
+
+
+@pytest.mark.parametrize("missing", [
+    "GEMINI_API_KEY", "MODEL_RUNTIME_ENABLED", "MODEL_ADMITTED_NAME", "MODEL_ADMITTED_ADAPTER_SHA256",
+])
+def test_runtime_admission_fails_closed_when_any_field_is_missing(missing: str) -> None:
+    values = dict(_ADMITTED)
+    values.pop(missing)
+    assert load_settings(values).model_runtime_admitted("a" * 64) is False
+
+
+def test_runtime_admission_requires_exact_model_name() -> None:
+    settings = load_settings({**_ADMITTED, "MODEL_ADMITTED_NAME": "demo.model-v2"})
+    assert settings.model_access_available is True
+    assert settings.model_runtime_admitted("a" * 64) is False
+
+
+def test_admitted_name_is_compared_with_the_effective_default_model() -> None:
+    values = {**_ADMITTED, "MODEL_ADMITTED_NAME": DEFAULT_GEMINI_MODEL}
+    values.pop("GEMINI_MODEL")
+    assert load_settings(values).model_runtime_admitted("a" * 64) is True
+    values["GEMINI_MODEL"] = "gemini-other"
+    assert load_settings(values).model_runtime_admitted("a" * 64) is False
+
+
+@pytest.mark.parametrize("overrides", [
+    {"MODEL_RUNTIME_ENABLED": "1"},
+    {"MODEL_RUNTIME_ENABLED": "yes"},
+    {"MODEL_RUNTIME_ENABLED": ""},
+    {"MODEL_ADMITTED_NAME": "unsafe model name"},
+    {"MODEL_ADMITTED_ADAPTER_SHA256": "a" * 63},
+    {"MODEL_ADMITTED_ADAPTER_SHA256": "A" * 64},
+    {"MODEL_ADMITTED_ADAPTER_SHA256": "g" * 64},
+])
+def test_invalid_admission_values_rejected(overrides: dict[str, str]) -> None:
+    with pytest.raises(ValueError):
+        load_settings(overrides)
 
 
 @pytest.mark.parametrize(("raw", "expected"), [("", None), ("default", None), (" Default ", None), ("0", 0), ("1024", 1024)])
@@ -75,13 +132,13 @@ def test_blank_model_name_falls_back_to_default() -> None:
     assert load_settings({"GEMINI_MODEL": "  "}).model_name == DEFAULT_GEMINI_MODEL
 
 
-def test_removed_openai_and_admission_settings_are_not_read() -> None:
+def test_removed_openai_settings_are_not_read() -> None:
     settings = load_settings({
-        "OPENAI_API_KEY": "not-read", "OPENAI_MODEL": "not-read", "MODEL_RUNTIME_ENABLED": "true",
-        "MODEL_ADMITTED_NAME": "x", "MODEL_ADMITTED_ADAPTER_SHA256": "a" * 64, "MODEL_REASONING_EFFORT": "low",
+        "OPENAI_API_KEY": "not-read", "OPENAI_MODEL": "not-read", "MODEL_REASONING_EFFORT": "low",
     })
     assert settings.model_access_available is False
-    assert not hasattr(settings, "model_runtime_enabled")
+    assert settings.model_name == DEFAULT_GEMINI_MODEL
+    assert not hasattr(settings, "model_reasoning_effort")
 
 
 @pytest.mark.parametrize(

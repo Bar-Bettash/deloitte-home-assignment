@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "holdout-safety-01-rank-outside-new-england",
+      "category": "safety_clarification",
+      "input": {"text": "Put ANC, LAX and SFO in order of seat occupancy for 2025", "context": null},
+      "expected": {"kind": "unsupported_scope", "message": "Ranking is limited to New England airports."}
+    },
+    {
+      "id": "holdout-safety-02-ambiguous-state",
+      "category": "safety_clarification",
+      "input": {"text": "Show seat occupancy for the Maine airport in 2024", "context": null},
+      "expected": {"kind": "clarification_required", "message": "Maine has several supported airports; name one."}
+    },
+    {
+      "id": "holdout-safety-03-two-analyses",
+      "category": "safety_clarification",
+      "input": {"text": "Give me BOS passengers for 2025, and separately rank New England by screen score", "context": null},
+      "expected": {"kind": "unsupported_scope", "message": "Submit one analysis at a time."}
+    },
+    {
+      "id": "holdout-safety-04-followup-without-context",
+      "category": "safety_clarification",
+      "input": {"text": "Now do the same for 2023", "context": null},
+      "expected": {"kind": "clarification_required", "message": "A follow-up needs a previous analysis."}
+    },
+    {
+      "id": "holdout-safety-05-explain-without-context",
+      "category": "safety_clarification",
+      "input": {"text": "Why did that come out so high?", "context": null},
+      "expected": {"kind": "clarification_required", "message": "An explanation needs a previous result."}
+    },
+    {
+      "id": "holdout-ordinary-01-filter-after-compare",
+      "category": "ordinary",
+      "input": {"text": "Just the taxi-out times, please", "context": {"action": "compare", "airports": ["LAX", "SNA"], "metric": "congestion", "year": 2024}},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["LAX", "SNA"], "metric": "taxi_out_minutes", "year": 2024}}
+    },
+    {
+      "id": "holdout-ordinary-02-explain-previous",
+      "category": "ordinary",
+      "input": {"text": "Can you walk me through how you got that number?", "context": {"action": "metric", "airports": ["BOS"], "metric": "passengers", "year": 2025, "bundle_id": "annual-2025-r1"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "explain"}}
+    },
+    {
+      "id": "holdout-ordinary-03-followup-new-year",
+      "category": "ordinary",
+      "input": {"text": "What about the 2024 version of that list?", "context": {"action": "rank", "region": "new_england", "metric": "passenger_growth", "year": 2025}},
+      "expected": {"kind": "analysis", "analysis": {"action": "rank", "region": "new_england", "metric": "passenger_growth", "year": 2024}}
+    },
+    {
+      "id": "holdout-ordinary-04-long-haul-default",
+      "category": "ordinary",
+      "input": {"text": "How much of Anchorage's traffic counts as long-haul?", "context": null},
+      "expected": {"kind": "analysis", "analysis": {"action": "metric", "airports": ["ANC"], "metric": "long_haul_share", "threshold_miles": 3000}}
+    },
+    {
+      "id": "holdout-ordinary-05-compare-two-new-england",
+      "category": "ordinary",
+      "input": {"text": "Put Portland, Maine and Burlington side by side on seats for 2023", "context": null},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["PWM", "BTV"], "metric": "seats", "year": 2023}}
+    },
+    {
+      "id": "holdout-ordinary-06-single-operational-metric",
+      "category": "ordinary",
+      "input": {"text": "Average taxi-out minutes at Santa Ana in 2024?", "context": null},
+      "expected": {"kind": "analysis", "analysis": {"action": "metric", "airports": ["SNA"], "metric": "taxi_out_minutes", "year": 2024}}
+    },
+    {
+      "id": "holdout-ordinary-07-rank-new-england",
+      "category": "ordinary",
+      "input": {"text": "Order the New England airports by how full their seats were in 2025", "context": null},
+      "expected": {"kind": "analysis", "analysis": {"action": "rank", "region": "new_england", "metric": "seat_occupancy", "year": 2025}}
+    }
+  ]
+}

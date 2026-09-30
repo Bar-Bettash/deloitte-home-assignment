@@ -48,7 +48,11 @@ def context_claims(http_client):
 
 
 def admitted_settings(**overrides):
-    values = {"model_api_key": "offline-test-only", "model_name": "fake-model"}
+    values = {
+        "model_api_key": "offline-test-only", "model_name": "fake-model",
+        "model_runtime_enabled": True, "model_admitted_name": "fake-model",
+        "model_admitted_adapter_sha256": main.ADAPTER_SHA256,
+    }
     values.update(overrides)
     return Settings.model_validate(values)
 
@@ -600,6 +604,43 @@ def test_free_text_without_a_gemini_key_never_calls_the_model(monkeypatch):
     response = client.post("/api/query", json={"message": "How many PVD passengers in 2024?"})
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "ai_unavailable"
+
+
+def _assert_free_text_refused_without_model_call(monkeypatch, settings):
+    monkeypatch.setattr(main, "load_settings", lambda: settings)
+
+    async def fail(*_args, **_kwargs):
+        raise AssertionError("an unadmitted request reached the model")
+
+    monkeypatch.setattr(main, "interpret_message", fail)
+    response = client.post("/api/query", json={"message": "How many PVD passengers in 2024?"})
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "ai_unavailable"
+
+
+def test_a_key_alone_never_enables_free_text(monkeypatch):
+    _assert_free_text_refused_without_model_call(
+        monkeypatch, Settings.model_validate({"model_api_key": "offline-test-only", "model_name": "fake-model"}))
+
+
+@pytest.mark.parametrize("overrides", [
+    {"model_runtime_enabled": False},
+    {"model_admitted_name": "other-model"},
+    {"model_admitted_name": None},
+    {"model_admitted_adapter_sha256": None},
+    {"model_admitted_adapter_sha256": "0" * 64},
+    {"model_api_key": None},
+])
+def test_any_admission_mismatch_fails_closed(monkeypatch, overrides):
+    _assert_free_text_refused_without_model_call(monkeypatch, admitted_settings(**overrides))
+
+
+def test_old_prompt_hash_cannot_admit_changed_adapter(monkeypatch):
+    from app.model_adapter import PROMPT_SHA256
+
+    assert PROMPT_SHA256 != main.ADAPTER_SHA256
+    _assert_free_text_refused_without_model_call(
+        monkeypatch, admitted_settings(model_admitted_adapter_sha256=PROMPT_SHA256))
 
 
 def test_provider_http_status_is_logged_but_not_returned(monkeypatch, caplog):

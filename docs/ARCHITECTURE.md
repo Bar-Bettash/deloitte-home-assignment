@@ -25,7 +25,7 @@ flowchart LR
     Guard --> API[main.py query route]
     API --> Contract[contracts.py strict validation]
     API <-->|airport_context cookie| Ctx[context_token.py HMAC sign/verify]
-    API -.->|free text, only when a key is set| Model[model_adapter.py: one Gemini generateContent call]
+    API -.->|free text, only when admitted| Model[model_adapter.py: one Gemini generateContent call]
     Model -.->|validated AnalysisRequest| Dispatch
     Contract --> Dispatch[dispatch.py deterministic routing]
     Dispatch --> Calc[calculations/*]
@@ -39,7 +39,7 @@ flowchart LR
 
 | Module | Responsibility |
 |---|---|
-| `main.py` | Transport, the HostGuard, safe errors, the 30 s query deadline, per-instance concurrency slots, the context cookie and the model switch |
+| `main.py` | Transport, the HostGuard, safe errors, the 30 s query deadline, per-instance concurrency slots, the context cookie and the model admission gate |
 | `contracts.py` | The strict request, result and error models, including the closed list of airports, metrics and years |
 | `dispatch.py` | Resolves the bundle and year, routes each request to one calculation, and projects typed results |
 | `calculations/` | Plain functions |
@@ -123,13 +123,21 @@ Any instance with the same `APP_SIGNING_KEY` can verify the cookie, so no server
 
 There is **no login** and no in-app spending ledger. Model cost is bounded by caps on each call and by the Google project's quota or budget (see the next section).
 
-### Model switch
+### Model gate
 
-A `message` request reaches the model only when `GEMINI_API_KEY` is set (`settings.model_access_available`). Otherwise it gets `503 ai_unavailable`, and structured requests are unaffected. A local run also reads `backend/.env` through `settings.load_local_env`; shell variables win, and the file is ignored on Vercel and in tests.
+A `message` request reaches the model only when `settings.model_runtime_admitted(ADAPTER_SHA256)` is true. That requires all of the following:
+
+- `GEMINI_API_KEY` is set
+- `MODEL_RUNTIME_ENABLED=true`
+- `MODEL_ADMITTED_NAME` equals the model in use (`GEMINI_MODEL`, default `gemini-2.5-flash`)
+- `MODEL_ADMITTED_ADAPTER_SHA256` equals the SHA-256 of `model_adapter.py`
+
+If any of these fails, the request gets `503 ai_unavailable`, and structured requests are unaffected. A key alone never enables free text; it only lets `scripts/eval_intents.py --live` evaluate a candidate. Any change to the adapter's prompt, schema or code changes its hash and turns free text off until it is re-admitted. A local run also reads `backend/.env` through `settings.load_local_env`; shell variables win, and the file is ignored on Vercel and in tests.
 
 The adapter makes one streamed POST to `https://generativelanguage.googleapis.com/v1beta/models/<GEMINI_MODEL>:generateContent`, with the key in the `x-goog-api-key` header. The call has these properties:
 
-- `responseMimeType: application/json` with a `responseSchema` (Gemini's OpenAPI subset), temperature 0.
+- `generationConfig.responseFormat.text` with `mimeType: APPLICATION_JSON` and a JSON Schema (the documented replacement for the deprecated `responseSchema`), temperature 0. The analysis object is fixed-shape: all six fields (`action`, `airports`, `region`, `metric`, `year`, `threshold_miles`) are required, unused ones are null, extra properties are not allowed, and enums mirror the contract. `AnalysisRequest` remains the authoritative validator.
+- The system instruction states general contract rules: rank is New England only; compare takes exactly two airports and metric exactly one; explain carries only the action; follow-ups keep the previous airports, action and year unless the user changes them; several analyses in one message are unsupported; an ambiguous place needs clarification.
 - It uses the settings caps: 512 output tokens, 8,000 prompt bytes, a 20 s timeout and a 64 KiB response limit.
 - `thinkingConfig.thinkingBudget` is 0 by default so thinking tokens do not eat the output cap; `GEMINI_THINKING_BUDGET=default` omits it.
 - A blocked prompt or a safety stop becomes `model_refusal`; `MAX_TOKENS` becomes `model_incomplete`; thought parts are ignored.
@@ -208,7 +216,7 @@ ruff check app/backend --ignore EXE002,SIM905
 
 **Not yet done.**
 
-- A live Gemini run with a real key.
+- A live Gemini evaluation (30-case corpus and 12-case holdout) and model admission.
 - A deployed smoke test.
 - A live freshness recheck after 2026-09-27.
 

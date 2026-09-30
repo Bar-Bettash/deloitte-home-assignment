@@ -88,8 +88,7 @@ async def test_one_request_exact_gemini_contract_and_validated_analysis() -> Non
     assert payload["systemInstruction"] == {"parts": [{"text": model_adapter.SYSTEM_PROMPT}]}
     assert payload["contents"][0]["role"] == "user"
     assert payload["generationConfig"] == {
-        "responseMimeType": "application/json",
-        "responseSchema": OUTPUT_SCHEMA,
+        "responseFormat": {"text": {"mimeType": "APPLICATION_JSON", "schema": OUTPUT_SCHEMA}},
         "maxOutputTokens": 512,
         "temperature": 0,
         "thinkingConfig": {"thinkingBudget": 0},
@@ -97,17 +96,100 @@ async def test_one_request_exact_gemini_contract_and_validated_analysis() -> Non
     assert "tools" not in payload
 
 
-def test_schema_uses_gemini_openapi_subset() -> None:
-    assert OUTPUT_SCHEMA["type"] == "OBJECT"
+def _non_null(schema: dict) -> dict:
+    """The non-null branch of a nullable field schema."""
+    if "anyOf" in schema:
+        branches = [branch for branch in schema["anyOf"] if branch != {"type": "null"}]
+        assert len(branches) == 1 and {"type": "null"} in schema["anyOf"]
+        return branches[0]
+    return schema
+
+
+def test_schema_is_a_fixed_shape_json_schema() -> None:
+    from app.contracts import AIRPORTS, METRICS, AnalysisRequest
+
+    assert OUTPUT_SCHEMA["type"] == "object"
+    assert OUTPUT_SCHEMA["additionalProperties"] is False
     assert set(OUTPUT_SCHEMA["required"]) == set(OUTPUT_SCHEMA["properties"]) == {"kind", "analysis"}
-    nested = OUTPUT_SCHEMA["properties"]["analysis"]
-    assert nested["nullable"] is True
-    assert set(nested["propertyOrdering"]) == set(nested["properties"])
-    for field in nested["properties"].values():
-        assert field["type"].isupper()
-        assert all(isinstance(value, str) for value in field.get("enum", []))
+    nested = _non_null(OUTPUT_SCHEMA["properties"]["analysis"])
+    fields = {"action", "airports", "region", "metric", "year", "threshold_miles"}
+    # Every field is always present (unused ones null) and nothing else is allowed.
+    assert nested["type"] == "object" and nested["additionalProperties"] is False
+    assert set(nested["required"]) == set(nested["properties"]) == fields
     assert "bundle_id" not in nested["properties"]
-    assert "additionalProperties" not in json.dumps(OUTPUT_SCHEMA)
+    properties = nested["properties"]
+    # Enums mirror the contract exactly.
+    assert properties["action"] == {"type": "string", "enum": ["rank", "compare", "metric", "explain"]}
+    assert set(_non_null(properties["metric"])["enum"]) == set(METRICS)
+    assert set(_non_null(properties["airports"])["items"]["enum"]) == set(AIRPORTS)
+    assert _non_null(properties["region"])["enum"] == ["new_england"]
+    assert properties["year"] == {"type": ["integer", "null"]}
+    assert properties["threshold_miles"] == {"type": ["number", "null"]}
+    for name in fields - {"action"}:
+        assert "null" in json.dumps(properties[name])
+    # The schema never admits a field the contract lacks.
+    assert fields <= set(AnalysisRequest.model_fields)
+    assert "nullable" not in json.dumps(OUTPUT_SCHEMA)
+    assert all(isinstance(value, str) for value in _non_null(properties["metric"])["enum"])
+
+
+def test_fixed_shape_output_with_nulls_is_accepted() -> None:
+    full = {"action": "compare", "airports": ["LAX", "SNA"], "region": None,
+            "metric": "cancellation_rate", "year": 2025, "threshold_miles": None}
+    _, result = asyncio.run(_captured_payload(_settings(), {"kind": "analysis", "analysis": full}))
+    assert result.as_outcome() == {"kind": "analysis", "analysis": {
+        "action": "compare", "airports": ["LAX", "SNA"], "metric": "cancellation_rate", "year": 2025}}
+    explain = {"action": "explain", "airports": None, "region": None, "metric": None, "year": None, "threshold_miles": None}
+    _, result = asyncio.run(_captured_payload(_settings(), {"kind": "analysis", "analysis": explain}))
+    assert result.as_outcome() == {"kind": "analysis", "analysis": {"action": "explain"}}
+
+
+@pytest.mark.parametrize("rule", [
+    "Ranking\n  is limited to New England airports",
+    "compare: exactly two airports",
+    "metric: exactly one airport",
+    "Set action to explain and every other\n  field to null",
+    "keeps the previous analysis's airports, action and year",
+    "after a comparison stays a comparison",
+    "user must submit one analysis at a time",
+    "return clarification_required. Never guess an airport",
+])
+def test_prompt_states_general_contract_rules(rule: str) -> None:
+    assert rule in model_adapter.SYSTEM_PROMPT
+
+
+@pytest.mark.parametrize("phrase", [
+    "Show only cancellations", "Explain that result", "Rank SFO", "Compare LA airports",
+    "SFO unmet demand", "Calculate ANC long-haul share",
+])
+def test_prompt_does_not_copy_evaluation_questions(phrase: str) -> None:
+    assert phrase.lower() not in model_adapter.SYSTEM_PROMPT.lower()
+
+
+@run_async
+async def test_rejected_output_keeps_reported_usage_for_cost_accounting() -> None:
+    bad = {"kind": "analysis", "analysis": {**_analysis(), "action": "rank", "airports": ["SFO"],
+                                             "metric": "passengers", "threshold_miles": None}}
+
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=_response(bad))
+
+    async with _client(handler) as client:
+        with pytest.raises(ModelAdapterError) as caught:
+            await interpret_message("rank it", settings=_settings(), client=client)
+    assert caught.value.code == "model_invalid_response"
+    assert (caught.value.usage.input_tokens, caught.value.usage.output_tokens) == (300, 70)
+
+
+@run_async
+async def test_http_failure_has_no_usage() -> None:
+    def handler(_request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, json={})
+
+    async with _client(handler) as client:
+        with pytest.raises(ModelAdapterError) as caught:
+            await interpret_message("ANC", settings=_settings(), client=client)
+    assert caught.value.usage is None
 
 
 def test_adapter_identity_covers_complete_source_not_only_prompt() -> None:
@@ -328,8 +410,8 @@ async def _captured_payload(settings: Settings, outcome: dict[str, object] | Non
 
 
 def test_prompt_declares_supported_periods_including_2025() -> None:
-    year = OUTPUT_SCHEMA["properties"]["analysis"]["properties"]["year"]
-    assert year == {"type": "INTEGER", "nullable": True}
+    year = _non_null(OUTPUT_SCHEMA["properties"]["analysis"])["properties"]["year"]
+    assert year == {"type": ["integer", "null"]}
     assert "2025" in model_adapter.SYSTEM_PROMPT
     assert "set year to null" in model_adapter.SYSTEM_PROMPT
 
