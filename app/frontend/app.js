@@ -283,8 +283,20 @@ function showChatError(text) {
 
 function chatErrorMessage(detail) {
   if (!detail) return connectionFailureMessage;
-  if (detail.code === "ai_unavailable") return "Couldn’t interpret that question. Try again or use one of the preset analyses.";
+  if (detail.code === "ai_unavailable") return "Natural-language analysis is temporarily unavailable. Preset analyses still work.";
   return detail.message;
+}
+
+// A new result replaces the old one in place, so the reader is returned to its
+// title and headline figures instead of the old scroll position.
+function scrollResultIntoView() {
+  const behavior = prefersReducedMotion() ? "auto" : "smooth";
+  const pane = $("#result-panel");
+  const scrollable = pane && typeof getComputedStyle === "function" && /(auto|scroll)/.test(getComputedStyle(pane).overflowY || "")
+    && pane.scrollHeight > pane.clientHeight;
+  if (scrollable) { pane.scrollTo?.({ top: 0, behavior }); return; }
+  const top = pane?.getBoundingClientRect?.().top;
+  if (typeof top === "number" && top < 0) window.scrollTo?.({ top: Math.max(0, window.scrollY + top - 12), behavior });
 }
 
 function showScopeErrors(errors) {
@@ -373,7 +385,8 @@ async function submitRequest(request) {
     if (kind === "followup") $("#question").value = "";
     renderResult(result, false);
     fadeInResult(panelWasHidden);
-    showResultReady(result.status === "partial" ? "Partial result received. Review unavailable metrics, exclusions, and limitations." : "Analysis received.");
+    scrollResultIntoView();
+    showResultReady(result.status === "partial" ? "Analysis received. Some airports or values were unavailable; see the coverage note." : "Analysis received.");
   } catch (error) {
     if (generation !== requestGeneration) return;
     const failure = error.name === "AbortError"
@@ -397,6 +410,7 @@ function enableEvidenceLink() {
   const skip = $("#result-skip");
   if (skip) {
     skip.href = "#result-title";
+    skip.hidden = false;
     skip.removeAttribute("aria-disabled");
     skip.removeAttribute("tabindex");
   }
@@ -431,7 +445,8 @@ function renderResult(result, previous) {
   resultPanel.hidden = false;
   $("#result-panel").hidden = false;
   const title = $("#result-title");
-  title.textContent = previous ? "Previous result" : result.status === "partial" ? "Partial result" : "Current result";
+  // Partial coverage is stated in the result's coverage note, not as the headline.
+  title.textContent = previous ? "Previous result" : "Current result";
   title.hidden = false;
   const another = $("#fresh");
   another.textContent = "Choose another question";
@@ -476,9 +491,18 @@ function renderResult(result, previous) {
   heading(insights, "h3", "Key insight");
   renderInsightSummary(insights, result.summary || "No summary was returned.");
   if (result.limitations.length) paragraph(insights, `Limitation · ${result.limitations[0]}`).className = "insight-limitation";
-  if (explanation && explanation.resultId === result.result_id) paragraph(insights, `Explanation · ${explanation.text}`).id = "result-explanation";
+  const coverage = coverageNote(result);
+  if (coverage) paragraph(insights, coverage).className = "insight-coverage";
   dashboard.classList.toggle("fullwidth-insights", ["sfo_pressure", "sfo_enplaned_trend"].includes(result.scope.metric));
   dashboard.append(insights);
+  // Explain output gets its own short section; it never joins the Key insight card.
+  if (explanation && explanation.resultId === result.result_id) {
+    const explained = document.createElement("section");
+    explained.className = "result-explanation";
+    heading(explained, "h3", "Explanation");
+    paragraph(explained, explanation.text).id = "result-explanation";
+    dashboard.append(explained);
+  }
   if (result.series.length || ["sfo_enplaned_trend", "sfo_pressure"].includes(result.scope.metric)) {
     const seriesPanel = document.createElement("section");
     seriesPanel.className = "series-panel";
@@ -509,6 +533,18 @@ function renderResult(result, previous) {
   $("#view-evidence").onclick = () => { evidenceGroup.open = true; evidenceHeading.focus(); };
   updateContextStrip(result, previous);
   publishResultState();
+}
+
+// Exclusions are reported as coverage ("22 of 23 airports assessed"), calmly and
+// without hiding them; the exact reasons stay under Methodology & limitations.
+function coverageNote(result) {
+  if (!result.exclusions.length) return null;
+  const codes = result.exclusions.map((item) => /^([A-Z]{3})\b/.exec(item.trim())?.[1]).filter(Boolean);
+  const why = result.exclusions.every((item) => /incomplete/i.test(item)) ? "required data was incomplete" : "required data was unavailable";
+  const named = codes.length ? codes.join(", ") : `${result.exclusions.length} airport${result.exclusions.length === 1 ? "" : "s"}`;
+  const verb = codes.length > 1 || (!codes.length && result.exclusions.length > 1) ? "were" : "was";
+  const assessed = result.rows.length < result.scope.airports.length ? `${result.rows.length} of ${result.scope.airports.length} airports assessed. ` : "";
+  return `Coverage · ${assessed}${named} ${verb} excluded because ${why}.`;
 }
 
 // A leading "Label:" in the returned summary is emphasised; the text itself is
@@ -962,14 +998,20 @@ function renderScreeningView(result, target) {
     // methodology and technical disclosures.
     list.append(item);
   };
-  for (const row of ranked.slice(0, 5)) appendRow(preview, row, true, true);
+  const top = ranked.slice(0, 5);
+  for (const row of top) appendRow(preview, row, true, true);
   target.append(preview);
+  // The disclosure continues the list below the top five; it never repeats them.
+  const rest = result.rows.filter((row) => !top.includes(row));
+  if (!rest.length) return true;
+  const restRanks = rest.map((row) => row.rank).filter(Number.isInteger);
+  const range = restRanks.length ? `Ranks ${Math.min(...restRanks)}–${Math.max(...restRanks)}` : "More airports";
   const full = document.createElement("details");
   full.className = "full-ranking-disclosure";
-  heading(full, "summary", `All ranked airports (${ranked.length})`);
+  heading(full, "summary", `${range} (${rest.length} more airport${rest.length === 1 ? "" : "s"})`);
   const list = document.createElement("div"); list.className = "ranking-list full-ranking"; list.setAttribute("role", "list");
-  list.setAttribute("aria-label", "All returned airports in backend order");
-  for (const row of result.rows) appendRow(list, row, true, true);
+  list.setAttribute("aria-label", "Remaining returned airports in backend order");
+  for (const row of rest) appendRow(list, row, true, true);
   full.append(list); target.append(full);
   return true;
 }
@@ -977,7 +1019,7 @@ function renderCongestionView(result, target) {
   if (result.scope.airports.length !== 2) return false;
   heading(target, "h3", "Operational comparison");
   const keys = ["cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"];
-  const titles = ["Cancellation rate", "Diversion rate", "Departure delay", "Taxi out"];
+  const titles = keys.map(humanMetricLabel);
   const ns = "http://www.w3.org/2000/svg";
   const legend = document.createElement("p");
   legend.className = "congestion-legend";
@@ -1088,18 +1130,36 @@ function renderGenericMetricTable(result, target) {
     target.append(action);
     return;
   }
-  const table = makeTable("Airport metrics — values supplied by the backend", ["Rank", "Airport", "Metric", "Value", "Numerator / denominator", "Eligible observations", "Comparison", "Sources"]);
+  // The headline figures are the KPI cards above. A ranking of more airports than
+  // the cards can hold gets a compact Rank / Airport / Value list. Every exact
+  // value, denominator and count moves to Methodology; source IDs stay in
+  // Technical details only.
+  const ranked = result.rows.some((row) => Number.isInteger(row.rank));
+  if (ranked || result.rows.length > 4) {
+    const list = makeTable(`${humanScopeMetricLabel(result.scope.metric)} by airport`, [ranked ? "Rank" : "Airport", ranked ? "Airport" : "Value", ...(ranked ? ["Value"] : [])]);
+    list.region.classList.add("compact-values");
+    for (const row of result.rows) {
+      const metric = row.metrics.find((item) => item.key === result.scope.metric) || row.metrics[0];
+      if (!metric) continue;
+      const value = metric.status === "unavailable" ? "Unavailable" : formatMetric(metric);
+      const tr = document.createElement("tr");
+      for (const text of ranked ? [row.rank == null ? "—" : String(row.rank), row.airport, value] : [row.airport, value]) cell(tr, text);
+      list.body.append(tr);
+    }
+    target.append(list.region);
+  }
+  const table = makeTable("Exact values by airport", ["Airport", "Measure", "Value", "Numerator / denominator", "Eligible observations", "Comparison"]);
   for (const row of result.rows) for (const metric of row.metrics) {
     const tr = document.createElement("tr");
     if (metric.key === result.scope.metric) tr.className = "selected-metric-row";
-    const direction = metric.comparison_direction ? label(metric.comparison_direction) : "—";
     const value = metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : formatMetric(metric);
-    for (const text of [row.rank == null ? "—" : String(row.rank), row.airport, label(metric.key), value,
-      metric.denominator == null ? "Not supplied" : `${formatNumber(metric.numerator)} / ${formatNumber(metric.denominator)}`,
-      metric.eligible_count == null ? "Not supplied" : formatNumber(metric.eligible_count), direction, metric.source_ids.join(", ")]) cell(tr, text);
+    for (const text of [row.airport, humanMetricLabel(metric.key), value,
+      metric.denominator == null ? "—" : `${formatNumber(metric.numerator)} / ${formatNumber(metric.denominator)}`,
+      metric.eligible_count == null ? "—" : formatNumber(metric.eligible_count),
+      metric.comparison_direction ? humanDirection(metric.comparison_direction) : "—"]) cell(tr, text);
     table.body.append(tr);
   }
-  target.append(table.region);
+  methodologyExtras.push(["Exact values", [table.region]]);
 }
 
 function validateResult(result) {
@@ -1169,7 +1229,7 @@ function isSafeHttpUrl(value) {
 function label(value) { return value.replaceAll("_", " "); }
 function humanDirection(value) { return ({ higher: "Higher", lower: "Lower", tied: "Tied", unavailable: "Unavailable" })[value] || "Direction unavailable"; }
 function humanMetricLabel(key) {
-  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi out", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap" };
+  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi-out time", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap" };
   return names[key] || label(key);
 }
 function humanScopeMetricLabel(key) { return key === "sfo_pressure" ? "SFO demand pressure" : humanMetricLabel(key); }
@@ -1267,6 +1327,7 @@ function startNewAnalysis() {
   $("#fresh").hidden = true;
   $("#view-evidence").hidden = true;
   $("#explain").hidden = true;
+  $("#result-skip").hidden = true;
   $("#setup-controls").open = true;
   $("#setup-toggle").textContent = "Choose an analysis";
   positionFeedback($("#analyze"));
@@ -1327,6 +1388,16 @@ $("#chat-form").addEventListener("submit", (event) => {
   }
   if (contextResultId) request.context_result_id = contextResultId;
   void submitRequest(request);
+});
+// Enter sends; Shift+Enter keeps a newline. IME composition (isComposing / 229)
+// is left alone so confirming a candidate never sends a half-typed question.
+$("#question").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing || event.keyCode === 229) return;
+  event.preventDefault();
+  if (busy) return;
+  const form = $("#chat-form");
+  if (typeof form.requestSubmit === "function") form.requestSubmit();
+  else form.dispatchEvent(new Event("submit", { cancelable: true }));
 });
 askTrigger.addEventListener("click", openQuestionComposer);
 $("#back-to-analysis").addEventListener("click", startNewAnalysis);
