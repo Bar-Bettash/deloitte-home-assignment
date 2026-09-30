@@ -1,8 +1,10 @@
 # Free-text model admission — 2026-09-30
 
 **Admitted:** `gemini-3.8-flash` with adapter SHA-256
-`7046f4504ec467191451525c9ccc0e21ef41ba7e481f6155e94cf88baa616124`
-(prompt SHA-256 `e66f8a7c9d0ddb8a4c5a252477a2a30348589259db82bfd53d25ad861ab1659b`).
+`ecd2c0d8508a2006a102fa5ee3dc279632f50f7a08f04129a87966369ac4977f`
+(prompt SHA-256 `6dfc577628ba5458a089be0c7b8d222ffe7f6d7bbc253c206c891b0e1b5c9d98`),
+from the chat-robustness revision below. It replaces the first admitted adapter
+`7046f4504ec467191451525c9ccc0e21ef41ba7e481f6155e94cf88baa616124`, whose results are kept further down.
 
 Free text turns on only where these are set (see `app/README.md`, "Enable free text"):
 
@@ -10,7 +12,7 @@ Free text turns on only where these are set (see `app/README.md`, "Enable free t
 GEMINI_MODEL=gemini-3.8-flash
 MODEL_RUNTIME_ENABLED=true
 MODEL_ADMITTED_NAME=gemini-3.8-flash
-MODEL_ADMITTED_ADAPTER_SHA256=7046f4504ec467191451525c9ccc0e21ef41ba7e481f6155e94cf88baa616124
+MODEL_ADMITTED_ADAPTER_SHA256=ecd2c0d8508a2006a102fa5ee3dc279632f50f7a08f04129a87966369ac4977f
 ```
 
 Any change to `app/backend/app/model_adapter.py` changes the hash and turns free text off until the evaluations are rerun.
@@ -58,3 +60,27 @@ A browser acceptance pass turned up an intermittent `model_incomplete`: a typed 
 Note: the 30-case corpus and 12-case holdout were inspected during development, so they now serve as regression sets; the 8-case assignment set was written before its only run.
 
 Known risk: p95 latency on the holdout was 14.25 s against the 20 s model timeout. A timeout returns a safe `query_timeout`; presets are unaffected.
+
+## Chat-robustness prompt revision (2026-09-30, same day)
+
+A browser pass had typed questions refused: the server log holds three `model call ... outcome=unsupported_scope follow_up=False` lines, answered `422 unsupported_scope`. The log records no question text (by design), so those exact questions cannot be recovered; a new set was written instead.
+
+**New set:** [`app/backend/tests/fixtures/intent_regression_2025.json`](../../../app/backend/tests/fixtures/intent_regression_2025.json), 20 cases (12 ordinary, 8 safety), none copied from the earlier sets: investment and capacity wording, casual phrasing, full airport names, a short follow-up (`Just cancellations.` after LAX vs SNA), a new question asked while an unrelated result is on screen, an ambiguous request (`Compare LA airports.`), and refusals (ROI, profit, how much to invest, valuation, a 2030 forecast). Policy `regression`: at least 19/20, every safety case, 0 errors (`--policy regression`).
+
+**Before (adapter `7046f450...`):** [regression-20-before.json](regression-20-before.json) 16/20 with 2 errors; the per-question trace [regression-20-trace-before.json](regression-20-trace-before.json) (model kind, contract check, final API code) was 15/20. Failures: investment wording refused as `unsupported_scope` (growth potential; a congestion question that also asked whether it is an investment signal); `model_incomplete` on "does SFO need more capacity" (up to about 985 thinking tokens against the 1,024 cap); `model_invalid_response` on a screening question about one airport (not a valid `AnalysisRequest`); and a new question that inherited the previous result's year. No valid request was rejected by the dispatcher.
+
+**Prompt changes (general rules only; contract, dispatcher, scoring and data unchanged):** an explicit decision order (unsupported only when the analysis is outside the product; clarification when one missing detail would make it supported; otherwise analysis); investment and capacity wording mapped to the matching screen; a single New England airport or no region runs the New England screen; an analysis plus "what does it mean" is that one analysis; a new question with its own airport and metric replaces the previous analysis, while a follow-up fills only what it leaves implicit. Thinking on the failing questions fell from about 980 tokens to under 300.
+
+**After (adapter `ecd2c0d8...`), one run each:**
+
+| Set | File | Result | Errors | Cost (USD) | Latency p50 / p95 |
+|---|---|---|---|---|---|
+| 30-case development corpus | [corpus-30-chat.json](corpus-30-chat.json) | 30/30, pass | 0 | 0.0403 | 1.77 s / 3.26 s |
+| 12-case holdout | [holdout-12-chat.json](holdout-12-chat.json) | 12/12, pass | 0 | 0.0156 | 1.83 s / 2.84 s |
+| 8-case assignment wording | [assignment-8-chat.json](assignment-8-chat.json) | 8/8, pass | 0 | 0.0113 | 2.03 s / 3.66 s |
+| 20-case chat regression | [regression-20-chat.json](regression-20-chat.json) | 20/20, pass | 0 | 0.0270 | 1.98 s / 3.10 s |
+
+The first corpus run on this adapter, [corpus-30-chat-run1.json](corpus-30-chat-run1.json), scored 29/30: one call got a provider `http_503` (no model output, cost unknown); the whole corpus was then run once more (table above). The per-question trace after the change, [regression-20-trace-after.json](regression-20-trace-after.json), is 20/20 with every analysis returning `200` from the dispatcher. The prompt grew by about 450 input tokens per call (roughly $0.0003). The 20-case regression set was used while revising the prompt, so its 20/20 shows the fixes hold and is not an unseen-set score; the generalisation evidence is the 8/8 on the assignment-wording set.
+
+Judgement calls a reviewer may want to check: a single-airport or no-region screening question now runs the whole New England screen rather than asking; "is it worth putting money into" a New England airport runs the screen (only ROI, profit, amounts, valuation and forecasts are refused); a new question asked over a previous result leaves year null (both run 2025 today).
+

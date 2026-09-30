@@ -161,6 +161,8 @@ def test_prompt_states_general_contract_rules(rule: str) -> None:
 @pytest.mark.parametrize("phrase", [
     "Show only cancellations", "Explain that result", "Rank SFO", "Compare LA airports",
     "SFO unmet demand", "Calculate ANC long-haul share",
+    "Does SFO need more capacity", "Is Manchester worth investigating", "Just cancellations",
+    "What about ANC long-haul share", "is that an investment signal", "Orange County",
 ])
 def test_prompt_does_not_copy_evaluation_questions(phrase: str) -> None:
     assert phrase.lower() not in model_adapter.SYSTEM_PROMPT.lower()
