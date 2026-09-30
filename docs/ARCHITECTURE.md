@@ -15,7 +15,7 @@ python -m uvicorn app.main:app --app-dir app/backend --host 127.0.0.1 --port 800
 - `app/backend/requirements.txt` holds the runtime pins only: duckdb, fastapi, httpx, pydantic and uvicorn.
 - `requirements-dev.txt` adds pytest.
 - The UI has no build step. Node is needed only for `app/frontend/tests/*.cjs`.
-- A loopback run needs no environment variables. See [app/backend/.env.example](../app/backend/.env.example) for the variables that exist.
+- A loopback run needs no environment variables. See the settings table in [app/README.md](../app/README.md) for the variables that exist.
 
 ## Components and request flow
 

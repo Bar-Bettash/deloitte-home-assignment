@@ -42,7 +42,7 @@ The two skipped tests need raw input files that exist only on the original autho
 
 ## Configuration
 
-All settings are environment variables. For a local run the backend also reads `backend/.env` (git-ignored); anything already set in your shell wins, and nothing is read from it on Vercel. [backend/.env.example](backend/.env.example) lists every variable, with placeholders.
+All settings are environment variables. For a local run the backend also reads `backend/.env` (git-ignored); anything already set in your shell wins, and nothing is read from it on Vercel. The table below lists every variable.
 
 | Variable | When it is needed |
 |---|---|
@@ -66,11 +66,7 @@ Free text is off by default. It turns on only when all of the following are true
 Any change to `model_adapter.py` (its prompt, schema or code) changes the hash and turns free text off again. The model only turns the question into a structured request; every number still comes from the deterministic engine.
 
 1. Create a key at <https://aistudio.google.com/apikey>. Set a quota or budget on its Google project: that is the only spending cap, because the app keeps no record of spend.
-2. Local run: create `app/backend/.env` from the example and paste the key after `GEMINI_API_KEY=`, then restart the server.
-
-   ```sh
-   cp app/backend/.env.example app/backend/.env   # then edit GEMINI_API_KEY=...
-   ```
+2. Local run: create `app/backend/.env` with `GEMINI_API_KEY=<your key>` (plus the admission variables once the model is admitted), then restart the server.
 
 3. From `app/backend/`, run both evaluations against the live model (prices are per million tokens, read from Google's price list on the day). The script needs only the key and makes one call per case:
 
