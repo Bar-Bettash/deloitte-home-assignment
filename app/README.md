@@ -33,7 +33,7 @@ Open <http://127.0.0.1:8000/>. The presets, the "Adjust scope" controls and "Exp
 Run these commands from the repository root:
 
 ```sh
-PYTHONPATH=app/backend python -m pytest app/backend/tests -q   # Author Mac: 724 passed; other hosts: 722 passed, 2 skipped
+PYTHONPATH=app/backend python -m pytest app/backend/tests -q   # 787 passed, 1 skipped (one author-local raw input)
 node --test app/frontend/tests/*.cjs                           # 102 passed
 ruff check app/backend --ignore EXE002,SIM905                  # optional; ruff is not in the requirements
 ```
@@ -109,6 +109,6 @@ Each model call writes one log line with the model, outcome, latency and token c
 
 ## What's left
 
-- [ ] **Admit the live model.** Follow [Enable free text](#enable-free-text): run both evaluations, save the reports (they contain no secrets) under `docs/evidence/`, set the admission variables, then ask the four questions in your own words plus one follow-up.
+- [x] **Admit the live model.** `gemini-3.8-flash` was admitted on 2026-09-30 ([evidence](../docs/evidence/model-admission-20260930/README.md)). Set the admission variables wherever free text should be on.
 - [ ] **Deploy to Vercel.** Follow the section above, then run the smoke test.
 - [ ] **Recheck data freshness before the demo.** From `app/backend/`, run `python -m scripts.check_source_status --bundle annual-2025-r1 --output <receipt.json>` on a host that can reach BTS, DataSF and FAA. Re-promoting `annual-2025-r1` after **2026-10-04T17:17Z** requires a new freshness receipt. Serving the current bundle does not depend on this, and the date is not a rebuild deadline: a rebuilt bundle needs its own fresh receipt whenever it is promoted. As of 2026-09-29 the check blocks on FAA, which replaced its preliminary CY2025 PDF with the final edition; see [the FAA impact check](../docs/evidence/faa-final-cy2025-impact-20260929.md).
