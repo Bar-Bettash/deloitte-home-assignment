@@ -33,7 +33,7 @@ Open <http://127.0.0.1:8000/>. The presets, the "Adjust scope" controls and "Exp
 Run these commands from the repository root:
 
 ```sh
-PYTHONPATH=app/backend python -m pytest app/backend/tests -q   # Author Mac: 724 passed; other hosts: 722 passed, 2 skipped
+PYTHONPATH=app/backend python -m pytest app/backend/tests -q   # 787 passed, 1 skipped (one author-local raw input)
 node --test app/frontend/tests/*.cjs                           # 102 passed
 ruff check app/backend --ignore EXE002,SIM905                  # optional; ruff is not in the requirements
 ```
@@ -42,7 +42,7 @@ The two skipped tests need raw input files that exist only on the original autho
 
 ## Configuration
 
-All settings are environment variables. For a local run the backend also reads `backend/.env` (git-ignored); anything already set in your shell wins, and nothing is read from it on Vercel. [backend/.env.example](backend/.env.example) lists every variable, with placeholders.
+All settings are environment variables. For a local run the backend also reads `backend/.env` (git-ignored); anything already set in your shell wins, and nothing is read from it on Vercel. The table below lists every variable.
 
 | Variable | When it is needed |
 |---|---|
@@ -66,11 +66,7 @@ Free text is off by default. It turns on only when all of the following are true
 Any change to `model_adapter.py` (its prompt, schema or code) changes the hash and turns free text off again. The model only turns the question into a structured request; every number still comes from the deterministic engine.
 
 1. Create a key at <https://aistudio.google.com/apikey>. Set a quota or budget on its Google project: that is the only spending cap, because the app keeps no record of spend.
-2. Local run: create `app/backend/.env` from the example and paste the key after `GEMINI_API_KEY=`, then restart the server.
-
-   ```sh
-   cp app/backend/.env.example app/backend/.env   # then edit GEMINI_API_KEY=...
-   ```
+2. Local run: create `app/backend/.env` with `GEMINI_API_KEY=<your key>` (plus the admission variables once the model is admitted), then restart the server.
 
 3. From `app/backend/`, run both evaluations against the live model (prices are per million tokens, read from Google's price list on the day). The script needs only the key and makes one call per case:
 
@@ -113,6 +109,6 @@ Each model call writes one log line with the model, outcome, latency and token c
 
 ## What's left
 
-- [ ] **Admit the live model.** Follow [Enable free text](#enable-free-text): run both evaluations, save the reports (they contain no secrets) under `docs/evidence/`, set the admission variables, then ask the four questions in your own words plus one follow-up.
+- [x] **Admit the live model.** `gemini-3.8-flash` was admitted on 2026-09-30 ([evidence](../docs/evidence/model-admission-20260930/README.md)). Set the admission variables wherever free text should be on.
 - [ ] **Deploy to Vercel.** Follow the section above, then run the smoke test.
 - [ ] **Recheck data freshness before the demo.** From `app/backend/`, run `python -m scripts.check_source_status --bundle annual-2025-r1 --output <receipt.json>` on a host that can reach BTS, DataSF and FAA. Re-promoting `annual-2025-r1` after **2026-10-04T17:17Z** requires a new freshness receipt. Serving the current bundle does not depend on this, and the date is not a rebuild deadline: a rebuilt bundle needs its own fresh receipt whenever it is promoted. As of 2026-09-29 the check blocks on FAA, which replaced its preliminary CY2025 PDF with the final edition; see [the FAA impact check](../docs/evidence/faa-final-cy2025-impact-20260929.md).

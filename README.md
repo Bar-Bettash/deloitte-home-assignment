@@ -183,7 +183,7 @@ The design keeps AI where it adds value, which is understanding loosely worded q
 
 | Claim | Status |
 |---|---|
-| Four workflows, follow-ups and error paths | Locally tested. Python: 724 passed, 0 skipped on the author's Mac; 722 passed, 2 skipped on hosts without the two author-local raw inputs. UI: 102 passed. Every figure was recomputed independently. 23,474 API cases ran with no server errors. ([evidence](docs/evidence/)) |
+| Four workflows, follow-ups and error paths | Locally tested. Python: 787 passed, 1 skipped in a clean clone (the skip needs an author-local raw input). UI: 102 passed. Every figure was recomputed independently. 23,474 API cases ran with no server errors. ([evidence](docs/evidence/)) |
 | Packaged data matches the official sources | Source-checked on 2026-09-27 ([activation review](docs/evidence/recent-data-activation-review.md)). The 2026-09-29 recheck blocked on FAA's final CY2025 file, which leaves the New England cohort and figures unchanged ([FAA impact check](docs/evidence/faa-final-cy2025-impact-20260929.md)). The app serves the frozen accepted snapshot. |
 | Free-text model | `gemini-3.8-flash` admitted on 2026-09-30: 30/30 corpus, 12/12 holdout and 8/8 unseen assignment-wording cases, 0 errors, plus a live check of the four questions and a follow-up ([admission evidence](docs/evidence/model-admission-20260930/README.md)). Free text is on only where the admission variables are set; otherwise it returns `503 ai_unavailable`. |
 | Hosted deployment | Packaged for Vercel and checked offline. Not deployed yet ([package check](docs/evidence/vercel-package-check.md)). |
