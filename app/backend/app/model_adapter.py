@@ -1,8 +1,8 @@
-"""One bounded Responses API call for interpreting an airport question.
+"""One bounded Gemini generateContent call for interpreting an airport question.
 
 This module has no credential lookup or network activity at import time. Callers
-own admission, context validation, logging, and result dispatch. Spend is capped
-by the provider project's hard budget, not by this module.
+own context validation, logging, and result dispatch. Spend is capped by the
+Google project's quota and budget, not by this module.
 """
 
 from __future__ import annotations
@@ -14,13 +14,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote
 
 import httpx
 from app.contracts import AIRPORTS, AnalysisRequest
 from app.settings import Settings
 from pydantic import ValidationError
 
-RESPONSES_URL = "https://api.openai.com/v1/responses"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 MAX_RESPONSE_BYTES = 64 * 1024
 
 SYSTEM_PROMPT = """Interpret one user question for a constrained airport-analysis application.
@@ -28,21 +29,57 @@ Return only one structured outcome. Choose analysis only when the user's request
 unambiguously maps to the supplied analysis fields and supported periods. Never
 invent an airport, year, metric, threshold, source result, or business quantity.
 Ask for clarification when the request is ambiguous. Mark unsupported business
-claims, arbitrary data access, and unqualified periods unsupported. One analysis
-per question. A follow-up may use only the validated previous analysis supplied
-in context; if it needs prior context and none is supplied, ask for clarification.
-A follow-up keeps the previous analysis's year unless the user names another.
-Supported periods are calendar years 2023, 2024 and 2025. If the user names no
-year, set year to null: the server then uses the newest accepted period (2025,
-compared with 2024). Growth and screen scores need a comparison year (2024 or
-2025); operational and SFO metrics support 2024 and 2025. Any other year is
+claims, arbitrary data access, and unqualified periods unsupported.
+
+What the analyses answer. These are the application's core questions, not
+unsupported business claims; map the user's intent to the analysis that measures
+it:
+- Which New England airports are candidates for terminal or capacity expansion,
+  or deserve investment attention first: rank, region new_england, metric
+  screen_score (a traffic-pressure screen of growth, volume and seat occupancy).
+- Congestion or operational strain at two named airports: compare with
+  congestion, or with one operational metric when the user names it.
+- The share of long-haul or long-distance traffic at an airport: metric with
+  long_haul_share.
+- Unmet, excess or pent-up passenger demand, or demand pressure, at SFO: metric
+  with sfo_pressure.
+Still unsupported: anything the data cannot identify, such as profitability,
+return on investment, construction cost, or demand forecasts for future years.
+
+Analysis field rules. Every analysis field is always present; set each field the
+action does not use to null.
+- rank: region new_england or a list of New England airports, one metric. Ranking
+  is limited to New England airports; a ranking of any other airport is
+  unsupported_scope.
+- compare: exactly two airports and one metric; region null.
+- metric: exactly one airport and one metric; region null.
+- explain: explains the previous result. Set action to explain and every other
+  field to null.
+- threshold_miles is used only with long_haul_share; otherwise null.
+
+Scope rules.
+- One analysis per message. A message that asks for several analyses at once
+  (for example two metrics, or two separate questions) is unsupported_scope; the
+  user must submit one analysis at a time.
+- When a place could mean more than one supported airport, or names no specific
+  supported airport, return clarification_required. Never guess an airport.
+
+Follow-ups. A follow-up may use only the validated previous analysis supplied in
+context; if it needs prior context and none is supplied, ask for clarification.
+A follow-up keeps the previous analysis's airports, action and year unless the
+user changes them. A follow-up that only narrows or switches the metric (for
+example to one operational measure) after a comparison stays a comparison of the
+same two airports.
+
+Periods. Supported periods are calendar years 2023, 2024 and 2025. If the user
+names no year, set year to null: the server then uses the newest accepted period
+(2025, compared with 2024). Growth and screen scores need a comparison year (2024
+or 2025); operational and SFO metrics support 2024 and 2025. Any other year is
 unsupported. The server independently validates every analysis and supplies all
-user-visible safe-outcome wording. The message field must be null."""
+user-visible wording. When kind is not analysis, set analysis to null."""
+# Recorded in evaluation reports so a result names the exact prompt and adapter.
 PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()
-# Admission binds the complete running adapter, including its schema and request
-# construction, rather than only the instruction text.
 ADAPTER_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
-PROVIDER_FRAMING_ALLOWANCE_TOKENS = 4096
 
 _METRICS = [
     "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
@@ -50,29 +87,40 @@ _METRICS = [
     "diversion_rate", "departure_delay_minutes", "taxi_out_minutes",
     "sfo_enplaned_trend", "sfo_pressure",
 ]
-_ANALYSIS_FIELDS = {
+
+
+def _nullable(schema: dict[str, object]) -> dict[str, object]:
+    return {"anyOf": [schema, {"type": "null"}]}
+
+
+# JSON Schema for generationConfig.responseFormat.text.schema (responseSchema is
+# deprecated). The analysis object is fixed-shape: every field is required and
+# unused ones are null, with no extra properties. The contract (AnalysisRequest)
+# stays the authoritative validator and re-checks everything the model returns.
+_ANALYSIS_FIELDS: dict[str, dict[str, object]] = {
     "action": {"type": "string", "enum": ["rank", "compare", "metric", "explain"]},
-    "airports": {"type": ["array", "null"], "items": {"type": "string", "enum": sorted(AIRPORTS)}},
-    "region": {"type": ["string", "null"], "enum": ["new_england", None]},
-    "metric": {"type": ["string", "null"], "enum": [*_METRICS, None]},
-    "year": {"type": ["integer", "null"], "enum": [2023, 2024, 2025, None]},
+    "airports": _nullable({"type": "array", "items": {"type": "string", "enum": sorted(AIRPORTS)}}),
+    "region": _nullable({"type": "string", "enum": ["new_england"]}),
+    "metric": _nullable({"type": "string", "enum": _METRICS}),
+    "year": {"type": ["integer", "null"]},
     "threshold_miles": {"type": ["number", "null"]},
+}
+_ANALYSIS_SCHEMA = {
+    "type": "object",
+    "properties": _ANALYSIS_FIELDS,
+    "required": list(_ANALYSIS_FIELDS),
+    "additionalProperties": False,
 }
 OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
         "kind": {"type": "string", "enum": ["analysis", "clarification_required", "unsupported_scope"]},
-        "analysis": {
-            "type": ["object", "null"],
-            "properties": _ANALYSIS_FIELDS,
-            "required": list(_ANALYSIS_FIELDS),
-            "additionalProperties": False,
-        },
-        "message": {"type": "null"},
+        "analysis": _nullable(_ANALYSIS_SCHEMA),
     },
-    "required": ["kind", "analysis", "message"],
+    "required": ["kind", "analysis"],
     "additionalProperties": False,
 }
+_REFUSAL_FINISH = frozenset({"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY"})
 
 _SAFE_MESSAGES = {
     "clarification_required": "Please name the airport, metric, and supported period you want to analyze.",
@@ -86,8 +134,13 @@ class ModelAdapterError(Exception):
     def __init__(self, code: Literal[
         "ai_unavailable", "model_timeout", "model_incomplete", "model_refusal",
         "model_invalid_response", "model_prompt_too_large",
-    ]) -> None:
+    ], provider_status: int | None = None, usage: ModelUsage | None = None) -> None:
         self.code = code
+        # HTTP status from the provider, for the server log only (never the client).
+        self.provider_status = provider_status
+        # Token usage of a call that succeeded over HTTP but whose output was
+        # rejected; evaluation uses it to cost billed-but-rejected calls.
+        self.usage = usage
         super().__init__(code)
 
 
@@ -127,83 +180,98 @@ def _make_input(message: str, context: Mapping[str, object] | None, settings: Se
 
 
 def _request_json(settings: Settings, user_input: str) -> dict[str, object]:
-    request: dict[str, object] = {
-        "model": settings.model_name,
-        "input": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": user_input}],
-        "text": {"format": {"type": "json_schema", "name": "airport_intent", "strict": True, "schema": OUTPUT_SCHEMA}},
-        "store": False,
-        "max_output_tokens": settings.model_max_output_tokens,
+    generation: dict[str, object] = {
+        "responseFormat": {"text": {"mimeType": "APPLICATION_JSON", "schema": OUTPUT_SCHEMA}},
+        "maxOutputTokens": settings.model_max_output_tokens,
+        "temperature": 0,
     }
-    # Reasoning tokens count against max_output_tokens; a low effort keeps a
-    # reasoning model inside the 512-token cap. Omitted entirely when unset so
-    # non-reasoning models never receive an unsupported parameter.
-    if settings.model_reasoning_effort is not None:
-        request["reasoning"] = {"effort": settings.model_reasoning_effort}
-    return request
+    # Thinking tokens count against maxOutputTokens; a zero budget keeps Flash
+    # models inside the cap. Omitted when unset so other models use their default.
+    if settings.model_thinking_budget is not None:
+        generation["thinkingConfig"] = {"thinkingBudget": settings.model_thinking_budget}
+    return {
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [{"text": user_input}]}],
+        "generationConfig": generation,
+    }
 
 
-def provider_input_token_ceiling(settings: Settings) -> int:
-    """Conservative billed-input bound including schema and provider framing.
-
-    The configured prompt cap applies only to system and user content. Structured
-    schema and request envelope also consume provider input tokens. UTF-8 bytes
-    conservatively bound their token contribution; framing adds a fixed reserve.
-    """
-    envelope_bytes = len(json.dumps(_request_json(settings, ""), ensure_ascii=True).encode("utf-8"))
-    return settings.model_max_prompt_tokens + envelope_bytes + PROVIDER_FRAMING_ALLOWANCE_TOKENS
+def _count(value: object) -> int:
+    if value is None:
+        return 0
+    if type(value) is not int or value < 0:
+        raise ModelAdapterError("model_invalid_response")
+    return value
 
 
-def _parse_usage(body: dict[str, object], settings: Settings) -> ModelUsage:
-    usage = body.get("usage")
+def _parse_usage(body: dict[str, object]) -> ModelUsage:
+    usage = body.get("usageMetadata")
+    if usage is None:
+        return ModelUsage(0, 0)
     if not isinstance(usage, dict):
         raise ModelAdapterError("model_invalid_response")
-    input_tokens, output_tokens = usage.get("input_tokens"), usage.get("output_tokens")
-    if (type(input_tokens) is not int or type(output_tokens) is not int
-            or input_tokens < 0 or input_tokens > provider_input_token_ceiling(settings)
-            or output_tokens < 0 or output_tokens > settings.model_max_output_tokens):
+    return ModelUsage(
+        _count(usage.get("promptTokenCount")),
+        _count(usage.get("candidatesTokenCount")) + _count(usage.get("thoughtsTokenCount")),
+    )
+
+
+def _response_text(body: dict[str, object]) -> str:
+    feedback = body.get("promptFeedback")
+    if isinstance(feedback, dict) and feedback.get("blockReason"):
+        raise ModelAdapterError("model_refusal")
+    candidates = body.get("candidates")
+    if not isinstance(candidates, list) or not candidates or not isinstance(candidates[0], dict):
         raise ModelAdapterError("model_invalid_response")
-    return ModelUsage(input_tokens, output_tokens)
+    candidate = candidates[0]
+    finish = candidate.get("finishReason")
+    if finish in _REFUSAL_FINISH:
+        raise ModelAdapterError("model_refusal")
+    if finish == "MAX_TOKENS":
+        raise ModelAdapterError("model_incomplete")
+    if finish != "STOP":
+        raise ModelAdapterError("model_invalid_response")
+    content = candidate.get("content")
+    parts = content.get("parts") if isinstance(content, dict) else None
+    if not isinstance(parts, list):
+        raise ModelAdapterError("model_invalid_response")
+    texts = [part["text"] for part in parts
+             if isinstance(part, dict) and not part.get("thought") and isinstance(part.get("text"), str)]
+    if not texts:
+        raise ModelAdapterError("model_invalid_response")
+    return "".join(texts)
 
 
-def _parse_response(body: object, settings: Settings) -> ModelInterpretation:
+def _parse_response(body: object) -> ModelInterpretation:
     if not isinstance(body, dict):
         raise ModelAdapterError("model_invalid_response")
-    if body.get("status") != "completed":
-        raise ModelAdapterError("model_incomplete")
-    usage = _parse_usage(body, settings)
-    output = body.get("output")
-    if not isinstance(output, list):
-        raise ModelAdapterError("model_invalid_response")
-    messages = [item for item in output if isinstance(item, dict) and item.get("type") == "message"]
-    if len(messages) != 1 or any(not isinstance(item, dict) or item.get("type") not in {"message", "reasoning"} for item in output):
-        raise ModelAdapterError("model_invalid_response")
-    message = messages[0]
-    if message.get("status") != "completed" or message.get("role", "assistant") != "assistant":
-        raise ModelAdapterError("model_invalid_response")
-    content = message.get("content")
-    if not isinstance(content, list) or len(content) != 1 or not isinstance(content[0], dict):
-        raise ModelAdapterError("model_invalid_response")
-    part = content[0]
-    if part.get("type") == "refusal":
-        raise ModelAdapterError("model_refusal")
-    if part.get("type") != "output_text" or not isinstance(part.get("text"), str):
-        raise ModelAdapterError("model_invalid_response")
+    usage = _parse_usage(body)
     try:
-        parsed = json.loads(part["text"])
+        return _interpret(body, usage)
+    except ModelAdapterError as exc:
+        exc.usage = usage
+        raise
+
+
+def _interpret(body: dict[str, object], usage: ModelUsage) -> ModelInterpretation:
+    try:
+        parsed = json.loads(_response_text(body))
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ModelAdapterError("model_invalid_response") from exc
-    if not isinstance(parsed, dict) or set(parsed) != {"kind", "analysis", "message"} or parsed["message"] is not None:
+    if not isinstance(parsed, dict) or "kind" not in parsed or not set(parsed) <= {"kind", "analysis"}:
         raise ModelAdapterError("model_invalid_response")
-    kind = parsed["kind"]
+    kind, proposed = parsed["kind"], parsed.get("analysis")
     if kind == "analysis":
-        if not isinstance(parsed["analysis"], dict) or set(parsed["analysis"]) != set(_ANALYSIS_FIELDS):
+        if not isinstance(proposed, dict) or not set(proposed) <= set(_ANALYSIS_FIELDS):
             raise ModelAdapterError("model_invalid_response")
         try:
-            analysis = AnalysisRequest.model_validate(parsed["analysis"])
+            analysis = AnalysisRequest.model_validate({field: proposed.get(field) for field in _ANALYSIS_FIELDS})
         except ValidationError as exc:
             raise ModelAdapterError("model_invalid_response") from exc
         return ModelInterpretation("analysis", analysis, None, usage)
-    if kind in _SAFE_MESSAGES and parsed["analysis"] is None:
+    # A nullable object may come back as {} or with every field null instead of null.
+    empty = proposed is None or (isinstance(proposed, dict) and all(value is None for value in proposed.values()))
+    if kind in _SAFE_MESSAGES and empty:
         return ModelInterpretation(kind, None, _SAFE_MESSAGES[kind], usage)
     raise ModelAdapterError("model_invalid_response")
 
@@ -220,12 +288,13 @@ async def interpret_message(
         raise ModelAdapterError("ai_unavailable")
     user_input = _make_input(message, context, settings)
     request_json = _request_json(settings, user_input)
-    headers = {"Authorization": f"Bearer {settings.model_api_key.get_secret_value()}", "Content-Type": "application/json"}
+    headers = {"x-goog-api-key": settings.model_api_key.get_secret_value(), "Content-Type": "application/json"}
+    url = GEMINI_URL.format(model=quote(settings.model_name, safe=""))
 
     async def call(http: httpx.AsyncClient) -> object:
-        async with http.stream("POST", RESPONSES_URL, json=request_json, headers=headers) as response:
+        async with http.stream("POST", url, json=request_json, headers=headers) as response:
             if response.status_code != 200:
-                raise ModelAdapterError("ai_unavailable")
+                raise ModelAdapterError("ai_unavailable", provider_status=response.status_code)
             data = bytearray()
             async for chunk in response.aiter_bytes():
                 if len(data) + len(chunk) > MAX_RESPONSE_BYTES:
@@ -247,4 +316,4 @@ async def interpret_message(
         raise ModelAdapterError("model_timeout") from exc
     except httpx.HTTPError as exc:
         raise ModelAdapterError("ai_unavailable") from exc
-    return _parse_response(body, settings)
+    return _parse_response(body)

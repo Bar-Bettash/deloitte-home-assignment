@@ -49,7 +49,7 @@ flowchart LR
         UI["Chat UI<br/>app/frontend"]
         Guard["Host and Origin guard"]
         API["POST /api/query<br/>strict contracts"]
-        LLM["One OpenAI call<br/>free text → structured request"]
+        LLM["One Gemini call<br/>free text → structured request"]
         Engine["Deterministic engine<br/>Python + DuckDB"]
         Cookie["Signed follow-up cookie<br/>airport_context"]
     end
@@ -75,7 +75,7 @@ sequenceDiagram
     actor A as Analyst
     participant UI as Chat UI
     participant API as FastAPI
-    participant M as OpenAI (one call)
+    participant M as Gemini (one call)
     participant E as Engine (DuckDB)
 
     alt Preset or "Adjust scope" controls
@@ -148,11 +148,11 @@ AI is used in **exactly one place**: `app/backend/app/model_adapter.py` turns a 
 
 | | |
 |---|---|
-| **What the model does** | One OpenAI Responses API call with a strict JSON schema. It returns an `AnalysisRequest`, or `clarification_required`, or `unsupported_scope`. For a follow-up, the previous request is passed in as context. |
+| **What the model does** | One Google Gemini `generateContent` call with a JSON response schema. It returns an `AnalysisRequest`, or `clarification_required`, or `unsupported_scope`. For a follow-up, the previous request is passed in as context. |
 | **What the model never does** | It never produces numbers, SQL, citations or text shown to the analyst. Everything shown comes from the deterministic engine and fixed templates. |
 | **Validation** | The model's output is checked by the same strict contract used for presets: a closed list of airports, metrics and years, and no extra fields. Anything outside that list is refused with a clear message. |
-| **Limits** | Up to 4,000 characters in; up to 512 output tokens; a 20 s timeout; `store: false`; spend capped by a hard monthly budget on the OpenAI project. |
-| **Admission gate** | Free text stays off until the chosen model passes a 30-case evaluation (at least 29 of 30 correct). The server then calls the model only if the model name and the SHA-256 of the adapter file match the admitted values, so an unreviewed change to the prompt or code turns the feature off. |
+| **Limits** | Up to 4,000 characters in; up to 512 output tokens; temperature 0; thinking off by default; a 20 s timeout; spend capped by the Google project's quota or budget. |
+| **Admission gate** | Free text stays off until the chosen model passes a 30-case evaluation (at least 29 of 30) and an unseen 12-case holdout (at least 11 of 12), both with zero errors (`scripts/eval_intents.py`). The server then calls the model only if `MODEL_RUNTIME_ENABLED=true`, the model name matches the admitted name, and the SHA-256 of the adapter file matches the admitted hash, so an unreviewed change to the prompt or code turns the feature off. A Gemini key alone never enables free text. |
 | **Failure** | Any provider error becomes a safe `ai_unavailable` or `query_timeout` response. Presets and the scope controls work without the model. |
 
 The design keeps AI where it adds value, which is understanding loosely worded questions. It keeps AI out of places where it could make up a figure.
@@ -167,7 +167,7 @@ The design keeps AI where it adds value, which is understanding loosely worded q
 | No composite congestion index | Honest about a mixed picture. | No single "winner" headline. |
 | A signed cookie instead of a session store | Works on any serverless instance, with no database. | Context lasts at most 1 hour and is lost when the signing key changes. |
 | Public data only | Every number traces back to an official source. | Capacity, fares and latent demand cannot be observed. |
-| No login (owner's decision) | Simple to demo and review. | Cost is limited by per-call limits and the OpenAI project's budget, not by user accounts. |
+| No login (owner's decision) | Simple to demo and review. | Cost is limited by per-call limits and the Google project's quota, not by user accounts. |
 
 ## Assumptions, uncertainty and scope
 
@@ -185,7 +185,7 @@ The design keeps AI where it adds value, which is understanding loosely worded q
 |---|---|
 | Four workflows, follow-ups and error paths | Locally tested. Python: 724 passed, 0 skipped on the author's Mac; 722 passed, 2 skipped on hosts without the two author-local raw inputs. UI: 102 passed. Every figure was recomputed independently. 23,474 API cases ran with no server errors. ([evidence](docs/evidence/)) |
 | Packaged data matches the official sources | Source-checked on 2026-09-27 ([activation review](docs/evidence/recent-data-activation-review.md)). The 2026-09-29 recheck blocked on FAA's final CY2025 file, which leaves the New England cohort and figures unchanged ([FAA impact check](docs/evidence/faa-final-cy2025-impact-20260929.md)). The app serves the frozen accepted snapshot. |
-| Free-text model | Implemented and tested offline. Not yet tested against the live API, so free text returns `503 ai_unavailable` until the model is admitted. |
+| Free-text model | `gemini-3.8-flash` admitted on 2026-09-30: 30/30 corpus, 12/12 holdout and 8/8 unseen assignment-wording cases, 0 errors, plus a live check of the four questions and a follow-up ([admission evidence](docs/evidence/model-admission-20260930/README.md)). Free text is on only where the admission variables are set; otherwise it returns `503 ai_unavailable`. |
 | Hosted deployment | Packaged for Vercel and checked offline. Not deployed yet ([package check](docs/evidence/vercel-package-check.md)). |
 
 For more detail, see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (modules, numerical definitions, how data is refreshed) and [docs/API_UI_MAP.md](docs/API_UI_MAP.md) (the HTTP contract).

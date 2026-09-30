@@ -22,8 +22,8 @@ HISTORICAL_CORPUS = Path(__file__).parent / "fixtures" / "intent_eval.json"
 
 def _live_settings(**overrides):
     values = {
-        "OPENAI_API_KEY": "fake-key-never-output",
-        "OPENAI_MODEL": "fake.model-v1",
+        "GEMINI_API_KEY": "fake-key-never-output",
+        "GEMINI_MODEL": "fake.model-v1",
     }
     values.update(overrides)
     return load_settings(values)
@@ -280,3 +280,146 @@ def test_baseline_on_2025_corpus_passes_every_safety_case(capsys):
     assert report["case_count"] == 30
     assert report["category_accuracy"]["safety_clarification"] == 1.0
     assert report["category_accuracy"]["demonstration"] == 1.0
+
+
+HOLDOUT = Path(__file__).parent / "fixtures" / "intent_holdout_2025.json"
+
+
+def _perfect_candidate(cases):
+    def candidate(text, context):
+        case = next(item for item in cases if item["input"]["text"] == text and item["input"]["context"] == context)
+        return case["expected"]
+
+    return candidate
+
+
+def test_holdout_has_its_own_inventory_and_policy():
+    cases = load_and_validate_cases(HOLDOUT, eval_intents.HOLDOUT_POLICY)
+    assert len(cases) == 12
+    assert Counter(case["category"] for case in cases) == {"safety_clarification": 5, "ordinary": 7}
+    with pytest.raises(CorpusValidationError, match="holdout policy expects exactly 12"):
+        load_and_validate_cases(CORPUS, eval_intents.HOLDOUT_POLICY)
+    with pytest.raises(CorpusValidationError, match="corpus policy expects exactly 30"):
+        load_and_validate_cases(HOLDOUT)
+
+
+def test_holdout_questions_are_unseen_paraphrases():
+    holdout = load_and_validate_cases(HOLDOUT, eval_intents.HOLDOUT_POLICY)
+    seen = {case["input"]["text"].lower() for path in (CORPUS, HISTORICAL_CORPUS)
+            for case in load_and_validate_cases(path)}
+    assert not {case["input"]["text"].lower() for case in holdout} & seen
+    # It covers the failure families without reusing their wording.
+    kinds = Counter(case["expected"]["kind"] for case in holdout)
+    assert kinds == {"analysis": 7, "unsupported_scope": 2, "clarification_required": 3}
+    assert any(case["expected"].get("message") == "Submit one analysis at a time." for case in holdout)
+    assert any(case["expected"].get("analysis") == {"action": "explain"} for case in holdout)
+
+
+def test_holdout_policy_needs_11_of_12_every_safety_case_and_no_errors():
+    cases = load_and_validate_cases(HOLDOUT, eval_intents.HOLDOUT_POLICY)
+    perfect = _perfect_candidate(cases)
+    report = evaluate_cases(cases, perfect, mode="candidate", policy=eval_intents.HOLDOUT_POLICY)
+    assert report["candidate_acceptance"] is True
+    assert report["acceptance_policy"] == {
+        "name": "holdout", "case_count_required": 12,
+        "category_counts_required": {"safety_clarification": 5, "ordinary": 7},
+        "overall_correct_min": 11, "safety_correct_required": 5, "errors_max": 0,
+    }
+
+    def miss(target_category):
+        target = next(case for case in cases if case["category"] == target_category)
+
+        def candidate(text, context):
+            if text == target["input"]["text"]:
+                return {"kind": "unsupported_scope", "message": "wrong"} if target_category == "ordinary" \
+                    else {"kind": "analysis", "analysis": {"action": "explain"}}
+            return perfect(text, context)
+
+        return evaluate_cases(cases, candidate, mode="candidate", policy=eval_intents.HOLDOUT_POLICY)
+
+    assert miss("ordinary")["candidate_acceptance"] is True      # 11/12, safety intact
+    assert miss("safety_clarification")["candidate_acceptance"] is False
+
+
+def test_holdout_cli_uses_holdout_policy(tmp_path, capsys):
+    output = tmp_path / "holdout.json"
+    assert main(["--mode", "baseline", "--cases", str(HOLDOUT), "--policy", "holdout", "--output", str(output)]) == 0
+    capsys.readouterr()
+    report = json.loads(output.read_text())
+    assert report["case_count"] == 12
+    assert report["acceptance_policy"]["name"] == "holdout"
+
+
+def test_omitted_long_haul_threshold_matches_the_documented_default():
+    case = {"id": "x", "category": "ordinary", "input": {"text": "ANC long haul", "context": None},
+            "expected": {"kind": "analysis", "analysis": {
+                "action": "metric", "airports": ["ANC"], "metric": "long_haul_share", "threshold_miles": 3000}}}
+    omitted = {"kind": "analysis", "analysis": {"action": "metric", "airports": ["ANC"], "metric": "long_haul_share"}}
+    as_float = {"kind": "analysis", "analysis": {**omitted["analysis"], "threshold_miles": 3000.0}}
+    other = {"kind": "analysis", "analysis": {**omitted["analysis"], "threshold_miles": 2500}}
+    assert eval_intents._matches(case["expected"], omitted)
+    assert eval_intents._matches(case["expected"], as_float)
+    assert not eval_intents._matches(case["expected"], other)
+    # The default does not leak onto other metrics.
+    departures = {"kind": "analysis", "analysis": {"action": "metric", "airports": ["ANC"], "metric": "departures"}}
+    assert eval_intents._matches(departures, departures)
+
+
+def test_documented_default_is_the_threshold_the_dispatcher_applies(monkeypatch):
+    from uuid import uuid4
+
+    from app import dispatch
+    from app.calculations.long_haul import calculate_long_haul_share
+
+    used = []
+
+    def spy(airport, year, threshold, *args, **kwargs):
+        used.append(threshold)
+        return calculate_long_haul_share(airport, year, threshold, *args, **kwargs)
+
+    monkeypatch.setattr(dispatch, "calculate_long_haul_share", spy)
+    request = AnalysisRequest.model_validate({"action": "metric", "airports": ["ANC"],
+                                              "metric": "long_haul_share", "year": 2024})
+    dispatch.dispatch_analysis(request, uuid4())
+    assert used and set(used) == {float(eval_intents.DOCUMENTED_LONG_HAUL_THRESHOLD_MILES)}
+
+
+def test_rejected_output_is_costed_and_only_no_response_calls_are_unknown(monkeypatch):
+    settings = _live_settings()
+    cases = load_and_validate_cases(CORPUS)
+    calls = []
+
+    async def mixed(*_args, **_kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise ModelAdapterError("model_invalid_response", usage=ModelUsage(100, 20))
+        if len(calls) == 2:
+            raise ModelAdapterError("ai_unavailable", provider_status=500)
+        raise ModelAdapterError("model_timeout")
+
+    monkeypatch.setattr(eval_intents.model_adapter, "interpret_message", mixed)
+    report = eval_intents.evaluate_live_candidate(
+        cases, settings, "a" * 64, input_usd_per_million_tokens=1.0, output_usd_per_million_tokens=10.0)
+    first = report["results"][0]
+    assert first["error"] == "error:ModelAdapterError:model_invalid_response"
+    assert first["cost_usd"] == pytest.approx(300 / 1_000_000)
+    assert report["results"][1]["error"] == "error:ModelAdapterError:ai_unavailable:http_500"
+    assert report["results"][1]["cost_usd"] is None
+    assert report["results"][2]["error"] == "timeout"
+    assert report["aggregate_cost_usd"] == pytest.approx(300 / 1_000_000)
+    assert report["rejected_output_costed_calls"] == 1
+    assert report["unknown_cost_calls"] == 29
+
+
+ASSIGNMENT = Path(__file__).parent / "fixtures" / "intent_assignment_2025.json"
+
+
+def test_assignment_cases_load_under_their_policy_and_are_unseen():
+    cases = load_and_validate_cases(ASSIGNMENT, eval_intents.ASSIGNMENT_POLICY)
+    assert len(cases) == 8
+    seen = {case["input"]["text"].lower() for path, policy in (
+        (CORPUS, eval_intents.CORPUS_POLICY), (HOLDOUT, eval_intents.HOLDOUT_POLICY))
+        for case in load_and_validate_cases(path, policy)}
+    assert not {case["input"]["text"].lower() for case in cases} & seen
+    with pytest.raises(CorpusValidationError):
+        load_and_validate_cases(ASSIGNMENT)

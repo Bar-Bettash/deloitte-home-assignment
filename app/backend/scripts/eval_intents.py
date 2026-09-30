@@ -13,6 +13,7 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Any
 
 from app import model_adapter
@@ -23,16 +24,45 @@ from pydantic import ValidationError
 
 # The 2025 corpus reflects the current default period; intent_eval.json is the
 # frozen 2024-era corpus kept for the earlier admission record.
-DEFAULT_CASES = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "intent_eval_2025.json"
+FIXTURES = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
+DEFAULT_CASES = FIXTURES / "intent_eval_2025.json"
+HOLDOUT_CASES = FIXTURES / "intent_holdout_2025.json"
 EXPECTED_CATEGORIES = {"demonstration": 6, "safety_clarification": 8, "ordinary": 16}
 MIN_ACCEPTANCE_CORRECT = 29
+
+
+@dataclass(frozen=True)
+class AcceptancePolicy:
+    """Inventory and pass bar for one frozen case file."""
+
+    name: str
+    categories: dict[str, int]
+    overall_correct_min: int
+    # Categories in which every case must be correct.
+    all_correct: tuple[str, ...]
+
+    @property
+    def case_count(self) -> int:
+        return sum(self.categories.values())
+
+
+# The 30-case development corpus: >=29/30, every demonstration and safety case, 0 errors.
+CORPUS_POLICY = AcceptancePolicy(
+    "corpus", EXPECTED_CATEGORIES, MIN_ACCEPTANCE_CORRECT, ("demonstration", "safety_clarification"))
+# The 12-case unseen holdout: >=11/12, every safety case, 0 errors.
+HOLDOUT_POLICY = AcceptancePolicy(
+    "holdout", {"safety_clarification": 5, "ordinary": 7}, 11, ("safety_clarification",))
+# 8 unseen cases in the assignment's own natural wording: all correct, 0 errors.
+ASSIGNMENT_POLICY = AcceptancePolicy(
+    "assignment", {"safety_clarification": 2, "ordinary": 6}, 8, ("safety_clarification", "ordinary"))
+POLICIES = {policy.name: policy for policy in (CORPUS_POLICY, HOLDOUT_POLICY, ASSIGNMENT_POLICY)}
 
 
 class CorpusValidationError(ValueError):
     """The frozen corpus violates its versioned schema or declared inventory."""
 
 
-def load_and_validate_cases(path: Path) -> list[dict[str, Any]]:
+def load_and_validate_cases(path: Path, policy: AcceptancePolicy = CORPUS_POLICY) -> list[dict[str, Any]]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -40,8 +70,9 @@ def load_and_validate_cases(path: Path) -> list[dict[str, Any]]:
     if not isinstance(data, dict) or set(data) != {"version", "cases"} or type(data["version"]) is not int or data["version"] != 1:
         raise CorpusValidationError("corpus root must contain version 1 and cases")
     cases = data["cases"]
-    if not isinstance(cases, list) or len(cases) != 30:
-        raise CorpusValidationError("corpus must contain exactly 30 cases")
+    if not isinstance(cases, list) or len(cases) != policy.case_count:
+        raise CorpusValidationError(
+            f"{policy.name} policy expects exactly {policy.case_count} cases (use --policy to pick another)")
 
     ids: set[str] = set()
     counts: Counter[str] = Counter()
@@ -52,7 +83,7 @@ def load_and_validate_cases(path: Path) -> list[dict[str, Any]]:
         if not isinstance(case_id, str) or not case_id.strip() or len(case_id) > 80 or case_id in ids:
             raise CorpusValidationError(f"case {index} has an empty, oversized, or duplicate ID")
         ids.add(case_id)
-        if not isinstance(category, str) or category not in EXPECTED_CATEGORIES:
+        if not isinstance(category, str) or category not in policy.categories:
             raise CorpusValidationError(f"case {case_id} has an unknown category")
         counts[category] += 1
 
@@ -71,8 +102,8 @@ def load_and_validate_cases(path: Path) -> list[dict[str, Any]]:
         if category == "safety_clarification" and expected_kind not in {"clarification_required", "unsupported_scope"}:
             raise CorpusValidationError(f"case {case_id} safety case must expect a safe outcome")
 
-    if dict(counts) != EXPECTED_CATEGORIES:
-        raise CorpusValidationError(f"category counts must be {EXPECTED_CATEGORIES}")
+    if dict(counts) != policy.categories:
+        raise CorpusValidationError(f"category counts must be {policy.categories}")
     return cases
 
 
@@ -111,8 +142,30 @@ def _matches(expected: dict[str, Any], actual: Any) -> bool:
             normalized = _valid_analysis(actual.get("analysis"), "actual analysis")
         except CorpusValidationError:
             return False
-        return normalized == _valid_analysis(expected["analysis"], "expected analysis")
+        expected_analysis = _valid_analysis(expected["analysis"], "expected analysis")
+        return _as_run(normalized) == _as_run(expected_analysis)
     return isinstance(actual.get("message"), str) and bool(actual["message"].strip())
+
+
+# The documented default applied when long_haul_share omits threshold_miles: the
+# contract accepts the omission (contracts.py, valid_scope_combination) and the
+# dispatcher runs it at 3,000 miles (dispatch.py, _long_haul). A test pins that
+# the dispatcher really uses this value.
+DOCUMENTED_LONG_HAUL_THRESHOLD_MILES = 3000
+
+
+def _as_run(analysis: dict[str, Any]) -> dict[str, Any]:
+    """The request the application would run, re-validated by the contract.
+
+    An omitted long_haul_share threshold and the documented default threshold are
+    the same request, so both normalize to the explicit default.
+    """
+    request = AnalysisRequest.model_validate(analysis)
+    if request.metric == "long_haul_share" and request.threshold_miles is None:
+        request = AnalysisRequest.model_validate(
+            {**request.model_dump(mode="json", exclude_none=True),
+             "threshold_miles": DOCUMENTED_LONG_HAUL_THRESHOLD_MILES})
+    return request.model_dump(mode="json", exclude_none=True)
 
 
 def _project_actual(value: Any) -> dict[str, Any] | None:
@@ -147,7 +200,7 @@ def _safe_usage(value: Any) -> dict[str, int | float] | None:
 def evaluate_cases(
     cases: list[dict[str, Any]],
     parser: Callable[[str, dict[str, Any] | None], Any],
-    *, mode: str,
+    *, mode: str, policy: AcceptancePolicy = CORPUS_POLICY,
 ) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     category_totals: Counter[str] = Counter()
@@ -168,7 +221,7 @@ def evaluate_cases(
         except TimeoutError:
             error = "timeout"
         except Exception as exc:  # noqa: BLE001 - evaluator records candidate failures instead of aborting
-            error = f"error:{type(exc).__name__}"
+            error = _error_label(exc)
         latency_ms = round((time.perf_counter() - started) * 1000, 3)
         actual = _project_actual(actual)
         correct = error is None and _matches(case["expected"], actual)
@@ -186,10 +239,9 @@ def evaluate_cases(
     accuracy = correct_total / total if total else 0.0
     candidate_acceptance = (
         mode == "candidate"
-        and dict(category_totals) == EXPECTED_CATEGORIES
-        and correct_total >= MIN_ACCEPTANCE_CORRECT
-        and category_correct["demonstration"] == EXPECTED_CATEGORIES["demonstration"]
-        and category_correct["safety_clarification"] == EXPECTED_CATEGORIES["safety_clarification"]
+        and dict(category_totals) == policy.categories
+        and correct_total >= policy.overall_correct_min
+        and all(category_correct[name] == policy.categories[name] for name in policy.all_correct)
         and errors == 0
     )
     return {
@@ -203,11 +255,11 @@ def evaluate_cases(
         "error_count": errors,
         "candidate_acceptance": candidate_acceptance if mode == "candidate" else None,
         "acceptance_policy": {
-            "case_count_required": sum(EXPECTED_CATEGORIES.values()),
-            "category_counts_required": EXPECTED_CATEGORIES,
-            "overall_correct_min": MIN_ACCEPTANCE_CORRECT,
-            "demonstration_correct_required": EXPECTED_CATEGORIES["demonstration"],
-            "safety_correct_required": EXPECTED_CATEGORIES["safety_clarification"],
+            "name": policy.name,
+            "case_count_required": policy.case_count,
+            "category_counts_required": policy.categories,
+            "overall_correct_min": policy.overall_correct_min,
+            **{f"{name.split('_')[0]}_correct_required": policy.categories[name] for name in policy.all_correct},
             "errors_max": 0,
         },
         "results": results,
@@ -232,6 +284,16 @@ def _percentile(values: list[float], fraction: float) -> float | None:
     return ordered[rank - 1]
 
 
+def _error_label(exc: Exception) -> str:
+    """Name a failed case without provider payloads: the exception type plus, for
+    adapter errors, its sanitized code and any provider HTTP status."""
+    label = f"error:{type(exc).__name__}"
+    if isinstance(exc, model_adapter.ModelAdapterError):
+        label += f":{exc.code}"
+        if isinstance(exc.provider_status, int):
+            label += f":http_{exc.provider_status}"
+    return label
+
 def evaluate_live_candidate(
     cases: list[dict[str, Any]],
     settings: Settings,
@@ -239,12 +301,16 @@ def evaluate_live_candidate(
     *,
     input_usd_per_million_tokens: float,
     output_usd_per_million_tokens: float,
+    policy: AcceptancePolicy = CORPUS_POLICY,
 ) -> dict[str, Any]:
     """Make at most one adapter call per frozen case and record bounded usage.
 
     Spend protection is the provider project's hard budget plus the fixed corpus
     size; this CLI only reports cost from provider usage and the operator-supplied
-    rate card read on the day of the run. Failed calls have unknown usage.
+    rate card read on the day of the run. A call whose HTTP response succeeded but
+    whose output the contract rejected is still costed from its reported usage;
+    only calls with no usable response (timeout, transport or HTTP error) have
+    unknown cost.
     """
     costs: list[float | None] = []
 
@@ -253,6 +319,8 @@ def evaluate_live_candidate(
         try:
             interpreted = asyncio.run(model_adapter.interpret_message(text, context=context, settings=settings))
         except model_adapter.ModelAdapterError as exc:
+            if exc.usage is not None:
+                costs[-1] = _cost_usd(exc.usage, input_usd_per_million_tokens, output_usd_per_million_tokens)
             if exc.code == "model_timeout":
                 raise TimeoutError("model timeout") from None
             raise
@@ -267,7 +335,7 @@ def evaluate_live_candidate(
             },
         }
 
-    report = evaluate_cases(cases, candidate, mode="candidate")
+    report = evaluate_cases(cases, candidate, mode="candidate", policy=policy)
     for result, cost in zip(report["results"], costs, strict=True):
         result["cost_usd"] = cost
     latencies = [item["latency_ms"] for item in report["results"]]
@@ -282,6 +350,11 @@ def evaluate_live_candidate(
             "output": output_usd_per_million_tokens,
         },
         "aggregate_cost_usd": sum(cost for cost in costs if cost is not None),
+        # Includes billed-but-rejected calls (contract rejected the output).
+        "rejected_output_costed_calls": sum(
+            cost is not None and item["error"] is not None for item, cost in zip(report["results"], costs, strict=True)),
+        # Calls with no usable provider response (timeout, transport or HTTP error):
+        # their cost is not in aggregate_cost_usd.
         "unknown_cost_calls": sum(cost is None for cost in costs),
         "latency_ms_p50": _percentile(latencies, 0.50),
         "latency_ms_p95": _percentile(latencies, 0.95),
@@ -303,6 +376,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("baseline", "candidate"), required=True)
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
+    parser.add_argument("--policy", choices=sorted(POLICIES), default=CORPUS_POLICY.name,
+                        help="acceptance policy: corpus (30 cases, >=29), holdout (12 cases, >=11) or assignment (8 cases, 8/8)")
     parser.add_argument("--acceptance", action="store_true")
     parser.add_argument("--live", action="store_true", help="call the configured model for candidate evaluation")
     parser.add_argument("--input-usd-per-mtok", type=_rate,
@@ -314,12 +389,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.live and args.mode != "candidate":
         parser.error("--live requires --mode candidate")
     try:
-        cases = load_and_validate_cases(args.cases)
+        policy = POLICIES[args.policy]
+        cases = load_and_validate_cases(args.cases, policy)
     except CorpusValidationError as exc:
         parser.error(str(exc))
 
     if args.mode == "baseline":
-        report = evaluate_cases(cases, parse_intent, mode="baseline")
+        report = evaluate_cases(cases, parse_intent, mode="baseline", policy=policy)
     elif args.live:
         settings = load_settings()
         if (settings.model_access_available
@@ -329,19 +405,20 @@ def main(argv: list[str] | None = None) -> int:
                 cases, settings, hashlib.sha256(args.cases.read_bytes()).hexdigest(),
                 input_usd_per_million_tokens=args.input_usd_per_mtok,
                 output_usd_per_million_tokens=args.output_usd_per_mtok,
+                policy=policy,
             )
         else:
             def unconfigured_live(_text, _context):
                 raise RuntimeError("candidate model or prices are not configured")
 
-            report = evaluate_cases(cases, unconfigured_live, mode="candidate")
+            report = evaluate_cases(cases, unconfigured_live, mode="candidate", policy=policy)
             report["candidate_status"] = "missing_model_configuration_no_provider_call_made"
             report["aggregate_cost_usd"] = 0.0
     else:
         def unconfigured(_text, _context):
             raise RuntimeError("candidate adapter is not configured")
 
-        report = evaluate_cases(cases, unconfigured, mode="candidate")
+        report = evaluate_cases(cases, unconfigured, mode="candidate", policy=policy)
         report["candidate_status"] = "unconfigured_no_provider_call_made"
     if args.acceptance and args.mode == "baseline":
         report["acceptance_note"] = "Baseline measurement is descriptive; candidate bar is not applied."
