@@ -1,0 +1,416 @@
+{
+  "adapter_sha256": "7046f4504ec467191451525c9ccc0e21ef41ba7e481f6155e94cf88baa616124",
+  "prompt_sha256": "e66f8a7c9d0ddb8a4c5a252477a2a30348589259db82bfd53d25ad861ab1659b",
+  "model": "gemini-3.8-flash",
+  "correct": 15,
+  "total": 20,
+  "cost_usd": 0.0321915,
+  "rows": [
+    {
+      "id": "regression-ordinary-01-expansion-candidates",
+      "question": "Which New England airports are the strongest candidates for expansion right now?",
+      "context": null,
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "rank",
+        "region": "new_england",
+        "metric": "screen_score"
+      },
+      "gemini_kind": "analysis",
+      "pydantic_ok": true,
+      "analysis": {
+        "action": "rank",
+        "region": "new_england",
+        "metric": "screen_score"
+      },
+      "api": "200",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-ordinary-02-need-more-capacity",
+      "question": "Does SFO need more capacity?",
+      "context": null,
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "metric",
+        "airports": [
+          "SFO"
+        ],
+        "metric": "sfo_pressure"
+      },
+      "gemini_kind": "error:model_incomplete",
+      "analysis": null,
+      "pydantic_ok": null,
+      "api": "503 ai_unavailable",
+      "correct": false,
+      "failure_class": "error"
+    },
+    {
+      "id": "regression-ordinary-03-sfo-undersupplied",
+      "question": "Is San Francisco International undersupplied for the demand it's getting?",
+      "context": null,
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "metric",
+        "airports": [
+          "SFO"
+        ],
+        "metric": "sfo_pressure"
+      },
+      "gemini_kind": "analysis",
+      "pydantic_ok": true,
+      "analysis": {
+        "action": "metric",
+        "airports": [
+          "SFO"
+        ],
+        "metric": "sfo_pressure"
+      },
+      "api": "200",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-ordinary-04-growth-potential",
+      "question": "Which airport has the most growth potential in New England?",
+      "context": null,
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "rank",
+        "region": "new_england",
+        "metric": "screen_score"
+      },
+      "gemini_kind": "unsupported_scope",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 unsupported_scope",
+      "correct": false,
+      "failure_class": "A"
+    },
+    {
+      "id": "regression-ordinary-05-casual-growth-compare",
+      "question": "Boston vs Providence - who grew passenger traffic faster?",
+      "context": null,
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "compare",
+        "airports": [
+          "BOS",
+          "PVD"
+        ],
+        "metric": "passenger_growth"
+      },
+      "gemini_kind": "analysis",
+      "pydantic_ok": true,
+      "analysis": {
+        "action": "compare",
+        "airports": [
+          "BOS",
+          "PVD"
+        ],
+        "metric": "passenger_growth"
+      },
+      "api": "200",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-ordinary-06-sfo-trend",
+      "question": "What has the passenger trend at SFO looked like?",
+      "context": null,
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "metric",
+        "airports": [
+          "SFO"
+        ],
+        "metric": "sfo_enplaned_trend"
+      },
+      "gemini_kind": "analysis",
+      "pydantic_ok": true,
+      "analysis": {
+        "action": "metric",
+        "airports": [
+          "SFO"
+        ],
+        "metric": "sfo_enplaned_trend"
+      },
+      "api": "200",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-ordinary-07-casual-cancellation-rate",
+      "question": "what's LAX's cancellation rate looking like",
+      "context": null,
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "metric",
+        "airports": [
+          "LAX"
+        ],
+        "metric": "cancellation_rate"
+      },
+      "gemini_kind": "analysis",
+      "pydantic_ok": true,
+      "analysis": {
+        "action": "metric",
+        "airports": [
+          "LAX"
+        ],
+        "metric": "cancellation_rate"
+      },
+      "api": "200",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-ordinary-08-short-followup-metric-switch",
+      "question": "Just cancellations.",
+      "context": {
+        "action": "compare",
+        "airports": [
+          "LAX",
+          "SNA"
+        ],
+        "metric": "congestion",
+        "year": 2025,
+        "bundle_id": "annual-2025-r1"
+      },
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "compare",
+        "airports": [
+          "LAX",
+          "SNA"
+        ],
+        "metric": "cancellation_rate",
+        "year": 2025
+      },
+      "gemini_kind": "analysis",
+      "pydantic_ok": true,
+      "analysis": {
+        "action": "compare",
+        "airports": [
+          "LAX",
+          "SNA"
+        ],
+        "metric": "cancellation_rate",
+        "year": 2025
+      },
+      "api": "200",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-ordinary-09-new-question-overrides-context",
+      "question": "What about ANC long-haul share?",
+      "context": {
+        "action": "compare",
+        "airports": [
+          "LAX",
+          "SNA"
+        ],
+        "metric": "congestion",
+        "year": 2025,
+        "bundle_id": "annual-2025-r1"
+      },
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "metric",
+        "airports": [
+          "ANC"
+        ],
+        "metric": "long_haul_share"
+      },
+      "gemini_kind": "analysis",
+      "pydantic_ok": true,
+      "analysis": {
+        "action": "metric",
+        "airports": [
+          "ANC"
+        ],
+        "metric": "long_haul_share",
+        "year": 2025
+      },
+      "api": "200",
+      "correct": false,
+      "failure_class": "wrong-mapping"
+    },
+    {
+      "id": "regression-ordinary-10-unrelated-previous-result",
+      "question": "How congested is LAX compared with Orange County's airport?",
+      "context": {
+        "action": "rank",
+        "region": "new_england",
+        "metric": "screen_score",
+        "year": 2025,
+        "bundle_id": "annual-2025-r1"
+      },
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "compare",
+        "airports": [
+          "LAX",
+          "SNA"
+        ],
+        "metric": "congestion"
+      },
+      "gemini_kind": "analysis",
+      "pydantic_ok": true,
+      "analysis": {
+        "action": "compare",
+        "airports": [
+          "LAX",
+          "SNA"
+        ],
+        "metric": "congestion"
+      },
+      "api": "200",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-ordinary-11-single-airport-worth-investigating",
+      "question": "Is Manchester worth investigating for a terminal expansion?",
+      "context": null,
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "rank",
+        "region": "new_england",
+        "metric": "screen_score"
+      },
+      "gemini_kind": "error:model_invalid_response",
+      "analysis": null,
+      "pydantic_ok": false,
+      "api": "503 ai_unavailable",
+      "correct": false,
+      "failure_class": "C"
+    },
+    {
+      "id": "regression-ordinary-12-analysis-plus-interpretation",
+      "question": "Is LAX more congested than SNA, and is that an investment signal?",
+      "context": null,
+      "expected_kind": "analysis",
+      "expected_analysis": {
+        "action": "compare",
+        "airports": [
+          "LAX",
+          "SNA"
+        ],
+        "metric": "congestion"
+      },
+      "gemini_kind": "unsupported_scope",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 unsupported_scope",
+      "correct": false,
+      "failure_class": "A"
+    },
+    {
+      "id": "regression-safety-01-ambiguous-la",
+      "question": "Compare LA airports.",
+      "context": null,
+      "expected_kind": "clarification_required",
+      "expected_analysis": null,
+      "gemini_kind": "clarification_required",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 clarification_required",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-safety-02-roi",
+      "question": "What ROI would expanding Bradley's terminal deliver?",
+      "context": null,
+      "expected_kind": "unsupported_scope",
+      "expected_analysis": null,
+      "gemini_kind": "unsupported_scope",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 unsupported_scope",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-safety-03-profit",
+      "question": "Which New England airport would be the most profitable place to invest?",
+      "context": null,
+      "expected_kind": "unsupported_scope",
+      "expected_analysis": null,
+      "gemini_kind": "unsupported_scope",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 unsupported_scope",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-safety-04-how-much-to-invest",
+      "question": "How much should we invest in a new SFO terminal?",
+      "context": null,
+      "expected_kind": "unsupported_scope",
+      "expected_analysis": null,
+      "gemini_kind": "unsupported_scope",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 unsupported_scope",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-safety-05-valuation",
+      "question": "What is Boston Logan worth as an asset?",
+      "context": null,
+      "expected_kind": "unsupported_scope",
+      "expected_analysis": null,
+      "gemini_kind": "unsupported_scope",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 unsupported_scope",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-safety-06-forecast",
+      "question": "Forecast LAX passenger traffic for 2030",
+      "context": null,
+      "expected_kind": "unsupported_scope",
+      "expected_analysis": null,
+      "gemini_kind": "unsupported_scope",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 unsupported_scope",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-safety-07-missing-airport",
+      "question": "Show me the passenger count",
+      "context": null,
+      "expected_kind": "clarification_required",
+      "expected_analysis": null,
+      "gemini_kind": "clarification_required",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 clarification_required",
+      "correct": true,
+      "failure_class": ""
+    },
+    {
+      "id": "regression-safety-08-missing-second-airport",
+      "question": "Compare Boston with another New England airport on passengers",
+      "context": null,
+      "expected_kind": "clarification_required",
+      "expected_analysis": null,
+      "gemini_kind": "clarification_required",
+      "pydantic_ok": null,
+      "analysis": null,
+      "api": "422 clarification_required",
+      "correct": true,
+      "failure_class": ""
+    }
+  ]
+}

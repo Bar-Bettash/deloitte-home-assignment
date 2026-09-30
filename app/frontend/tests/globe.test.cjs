@@ -131,6 +131,12 @@ function harness({ context = true, throwContext = false, autoLoad = true, shader
   };
 }
 
+// Scope changes fly the camera over ~750 ms of animation frames; run the flight
+// to its end (100 ms per frame, the flight's per-frame cap) before reading the view.
+function fly(h, frames = 10) {
+  for (let i = 0; i < frames; i += 1) { if (i) h.advance(100); h.frame(); }
+}
+
 async function settle(h) {
   await Promise.resolve();
   await new Promise((resolve) => setImmediate(resolve));
@@ -519,6 +525,7 @@ test('camera focuses a changed normalized airport set once and waits for map ass
   await settle(deferred);
   for (const image of deferred.imageInstances) image.onload();
   await settle(deferred);
+  fly(deferred);
   assert.ok(deferred.calls.uCenter, 'pending focus is applied when globe assets finish loading');
   const focusedCenter = [...deferred.calls.uCenter];
   assert.notDeepEqual(focusedCenter, [-100 * Math.PI / 180, 25 * Math.PI / 180]);
@@ -529,14 +536,21 @@ test('camera focuses a changed normalized airport set once and waits for map ass
   await settle(h);
   const initialCenter = [...h.calls.uCenter];
   h.windowListeners.get('analysisresultchange')({ detail: { airports: ['LAX'], focusAirports: ['LAX'] } });
+  assert.deepEqual([...h.calls.uCenter], initialCenter, 'the camera flies rather than jumping on the event itself');
+  fly(h, 3);
+  const midFlight = [...h.calls.uCenter];
+  assert.notDeepEqual(midFlight, initialCenter, 'the flight moves the camera frame by frame');
+  fly(h);
   const laxCenter = [...h.calls.uCenter];
-  assert.notDeepEqual(laxCenter, initialCenter);
+  assert.notDeepEqual(laxCenter, midFlight, 'the flight continues past its early frames');
   h.windowListeners.get('analysisresultchange')({ detail: { airports: ['SFO'], focusAirports: ['SFO'] } });
+  fly(h);
   assert.notDeepEqual(h.calls.uCenter, laxCenter, 'a changed airport set moves the camera once');
   const sfoCenter = [...h.calls.uCenter];
   h.windowListeners.get('analysisresultchange')({ detail: { airports: [], focusAirports: [] } });
   assert.deepEqual(h.calls.uCenter, sfoCenter, 'clearing result context does not move the globe');
   h.windowListeners.get('analysisresultchange')({ detail: { airports: ['LAX'], focusAirports: ['LAX'] } });
+  fly(h);
   assert.notDeepEqual(h.calls.uCenter, sfoCenter, 'the same airport set can be focused again after context was cleared');
 });
 

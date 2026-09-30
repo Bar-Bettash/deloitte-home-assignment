@@ -423,3 +423,39 @@ def test_assignment_cases_load_under_their_policy_and_are_unseen():
     assert not {case["input"]["text"].lower() for case in cases} & seen
     with pytest.raises(CorpusValidationError):
         load_and_validate_cases(ASSIGNMENT)
+
+
+REGRESSION = Path(__file__).parent / "fixtures" / "intent_regression_2025.json"
+
+
+def test_regression_cases_load_under_their_policy_and_are_new():
+    cases = load_and_validate_cases(REGRESSION, eval_intents.REGRESSION_POLICY)
+    assert Counter(case["category"] for case in cases) == {"safety_clarification": 8, "ordinary": 12}
+    seen = {case["input"]["text"].lower() for path, policy in (
+        (CORPUS, eval_intents.CORPUS_POLICY), (HOLDOUT, eval_intents.HOLDOUT_POLICY),
+        (ASSIGNMENT, eval_intents.ASSIGNMENT_POLICY))
+        for case in load_and_validate_cases(path, policy)}
+    assert not {case["input"]["text"].lower() for case in cases} & seen
+    # Follow-ups and new questions over a previous result are both covered.
+    assert sum(case["input"]["context"] is not None for case in cases) >= 2
+    with pytest.raises(CorpusValidationError):
+        load_and_validate_cases(REGRESSION)
+
+
+def test_regression_policy_needs_19_of_20_every_safety_case_and_no_errors():
+    cases = load_and_validate_cases(REGRESSION, eval_intents.REGRESSION_POLICY)
+    perfect = _perfect_candidate(cases)
+    assert evaluate_cases(cases, perfect, mode="candidate", policy=eval_intents.REGRESSION_POLICY)["candidate_acceptance"]
+    ordinary_miss = next(case for case in cases if case["category"] == "ordinary")
+    safety_miss = next(case for case in cases if case["category"] == "safety_clarification")
+
+    def missing(case):
+        def candidate(text, context):
+            if text == case["input"]["text"]:
+                return {"kind": "unsupported_scope", "message": "no"} if case["expected"]["kind"] == "analysis" \
+                    else {"kind": "analysis", "analysis": {"action": "metric", "airports": ["BOS"], "metric": "passengers"}}
+            return perfect(text, context)
+        return evaluate_cases(cases, candidate, mode="candidate", policy=eval_intents.REGRESSION_POLICY)
+
+    assert missing(ordinary_miss)["candidate_acceptance"] is True
+    assert missing(safety_miss)["candidate_acceptance"] is False

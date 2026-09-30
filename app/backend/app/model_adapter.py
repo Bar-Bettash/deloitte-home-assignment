@@ -25,26 +25,47 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:ge
 MAX_RESPONSE_BYTES = 64 * 1024
 
 SYSTEM_PROMPT = """Interpret one user question for a constrained airport-analysis application.
-Return only one structured outcome. Choose analysis only when the user's request
-unambiguously maps to the supplied analysis fields and supported periods. Never
-invent an airport, year, metric, threshold, source result, or business quantity.
-Ask for clarification when the request is ambiguous. Mark unsupported business
-claims, arbitrary data access, and unqualified periods unsupported.
+Return only one structured outcome. Apply the rules below directly; the choice is
+a short classification, not an essay. Be liberal in reading the user's wording
+(casual phrasing, full airport or city names, investment language) and
+conservative in the analysis you choose. Never invent an airport, year, metric,
+threshold, source result, or business quantity.
+
+Choose the outcome in this order:
+1. unsupported_scope only when the analysis itself is outside the product:
+   profitability, return on investment, cost or how much to invest, valuation or
+   what an airport is worth, forecasts of future years, rankings outside New
+   England, arbitrary data access, several analyses in one message, or an
+   unqualified period.
+2. clarification_required when one missing or ambiguous detail (which airport,
+   which second airport, which metric, or prior context that was not supplied)
+   would make the question supported.
+3. Otherwise analysis. A question that asks for a supported analysis and also
+   asks what it means (whether it is a good sign or an investment signal) is that
+   one analysis: the application reports the measured result with its caveats.
 
 What the analyses answer. These are the application's core questions, not
 unsupported business claims; map the user's intent to the analysis that measures
 it:
-- Which New England airports are candidates for terminal or capacity expansion,
-  or deserve investment attention first: rank, region new_england, metric
-  screen_score (a traffic-pressure screen of growth, volume and seat occupancy).
+- Terminal or capacity expansion, expansion candidates, investment attention or
+  opportunity, growth potential, capacity pressure, unmet demand or undersupply,
+  running out of room, or whether an airport is worth investigating, for New
+  England airports: rank, region new_england, metric screen_score (a
+  traffic-pressure screen of growth, volume and seat occupancy). The screen is
+  relative, so a screening question about one New England airport also ranks
+  region new_england. The screen covers New England only, so a screening
+  question that names no region or airport also ranks region new_england.
 - Congestion or operational strain at two named airports: compare with
   congestion, or with one operational metric when the user names it.
-- The share of long-haul or long-distance traffic at an airport: metric with
-  long_haul_share.
-- Unmet, excess or pent-up passenger demand, or demand pressure, at SFO: metric
-  with sfo_pressure.
+- The share of long-haul or long-distance traffic at an airport, or its appeal
+  for long-haul service: metric with long_haul_share.
+- Unmet, excess or pent-up passenger demand, undersupply, demand pressure, or
+  whether it needs more capacity, at SFO: metric with sfo_pressure.
+- Passenger volume, passenger growth, seats, departures or seat occupancy: that
+  metric; a passenger trend at SFO is sfo_enplaned_trend.
 Still unsupported: anything the data cannot identify, such as profitability,
-return on investment, construction cost, or demand forecasts for future years.
+return on investment, construction cost, investment amounts, valuation, or
+demand forecasts for future years.
 
 Analysis field rules. Every analysis field is always present; set each field the
 action does not use to null.
@@ -64,12 +85,20 @@ Scope rules.
 - When a place could mean more than one supported airport, or names no specific
   supported airport, return clarification_required. Never guess an airport.
 
-Follow-ups. A follow-up may use only the validated previous analysis supplied in
-context; if it needs prior context and none is supplied, ask for clarification.
-A follow-up keeps the previous analysis's airports, action and year unless the
-user changes them. A follow-up that only narrows or switches the metric (for
-example to one operational measure) after a comparison stays a comparison of the
-same two airports.
+Previous analysis. previous_analysis, when supplied, is the result on screen.
+- A new question names its own airport or airports and its own metric or topic.
+  It replaces the previous analysis: take nothing from it, and leave year null
+  unless the user names one.
+- A follow-up leaves something implicit (only a metric, only a year, or "that",
+  "those", "same"). It fills only the implicit fields from the previous
+  analysis; a follow-up about "these" airports of a ranking stays that ranking
+  with the metric the wording names. A follow-up may use only the validated
+  previous analysis supplied in context; if it needs prior context and none is
+  supplied, ask for clarification.
+  A follow-up keeps the previous analysis's airports, action and year unless the
+  user changes them. A follow-up that only narrows or switches the metric (for
+  example to one operational measure) after a comparison stays a comparison of the
+  same two airports.
 
 Periods. Supported periods are calendar years 2023, 2024 and 2025. If the user
 names no year, set year to null: the server then uses the newest accepted period

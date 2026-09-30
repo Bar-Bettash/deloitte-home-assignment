@@ -31,6 +31,7 @@ let busy = false;
 let resultIsPrevious = false;
 let rendererReady = false;
 let explanation = null;
+let methodologyExtras = [];
 const metricRenderers = Object.create(null);
 
 function dispatchGlobeEvent(type, detail) {
@@ -58,6 +59,7 @@ function publishGlobeState() { publishDraftState(); publishResultState(); }
 function changedDraft(renderPrevious = true) {
   if (busy) setLoading(false);
   requestGeneration += 1;
+  cancelResultFade();
   renderDraftSummary();
   if (latestSuccessfulResult && renderPrevious && $("#hero-layout").classList.contains("has-result")) {
     resultIsPrevious = true;
@@ -95,6 +97,9 @@ function addAirportToDraft(code) {
   return true;
 }
 
+// Loading copy never names a deadline; a longer hint appears only after a pause.
+const LOADING_HINT_DELAY_MS = 4000;
+let loadingHintTimer = null;
 function setLoading(value) {
   busy = value;
   $("#controls").setAttribute("aria-busy", String(value));
@@ -102,6 +107,52 @@ function setLoading(value) {
   $("#explain").disabled = value || !contextResultId;
   $("#question").disabled = value;
   $("#chat-form button").disabled = value;
+  document.body?.classList?.toggle("is-analyzing", value);
+  $("#result-panel").classList.toggle("is-loading", value);
+  if (!value) {
+    clearTimeout(loadingHintTimer);
+    loadingHintTimer = null;
+    feedback.removeAttribute("data-loading");
+  }
+}
+function showLoadingFeedback(label, generation) {
+  showFeedback(`${label}…`);
+  feedback.setAttribute("data-loading", "true");
+  clearTimeout(loadingHintTimer);
+  loadingHintTimer = setTimeout(() => {
+    loadingHintTimer = null;
+    if (busy && generation === requestGeneration && feedback.getAttribute("data-loading") === "true") {
+      feedback.textContent = `${label}… This may take a few more seconds.`;
+    }
+  }, LOADING_HINT_DELAY_MS);
+  loadingHintTimer?.unref?.();
+}
+
+// Result swap: the shown result dims briefly, the DOM is replaced, then the new
+// content settles in. Reduced motion (or no matchMedia) swaps immediately.
+const RESULT_OUT_MS = 120;
+function prefersReducedMotion() {
+  return typeof window.matchMedia !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+function fadeOutResult() {
+  const panel = $("#result-panel");
+  if (panel.hidden || prefersReducedMotion()) return Promise.resolve();
+  panel.classList.add("is-leaving");
+  return new Promise((resolve) => setTimeout(resolve, RESULT_OUT_MS));
+}
+// A superseded request (draft edit, Back) must never leave the shown result dimmed.
+function cancelResultFade() {
+  $("#result-panel").classList.remove("is-leaving");
+}
+function fadeInResult(wasHidden) {
+  const panel = $("#result-panel");
+  panel.classList.remove("is-leaving");
+  if (prefersReducedMotion()) return;
+  const start = wasHidden ? "is-entering-fresh" : "is-entering";
+  panel.classList.add(start);
+  const settle = () => panel.classList.remove(start);
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(settle));
+  else setTimeout(settle, 16);
 }
 
 function positionFeedback(target = null) {
@@ -284,10 +335,7 @@ async function submitRequest(request) {
     // Follow-ups and explanations keep the current result labeled as current:
     // nothing replaces it unless a new result is admitted.
     if (kind !== "analysis" && latestSuccessfulResult) positionFeedback(resultActions);
-    showFeedback(kind === "explain" ? "Loading explanation…"
-      : latestSuccessfulResult
-        ? "Loading analysis. The previous result remains available; this can take up to 30 seconds."
-        : "Loading analysis. This can take up to 30 seconds.");
+    showLoadingFeedback(kind === "explain" ? "Preparing explanation" : "Analyzing", generation);
     if (latestSuccessfulResult && kind === "analysis") renderResult(latestSuccessfulResult, true);
     timeout = setTimeout(() => controller.abort(), 35000);
     const response = await fetch("/api/query", {
@@ -315,12 +363,16 @@ async function submitRequest(request) {
       feedback.setAttribute("data-complete", "true");
       return;
     }
+    const panelWasHidden = $("#result-panel").hidden;
+    await fadeOutResult();
+    if (generation !== requestGeneration) { cancelResultFade(); return; }
     latestSuccessfulResult = result;
     contextResultId = result.result_id;
     resultIsPrevious = false;
     explanation = null;
     if (kind === "followup") $("#question").value = "";
     renderResult(result, false);
+    fadeInResult(panelWasHidden);
     showResultReady(result.status === "partial" ? "Partial result received. Review unavailable metrics, exclusions, and limitations." : "Analysis received.");
   } catch (error) {
     if (generation !== requestGeneration) return;
@@ -409,17 +461,21 @@ function renderResult(result, previous) {
   dashboard.className = "dashboard-grid";
   dashboard.classList.toggle("congestion-dashboard", result.scope.metric === "congestion");
   dashboard.classList.toggle("screening-dashboard", result.scope.metric === "screen_score");
+  dashboard.classList.toggle("long-haul-dashboard", result.scope.metric === "long_haul_share");
   resultPanel.append(dashboard);
   const metricView = document.createElement("div");
   metricView.className = "metric-view";
   metricView.id = "metric-view";
   dashboard.append(metricView);
+  // Renderers contribute exact tables here; they are shown inside the single
+  // collapsed "Methodology & limitations" disclosure, never above the fold.
+  methodologyExtras = [];
   renderMetricView(result, metricView);
   const insights = document.createElement("section");
   insights.className = "key-insights";
-  heading(insights, "h3", "Key insights");
-  paragraph(insights, result.summary || "No summary was returned.");
-  if (result.limitations.length) paragraph(insights, `Limitation · ${result.limitations[0]}`);
+  heading(insights, "h3", "Key insight");
+  renderInsightSummary(insights, result.summary || "No summary was returned.");
+  if (result.limitations.length) paragraph(insights, `Limitation · ${result.limitations[0]}`).className = "insight-limitation";
   if (explanation && explanation.resultId === result.result_id) paragraph(insights, `Explanation · ${explanation.text}`).id = "result-explanation";
   dashboard.classList.toggle("fullwidth-insights", ["sfo_pressure", "sfo_enplaned_trend"].includes(result.scope.metric));
   dashboard.append(insights);
@@ -432,9 +488,7 @@ function renderResult(result, previous) {
     if (result.series.length) {
       const units = [...new Set(result.series.map((point) => point.unit))];
       const unitCaption = units.length === 1 ? `Unit: ${units[0]}` : `Units vary: ${units.join(", ")}`;
-      paragraph(seriesPanel, `${unitCaption} · ${result.series[0].period.slice(0, 4)}-${result.series[0].period.slice(4)} to ${result.series.at(-1).period.slice(0, 4)}-${result.series.at(-1).period.slice(4)} · returned values only`);
-    }
-    if (result.series.length) {
+      paragraph(seriesPanel, `${unitCaption} · ${result.series[0].period.slice(0, 4)}-${result.series[0].period.slice(4)} to ${result.series.at(-1).period.slice(0, 4)}-${result.series.at(-1).period.slice(4)} · returned values only`).className = "series-caption";
       const table = makeTable("Monthly series — complete returned values and units", ["Month", "Value"]);
       for (const point of result.series) {
         const tr = document.createElement("tr");
@@ -445,98 +499,123 @@ function renderResult(result, previous) {
       const chart = renderSeriesChart(result.series);
       if (chart) seriesPanel.append(chart);
       else paragraph(seriesPanel, "Series not plotted: no usable returned count values.");
-      const exact = document.createElement("details");
-      heading(exact, "summary", "Exact monthly values");
-      exact.append(table.region);
-      seriesPanel.append(exact);
+      methodologyExtras.push(["Exact monthly values", [table.region]]);
     } else paragraph(seriesPanel, "No monthly series was returned.");
     if (["sfo_pressure", "sfo_enplaned_trend"].includes(result.scope.metric)) resultPanel.insertBefore(seriesPanel, dashboard);
     else dashboard.append(seriesPanel);
   }
-  const evidenceGroup = document.createElement("details");
-  evidenceGroup.className = "evidence-source-group";
-  heading(evidenceGroup, "summary", "Evidence and sources");
-  const evidenceHeading = heading(evidenceGroup, "h3", "Evidence and counterevidence");
+  const { group: evidenceGroup, heading: evidenceHeading } = renderEvidencePanel(result);
+  resultPanel.append(evidenceGroup, renderMethodologyPanel(result), renderTechnicalPanel(result));
+  $("#view-evidence").onclick = () => { evidenceGroup.open = true; evidenceHeading.focus(); };
+  updateContextStrip(result, previous);
+  publishResultState();
+}
+
+// A leading "Label:" in the returned summary is emphasised; the text itself is
+// rendered verbatim (split, never rewritten).
+function renderInsightSummary(parent, text) {
+  const node = document.createElement("p");
+  node.className = "insight-summary";
+  const match = /^([^:.]{3,40}:)\s(.+)$/s.exec(text);
+  if (match) {
+    const lead = document.createElement("strong");
+    lead.textContent = match[1];
+    node.append(lead);
+    const rest = document.createElement("span");
+    rest.textContent = ` ${match[2]}`;
+    node.append(rest);
+  } else node.textContent = text;
+  parent.append(node);
+  return node;
+}
+
+function disclosure(className, title) {
+  const group = document.createElement("details");
+  group.className = className;
+  group.open = false;
+  heading(group, "summary", title);
+  return group;
+}
+
+function renderEvidencePanel(result) {
+  const group = disclosure("evidence-source-group", "Evidence & sources");
+  const evidenceHeading = heading(group, "h3", "Evidence and counterevidence");
   evidenceHeading.id = "analysis-evidence";
   evidenceHeading.tabIndex = -1;
-  if (!result.evidence.length) paragraph(evidenceGroup, "No reviewed evidence was returned for this result; traffic alone does not establish an investment case.");
+  if (!result.evidence.length) paragraph(group, "No reviewed evidence was returned for this result; traffic alone does not establish an investment case.");
   for (const evidence of result.evidence) {
-    const details = document.createElement("details");
-    details.open = false;
-    const source = result.sources.find((item) => item.id === evidence.source_id);
-    heading(details, "summary", `${source?.name || "Reviewed source"} · ${evidence.date}`);
-    paragraph(details, `Evidence: ${evidence.claim}`);
-    paragraph(details, `Locator: ${evidence.locator}`);
-    paragraph(details, `Limitation / counterevidence: ${evidence.limitation}`);
-    if (!source) paragraph(details, `Source ID: ${evidence.source_id}`);
-    evidenceGroup.append(details);
+    const item = document.createElement("div");
+    item.className = "evidence-item";
+    const source = result.sources.find((entry) => entry.id === evidence.source_id);
+    paragraph(item, `${source?.name || "Reviewed source"} · ${evidence.date}`).className = "evidence-source";
+    paragraph(item, `Evidence: ${evidence.claim}`);
+    paragraph(item, `Locator: ${evidence.locator}`);
+    paragraph(item, `Limitation / counterevidence: ${evidence.limitation}`);
+    if (!source) paragraph(item, `Source ID: ${evidence.source_id}`);
+    group.append(item);
   }
-  if (result.scope.metric === "sfo_pressure") paragraph(evidenceGroup, "These signals do not quantify or establish unmet demand.");
-  if (result.scope.metric === "sfo_pressure") {
-    const row = result.rows.find(item => item.airport === "SFO");
-    const primary = new Set(["passenger_growth", "seat_occupancy", "sfo_pressure"]);
-    const supporting = row?.metrics.filter(metric => !primary.has(metric.key)) || [];
-    if (supporting.length) {
-      const details = document.createElement("details");
-      heading(details, "summary", "Supporting indicators");
-      for (const metric of supporting) paragraph(details, `${humanMetricLabel(metric.key)} · ${metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : formatMetric(metric)}`);
-      evidenceGroup.append(details);
-    }
-  }
-  if (result.exclusions.length || result.limitations.length) {
-    const limits = document.createElement("details");
-    limits.className = "limits-detail";
-    limits.open = false;
-    heading(limits, "summary", "Limitations and coverage");
-    listSection(limits, "Exclusions", result.exclusions);
-    listSection(limits, "Limitations", result.limitations);
-    evidenceGroup.append(limits);
-  }
-  const sourcesPanel = document.createElement("details");
-  heading(sourcesPanel, "summary", "Values and sources");
-  paragraph(sourcesPanel, `Population: ${result.scope.population}`);
-  if (result.scope.threshold_miles != null) paragraph(sourcesPanel, `Long-haul threshold: ${formatNumber(result.scope.threshold_miles)} miles.`);
-  for (const row of result.rows) for (const metric of row.metrics) {
-    const parts = [`${row.airport} · ${humanMetricLabel(metric.key)}`, metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : `Value: ${formatMetric(metric)}`];
-    if (metric.numerator != null && metric.denominator != null) parts.push(`Numerator / denominator: ${formatNumber(metric.numerator)} / ${formatNumber(metric.denominator)}`);
-    if (metric.eligible_count != null) parts.push(`Eligible observations: ${formatNumber(metric.eligible_count)}`);
-    if (metric.comparison_direction) parts.push(`Direction: ${humanDirection(metric.comparison_direction)}`);
-    parts.push(`Source IDs: ${metric.source_ids.join(", ") || "None returned"}`);
-    paragraph(sourcesPanel, parts.join(" · "));
-  }
-  heading(sourcesPanel, "h3", "Sources");
+  if (result.scope.metric === "sfo_pressure") paragraph(group, "These signals do not quantify or establish unmet demand.");
+  heading(group, "h3", "Sources");
   if (!result.sources.length) {
-    paragraph(sourcesPanel, "No source references were returned. Treat the result as incomplete and review the scope or run another supported example.");
+    paragraph(group, "No source references were returned. Treat the result as incomplete and review the scope or run another supported example.");
     const action = document.createElement("button");
     action.type = "button";
     action.textContent = "Review scope";
     action.addEventListener("click", openSetupAndScope);
-    sourcesPanel.append(action);
+    group.append(action);
   }
   for (const source of result.sources) {
-    const details = document.createElement("details");
-    heading(details, "summary", source.name);
-    paragraph(details, `Source ID: ${source.id}`);
-    paragraph(details, `Snapshot: ${source.snapshot_id}`);
-    paragraph(details, `Observation period: ${source.period}`);
-    paragraph(details, `Retrieved: ${source.retrieved_at || "Not supplied"}`);
+    const item = document.createElement("div");
+    item.className = "source-item";
+    paragraph(item, source.name).className = "evidence-source";
+    paragraph(item, `Observation period: ${source.period} · Retrieved: ${source.retrieved_at || "Not supplied"}`);
     if (isSafeHttpUrl(source.url)) {
       const link = document.createElement("a");
       link.href = source.url; link.target = "_blank"; link.rel = "noopener noreferrer";
-      link.textContent = "Open cited source (new tab)"; details.append(link);
+      link.textContent = "Open cited source (new tab)"; item.append(link);
     }
-    sourcesPanel.append(details);
+    group.append(item);
   }
-  evidenceGroup.append(sourcesPanel);
-  const diagnostics = document.createElement("details");
-  diagnostics.className = "technical-details";
-  heading(diagnostics, "summary", "Technical request details");
-  paragraph(diagnostics, `Request ID: ${result.request_id}`);
-  evidenceGroup.append(diagnostics);
-  resultPanel.append(evidenceGroup);
-  $("#view-evidence").onclick = () => { evidenceGroup.open = true; evidenceHeading.focus(); };
-  updateContextStrip(result, previous);
-  publishResultState();
+  return { group, heading: evidenceHeading };
+}
+
+function renderMethodologyPanel(result) {
+  const group = disclosure("methodology-group", "Methodology & limitations");
+  paragraph(group, `Population: ${result.scope.population}`);
+  if (result.scope.threshold_miles != null) paragraph(group, `Long-haul threshold: ${formatNumber(result.scope.threshold_miles)} miles.`);
+  for (const [title, nodes] of methodologyExtras) {
+    heading(group, "h3", title);
+    group.append(...nodes);
+  }
+  heading(group, "h3", "Values, denominators and directions");
+  const values = document.createElement("div");
+  values.className = "methodology-detail";
+  for (const row of result.rows) for (const metric of row.metrics) {
+    const parts = [`${row.airport} · ${humanMetricLabel(metric.key)}`, metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : `Value: ${formatMetric(metric)}`];
+    if (Number.isInteger(row.rank)) parts.push(`Backend rank ${row.rank}`);
+    if (metric.numerator != null && metric.denominator != null) parts.push(`Numerator / denominator: ${formatNumber(metric.numerator)} / ${formatNumber(metric.denominator)}`);
+    if (metric.eligible_count != null) parts.push(`Eligible observations: ${formatNumber(metric.eligible_count)}`);
+    if (metric.comparison_direction) parts.push(`Direction: ${label(metric.comparison_direction)}`);
+    paragraph(values, parts.join(" · "));
+  }
+  if (!values.children.length) paragraph(values, "No metric values were returned.");
+  group.append(values);
+  listSection(group, "Exclusions", result.exclusions);
+  listSection(group, "Limitations", result.limitations);
+  return group;
+}
+
+// Identifiers (request, result, bundle, source and snapshot IDs) live only here.
+function renderTechnicalPanel(result) {
+  const group = disclosure("technical-details", "Technical details");
+  paragraph(group, `Request ID: ${result.request_id}`);
+  paragraph(group, `Result ID: ${result.result_id}`);
+  if (result.scope.bundle_id != null) paragraph(group, `Bundle: ${result.scope.bundle_id}`);
+  for (const row of result.rows) for (const metric of row.metrics) {
+    paragraph(group, `${row.airport} · ${humanMetricLabel(metric.key)} · Source IDs: ${metric.source_ids.join(", ") || "None returned"}`);
+  }
+  for (const source of result.sources) paragraph(group, `${source.name} · Source ID: ${source.id} · Snapshot: ${source.snapshot_id}`);
+  return group;
 }
 
 function renderKpiRow(result) {
@@ -645,26 +724,10 @@ function updateContextStrip(result, previous) {
 function renderMetricView(result, target) {
   if (!result.rows.length) { renderGenericMetricTable(result, target); return; }
   const renderer = metricRenderers[result.scope.metric];
-  if (typeof renderer === "function" && renderer(result, target) !== false) {
-    if (!new Set(["congestion", "screen_score", "sfo_pressure"]).has(result.scope.metric)) renderSupplementalMetricDetails(result, target);
-    return;
-  }
+  // Exact values, denominators and source IDs for every renderer are listed in
+  // the collapsed methodology and technical disclosures below the result.
+  if (typeof renderer === "function" && renderer(result, target) !== false) return;
   renderGenericMetricTable(result, target);
-}
-function renderSupplementalMetricDetails(result, target) {
-  const details = document.createElement("details");
-  details.className = "methodology-detail";
-  heading(details, "summary", "Values and sources");
-  for (const row of result.rows) for (const metric of row.metrics) {
-    const parts = [`${row.airport} · ${label(metric.key)}`];
-    parts.push(metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : `Value: ${formatMetric(metric)}`);
-    if (metric.numerator != null && metric.denominator != null) parts.push(`Numerator / denominator: ${formatNumber(metric.numerator)} / ${formatNumber(metric.denominator)}`);
-    if (metric.eligible_count != null) parts.push(`Eligible observations: ${formatNumber(metric.eligible_count)}`);
-    if (metric.comparison_direction) parts.push(`Direction: ${label(metric.comparison_direction)}`);
-    parts.push(`Source IDs: ${metric.source_ids.join(", ") || "None returned"}`);
-    paragraph(details, parts.join(" · "));
-  }
-  target.append(details);
 }
 function renderSeriesChart(series) {
   const usable = series.filter(point => point.status === "ok" && Number.isFinite(point.value));
@@ -672,7 +735,8 @@ function renderSeriesChart(series) {
   const points = series.map((point, index) => ({ point, index, month: Number(point.period.slice(4)), year: Number(point.period.slice(0, 4)) }))
     .filter(({ point }) => point.status === "ok" && Number.isFinite(point.value));
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  const width = 960, height = 260, left = 82, right = 18, top = 20, bottom = 40;
+  // A viewBox close to the rendered width keeps axis text near its CSS size.
+  const width = 640, height = 280, left = 78, right = 14, top = 16, bottom = 36;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.setAttribute("role", "img");
   const titleId = `series-chart-title-${series[0].period}`;
@@ -726,7 +790,44 @@ function renderSeriesChart(series) {
     segment.push(current);
   }
   flush();
-  return svg;
+  return attachSeriesTooltip(svg, points, { x, y, width, top, bottom: height - bottom });
+}
+// Pointer tooltip for the monthly chart: nearest returned month, exact value.
+// Keyboard and screen-reader users get the exact table in the methodology panel.
+function attachSeriesTooltip(svg, points, geometry) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "series-chart";
+  const ns = "http://www.w3.org/2000/svg";
+  const guide = document.createElementNS(ns, "line");
+  guide.setAttribute("class", "series-hover-guide");
+  guide.setAttribute("y1", String(geometry.top)); guide.setAttribute("y2", String(geometry.bottom));
+  const marker = document.createElementNS(ns, "circle");
+  marker.setAttribute("class", "series-hover-point"); marker.setAttribute("r", "5");
+  const tooltip = document.createElement("div");
+  tooltip.className = "series-tooltip";
+  tooltip.setAttribute("aria-hidden", "true");
+  tooltip.hidden = true;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const hide = () => { tooltip.hidden = true; svg.classList?.remove?.("is-hovering"); };
+  svg.addEventListener("pointermove", (event) => {
+    const box = svg.getBoundingClientRect?.();
+    if (!box || !box.width || !points.length) return;
+    const userX = (event.clientX - box.left) * geometry.width / box.width;
+    const nearest = points.reduce((best, item) => Math.abs(geometry.x(item.index) - userX) < Math.abs(geometry.x(best.index) - userX) ? item : best, points[0]);
+    const cx = geometry.x(nearest.index), cy = geometry.y(nearest.point.value);
+    guide.setAttribute("x1", String(cx)); guide.setAttribute("x2", String(cx));
+    marker.setAttribute("cx", String(cx)); marker.setAttribute("cy", String(cy));
+    tooltip.textContent = `${months[nearest.month - 1]} ${nearest.year} · ${formatMetric(nearest.point)}`;
+    tooltip.hidden = false;
+    const scale = box.width / geometry.width;
+    tooltip.style.transform = `translate(${Math.round(cx * scale)}px, ${Math.round(cy * scale)}px)`;
+    tooltip.classList.toggle("is-flipped", cx > geometry.width * .66);
+    svg.classList?.add?.("is-hovering");
+  });
+  svg.addEventListener("pointerleave", hide);
+  svg.append(guide, marker);
+  wrapper.append(svg, tooltip);
+  return wrapper;
 }
 function isNextMonth(previous, current) {
   return (current.year === previous.year && current.month === previous.month + 1)
@@ -774,7 +875,8 @@ function renderLongHaulView(result, target) {
   for (const airport of result.scope.airports) {
     const block = document.createElement("div");
     block.className = "long-haul-result";
-    heading(block, "h3", airport);
+    // A single-airport result already names the airport in the result title.
+    if (result.scope.airports.length > 1) heading(block, "h3", airport);
     const metric = result.rows.find((row) => row.airport === airport)?.metrics.find((item) => item.key === "long_haul_share");
     if (!metric) paragraph(block, "Not returned.");
     else if (metric.status === "unavailable") {
@@ -784,31 +886,50 @@ function renderLongHaulView(result, target) {
         paragraph(block, `Eligible performed departures: ${formatNumber(metric.denominator)}`);
       }
     } else {
-      const share = paragraph(block, "Long-haul share");
+      const share = heading(block, "h3", "Long-haul share");
       share.className = "long-haul-share-label";
+      const figure = document.createElement("div");
+      figure.className = "long-haul-figure";
       const track = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       track.setAttribute("class", "share-ring");
-      track.setAttribute("viewBox", "0 0 100 100");
+      track.setAttribute("viewBox", "0 0 168 168");
       track.setAttribute("role", "img");
       track.setAttribute("aria-label", `${airport} returned long-haul share ${formatMetric(metric)}`);
-      const circumference = 2 * Math.PI * 36;
+      const circumference = 2 * Math.PI * 64; // viewBox matches the rendered 168px, so SVG text sizes are real pixels
       const ringTrack = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      ringTrack.setAttribute("cx", "50"); ringTrack.setAttribute("cy", "50"); ringTrack.setAttribute("r", "36"); ringTrack.setAttribute("class", "share-ring-track");
+      ringTrack.setAttribute("cx", "84"); ringTrack.setAttribute("cy", "84"); ringTrack.setAttribute("r", "64"); ringTrack.setAttribute("class", "share-ring-track");
       const fill = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      fill.setAttribute("cx", "50"); fill.setAttribute("cy", "50"); fill.setAttribute("r", "36"); fill.setAttribute("class", "share-ring-value");
+      fill.setAttribute("cx", "84"); fill.setAttribute("cy", "84"); fill.setAttribute("r", "64"); fill.setAttribute("class", "share-ring-value");
       fill.setAttribute("stroke-dasharray", `${circumference * Math.max(0, Math.min(100, metric.value)) / 100} ${circumference}`);
-      fill.setAttribute("transform", "rotate(-90 50 50)");
+      fill.setAttribute("transform", "rotate(-90 84 84)");
       const centerValue = document.createElementNS("http://www.w3.org/2000/svg", "text");
       centerValue.setAttribute("class", "share-ring-center");
-      centerValue.setAttribute("x", "50"); centerValue.setAttribute("y", "50");
+      centerValue.setAttribute("x", "84"); centerValue.setAttribute("y", "78");
       centerValue.setAttribute("text-anchor", "middle"); centerValue.setAttribute("dominant-baseline", "middle");
-      centerValue.setAttribute("fill", "currentColor"); centerValue.setAttribute("font-size", "10"); centerValue.setAttribute("font-weight", "600");
+      centerValue.setAttribute("fill", "currentColor"); centerValue.setAttribute("font-size", "26"); centerValue.setAttribute("font-weight", "600");
       centerValue.textContent = formatMetric(metric);
-      track.append(ringTrack, fill, centerValue);
-      block.append(track);
-      const threshold = result.scope.threshold_miles == null ? "threshold not supplied" : `at least ${formatNumber(result.scope.threshold_miles)} miles`;
-      paragraph(block, `Long-haul performed departures (${threshold}): ${formatNumber(metric.numerator)}`);
-      paragraph(block, `Eligible performed departures: ${formatNumber(metric.denominator)}`);
+      const centerCaption = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      centerCaption.setAttribute("class", "share-ring-caption");
+      centerCaption.setAttribute("x", "84"); centerCaption.setAttribute("y", "104");
+      centerCaption.setAttribute("text-anchor", "middle"); centerCaption.setAttribute("dominant-baseline", "middle");
+      centerCaption.setAttribute("font-size", "13"); centerCaption.setAttribute("aria-hidden", "true");
+      centerCaption.textContent = "LONG-HAUL";
+      track.append(ringTrack, fill, centerValue, centerCaption);
+      const stats = document.createElement("dl");
+      stats.className = "long-haul-stats";
+      const stat = (value, name) => {
+        const item = document.createElement("div");
+        const term = document.createElement("dt"); term.textContent = name;
+        const detail = document.createElement("dd"); detail.textContent = value;
+        item.append(term, detail); // dt before dd; CSS shows the value first
+
+        stats.append(item);
+      };
+      stat(formatNumber(metric.numerator), "Long-haul departures");
+      stat(formatNumber(metric.denominator), "Eligible departures");
+      stat(result.scope.threshold_miles == null ? "Not supplied" : `≥ ${formatNumber(result.scope.threshold_miles)} mi`, "Threshold");
+      figure.append(track, stats);
+      block.append(figure);
     }
     target.append(block);
   }
@@ -837,27 +958,18 @@ function renderScreeningView(result, target) {
       fill.setAttribute("style", `width:${Math.max(0, Math.min(100, score.value))}%`); scoreBar.append(fill); item.append(scoreBar);
       paragraph(item, compact ? formatNumber(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
     } else if (score?.status === "ok") paragraph(item, compact ? formatNumber(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
-    if (compact) { list.append(item); return; }
-    const support = document.createElement("details");
-    heading(support, "summary", "Supporting values and sources");
-    for (const key of ["passenger_growth", "passengers", "seat_occupancy"]) {
-      const metric = row.metrics.find((value) => value.key === key);
-      const detail = paragraph(support, `${humanMetricLabel(key)} · ${!metric ? "Not returned" : metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : formatMetric(metric)}`);
-      detail.className = "ranking-detail";
-    }
-    for (const metric of row.metrics) if (!new Set(["screen_score", "passenger_growth", "passengers", "seat_occupancy"]).has(metric.key)) {
-      paragraph(support, `${humanMetricLabel(metric.key)} · ${metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : formatMetric(metric)}`);
-    }
-    if (row.metrics.some(metric => metric.source_ids.length)) paragraph(support, `Source IDs: ${[...new Set(row.metrics.flatMap(metric => metric.source_ids))].join(", ")}`);
-    item.append(support); list.append(item);
+    // Supporting values and source IDs for every row are listed once in the
+    // methodology and technical disclosures.
+    list.append(item);
   };
   for (const row of ranked.slice(0, 5)) appendRow(preview, row, true, true);
   target.append(preview);
   const full = document.createElement("details");
+  full.className = "full-ranking-disclosure";
   heading(full, "summary", `All ranked airports (${ranked.length})`);
   const list = document.createElement("div"); list.className = "ranking-list full-ranking"; list.setAttribute("role", "list");
   list.setAttribute("aria-label", "All returned airports in backend order");
-  for (const row of result.rows) appendRow(list, row, true);
+  for (const row of result.rows) appendRow(list, row, true, true);
   full.append(list); target.append(full);
   return true;
 }
@@ -866,6 +978,25 @@ function renderCongestionView(result, target) {
   heading(target, "h3", "Operational comparison");
   const keys = ["cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"];
   const titles = ["Cancellation rate", "Diversion rate", "Departure delay", "Taxi out"];
+  const ns = "http://www.w3.org/2000/svg";
+  const legend = document.createElement("p");
+  legend.className = "congestion-legend";
+  result.scope.airports.forEach((airport, airportIndex) => {
+    const entry = document.createElement("span");
+    entry.className = "legend-entry";
+    const key = document.createElement("span");
+    key.className = `series-key series-key-${airportIndex + 1}`;
+    key.setAttribute("aria-hidden", "true");
+    const name = document.createElement("span");
+    name.textContent = airport;
+    entry.append(key, name);
+    legend.append(entry);
+  });
+  const legendNote = document.createElement("span");
+  legendNote.className = "legend-note";
+  legendNote.textContent = "Zero-based scale per indicator · further right is higher";
+  legend.append(legendNote);
+  target.append(legend);
   const bars = document.createElement("div");
   bars.className = "congestion-bars";
   bars.setAttribute("role", "list");
@@ -879,15 +1010,15 @@ function renderCongestionView(result, target) {
     const minimum = Math.min(0, ...valid.map(metric => metric.value));
     const maximum = Math.max(0, ...valid.map(metric => metric.value));
     const span = maximum - minimum || 1;
-    const zero = maximum === minimum ? 0 : -minimum / span * 100;
-    const measure = document.createElement("div"); measure.className = "congestion-measure"; measure.setAttribute("role", "listitem");
-    const labelNode = heading(measure, "h3", titles[index]); labelNode.className = "congestion-measure-title";
+    const percent = value => maximum === minimum ? 50 : (value - minimum) / span * 100;
     const unit = valid[0]?.unit || "count";
-    paragraph(measure, `Scale ${formatMetric({ unit, value: minimum })} to ${formatMetric({ unit, value: maximum })}`).className = "congestion-scale";
+    const measure = document.createElement("div"); measure.className = "congestion-measure"; measure.setAttribute("role", "listitem");
+    const head = document.createElement("div"); head.className = "measure-head";
+    const labelNode = heading(head, "h3", titles[index]); labelNode.className = "congestion-measure-title";
+    const valuesNode = document.createElement("div"); valuesNode.className = "comparison-tracks";
     const row = document.createElement("tr");
     cell(row, titles[index]);
-      const tracks = document.createElement("div"); tracks.className = "comparison-tracks";
-      const plotted = [];
+    const plotted = [];
     metrics.forEach((metric, airportIndex) => {
       const airport = result.scope.airports[airportIndex];
       let text = "Not returned", spoken = text;
@@ -899,55 +1030,52 @@ function renderCongestionView(result, target) {
       }
       cell(row, text);
       row.children[row.children.length - 1].setAttribute("aria-label", spoken);
-      const comparison = document.createElement("div"); comparison.className = "comparison-value";
-      paragraph(comparison, `${airport} · ${metric?.comparison_direction ? humanDirection(metric.comparison_direction) : "Direction unavailable"}`).className = "comparison-label";
-      paragraph(comparison, metric?.status === "ok" ? formatMetric(metric) : metric?.status === "unavailable" ? `Unavailable: ${metric.reason}` : "Not returned").className = "comparison-exact";
-      if (metric?.status === "ok" && Number.isFinite(metric.value)) {
-        plotted.push({ airport, metric });
-      } else paragraph(comparison, "Not plotted").className = "not-plotted";
-      tracks.append(comparison);
+      const comparison = document.createElement("p"); comparison.className = "comparison-value";
+      const keyNode = document.createElement("span"); keyNode.className = `series-key series-key-${airportIndex + 1}`; keyNode.setAttribute("aria-hidden", "true");
+      const airportNode = document.createElement("span"); airportNode.className = "comparison-label"; airportNode.textContent = airport;
+      const exact = document.createElement("strong"); exact.className = "comparison-exact";
+      exact.textContent = metric?.status === "ok" ? formatMetric(metric) : metric?.status === "unavailable" ? `Unavailable: ${metric.reason}` : "Not returned";
+      comparison.append(keyNode, airportNode, exact);
+      if (metric?.status === "ok" && Number.isFinite(metric.value)) plotted.push({ airport, airportIndex, metric });
+      else { const note = document.createElement("span"); note.className = "not-plotted"; note.textContent = "Not plotted"; comparison.append(note); }
+      valuesNode.append(comparison);
     });
-    const plot = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    head.append(valuesNode);
+    measure.append(head);
+    const track = document.createElement("div"); track.className = "measure-track";
+    const minLabel = document.createElement("span"); minLabel.className = "congestion-scale"; minLabel.textContent = formatMetric({ unit, value: minimum });
+    const maxLabel = document.createElement("span"); maxLabel.className = "congestion-scale"; maxLabel.textContent = formatMetric({ unit, value: maximum });
+    // No viewBox: x positions are percentages and radii are CSS pixels, so the
+    // dots stay round and full-size at any panel width.
+    const plot = document.createElementNS(ns, "svg");
     plot.setAttribute("class", "comparison-dumbbell");
-    plot.setAttribute("viewBox", "0 0 1000 32");
     plot.setAttribute("role", "img");
     plot.setAttribute("aria-label", `${titles[index]} comparison on a zero-inclusive ${formatMetric({ unit, value: minimum })} to ${formatMetric({ unit, value: maximum })} scale: ${plotted.map(({ airport, metric }) => `${airport} ${formatMetric(metric)}, ${humanDirection(metric.comparison_direction)}`).join("; ") || "no returned values plotted"}`);
-    const axis = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    axis.setAttribute("x1", "0"); axis.setAttribute("x2", "1000"); axis.setAttribute("y1", "16"); axis.setAttribute("y2", "16"); axis.setAttribute("class", "dumbbell-axis"); plot.append(axis);
-    if (plotted.length === 2) {
-      const positions = plotted.map(({ metric }) => maximum === minimum ? 500 : (metric.value - minimum) / span * 1000);
-      const connector = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      connector.setAttribute("x1", String(positions[0])); connector.setAttribute("x2", String(positions[1])); connector.setAttribute("y1", "16"); connector.setAttribute("y2", "16"); connector.setAttribute("class", "dumbbell-connector"); plot.append(connector);
-      plotted.forEach(({ airport }, pointIndex) => {
-        const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        point.setAttribute("cx", String(positions[pointIndex])); point.setAttribute("cy", String(plotted[0].metric.value === plotted[1].metric.value ? (pointIndex ? 21 : 11) : 16)); point.setAttribute("r", "7");
-        point.setAttribute("class", `dumbbell-point dumbbell-point-${pointIndex + 1}`); point.setAttribute("aria-label", `${airport} ${formatMetric(plotted[pointIndex].metric)}`); plot.append(point);
-      });
-    } else if (plotted.length === 1) {
-      const point = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      point.setAttribute("cx", String(maximum === minimum ? 500 : (plotted[0].metric.value - minimum) / span * 1000)); point.setAttribute("cy", "16"); point.setAttribute("r", "7"); point.setAttribute("class", "dumbbell-point dumbbell-point-1"); plot.append(point);
-    }
-    tracks.append(plot);
-    measure.append(tracks); bars.append(measure);
+    const line = (className, x1, x2, y1 = "14", y2 = "14") => {
+      const node = document.createElementNS(ns, "line");
+      node.setAttribute("x1", x1); node.setAttribute("x2", x2); node.setAttribute("y1", y1); node.setAttribute("y2", y2); node.setAttribute("class", className);
+      plot.append(node);
+    };
+    line("dumbbell-axis", "0%", "100%");
+    if (minimum < 0) line("dumbbell-zero", `${percent(0)}%`, `${percent(0)}%`, "6", "22");
+    const tied = plotted.length === 2 && plotted[0].metric.value === plotted[1].metric.value;
+    if (plotted.length === 2) line("dumbbell-connector", `${percent(plotted[0].metric.value)}%`, `${percent(plotted[1].metric.value)}%`);
+    plotted.forEach(({ airport, airportIndex, metric }, pointIndex) => {
+      const point = document.createElementNS(ns, "circle");
+      point.setAttribute("cx", `${percent(metric.value)}%`);
+      point.setAttribute("cy", tied ? (pointIndex ? "19" : "9") : "14");
+      point.setAttribute("r", "5");
+      point.setAttribute("class", `dumbbell-point dumbbell-point-${airportIndex + 1}`);
+      point.setAttribute("aria-label", `${airport} ${formatMetric(metric)}`);
+      plot.append(point);
+    });
+    track.append(minLabel, plot, maxLabel);
+    measure.append(track);
+    bars.append(measure);
     table.body.append(row);
   });
   target.append(bars);
-  const exact = document.createElement("details"); heading(exact, "summary", "Exact values and methodology"); exact.append(table.region); target.append(exact);
-  const methodology = document.createElement("div");
-  methodology.className = "methodology-detail";
-  heading(methodology, "h3", "Denominators and sources");
-  for (const key of keys) for (const airport of result.scope.airports) {
-    const metric = result.rows.find((item) => item.airport === airport)?.metrics.find((item) => item.key === key);
-    if (!metric) continue;
-    const components = [`${airport} · ${titles[keys.indexOf(key)]}`];
-    components.push(metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : `Value: ${formatMetric(metric)}`);
-    if (metric.numerator != null && metric.denominator != null) components.push(`Numerator / denominator: ${formatNumber(metric.numerator)} / ${formatNumber(metric.denominator)}`);
-    if (metric.eligible_count != null) components.push(`Eligible observations: ${formatNumber(metric.eligible_count)}`);
-    if (metric.comparison_direction) components.push(`Direction: ${label(metric.comparison_direction)}`);
-    components.push(`Source IDs: ${metric.source_ids.join(", ") || "None returned"}`);
-    paragraph(methodology, components.join(" · "));
-  }
-  exact.append(methodology);
+  methodologyExtras.push(["Exact operational values", [table.region]]);
   return true;
 }
 function renderGenericMetricTable(result, target) {
@@ -1125,6 +1253,7 @@ function startNewAnalysis() {
   askTrigger.textContent = "Ask your own question →";
   askTrigger.setAttribute("aria-expanded", "false");
   requestGeneration += 1;
+  cancelResultFade();
   setLoading(false);
   latestSuccessfulResult = null;
   contextResultId = null;

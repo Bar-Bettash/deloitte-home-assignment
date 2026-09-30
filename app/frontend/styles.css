@@ -577,3 +577,151 @@
     #result .metric-view > .table-region table { min-width: 0; }
     #result .metric-view > .table-region th,#result .metric-view > .table-region td { min-width: 0; padding-inline: .45rem; }
     #result .metric-view > .table-region td:last-child { overflow-wrap: anywhere; padding-right: 1rem; }
+
+    /* ── Final pass: motion, readability, chart legibility, progressive disclosure ── */
+    :root { --ease-out: cubic-bezier(.22,.61,.36,1); }
+
+    /* A1 result swap: dim + 3px drop out (120ms), swap, settle in (180ms). */
+    #result-panel :is(#result, #result-title, #result-actions) { transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); }
+    #result-panel.is-loading #result { opacity: .82; }
+    #result-panel.is-leaving :is(#result, #result-title, #result-actions) { opacity: .35; transform: translateY(3px); transition-duration: 120ms; }
+    #result-panel.is-entering :is(#result, #result-title, #result-actions) { opacity: .35; transform: translateY(3px); transition: none; }
+    #result-panel.is-entering-fresh :is(#result, #result-title, #result-actions) { opacity: 0; transform: translateY(3px); transition: none; }
+
+    /* A2 loading: calm copy, a thin sweep, slightly dimmed (and disabled) send controls. */
+    #feedback[data-loading="true"] { position: relative; overflow: hidden; padding-bottom: 10px; color: var(--text); font-size: .9375rem; }
+    #feedback[data-loading="true"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: linear-gradient(90deg, transparent, rgba(252,241,208,.6), transparent); transform: translateX(-100%); animation: analyzing-sweep 1400ms var(--ease-out) infinite; }
+    @keyframes analyzing-sweep { to { transform: translateX(100%); } }
+    body.is-analyzing button[data-send]:disabled { opacity: .72; cursor: progress; }
+
+    /* A4 globe markers: selection reads through opacity and a small scale, no pulse. */
+    .globe-marker { transition: opacity 180ms var(--ease-out); }
+    .globe-marker::before { transition: transform 180ms var(--ease-out), background-color 180ms var(--ease-out), border-color 180ms var(--ease-out); }
+    .globe-markers.has-selection .globe-marker:not(.is-result) { opacity: .3; }
+    .globe-markers .globe-marker.is-result { opacity: 1; }
+    .globe-marker.is-result::before { transform: translate(-50%,-50%) rotate(45deg) scale(1.08); }
+
+    /* A5 composer: 10px rise with the shared ease; hidden/inert only after exit. */
+    .conversation-composer { transform: translate(-50%, 10px); transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out); }
+    .conversation-composer.is-open { transform: translate(-50%, 0); }
+
+    /* B readability */
+    #result p, #result li { font-size: 1rem; line-height: 1.55; }
+    #result h3 { font-size: 1rem; font-weight: 600; line-height: 1.35; }
+    .hero-layout.has-result #result-title, #result-title { font-size: .8125rem; }
+    #result .result-scope-heading .result-airports { font-size: clamp(2.5rem, 3vw, 3.25rem); line-height: 1; }
+    #result .result-scope-heading .result-measure { margin-top: 8px; color: var(--text); font-size: 1rem; line-height: 1.4; }
+    #result .result-scope-heading .result-period { color: var(--text-secondary); font-size: .8125rem; line-height: 1.4; }
+    #result .kpi-row { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 12px; }
+    #result .kpi-card { padding: 14px 16px; }
+    #result .kpi-card h3 { margin: 0 0 10px; color: var(--text-secondary); font-size: .8125rem; font-weight: 600; }
+    #result .kpi-airport { font-size: .8125rem; }
+    #result .kpi-value-line strong { font-size: clamp(1.625rem, 2.1vw, 2rem); font-weight: 600; line-height: 1.1; }
+    #result .kpi-note, #result .kpi-reason, #result .kpi-threshold { font-size: .8125rem; }
+    .dashboard-grid .key-insights h3, #result .key-insights h3 { margin: 0 0 8px; font-size: 1rem; }
+    #result .key-insights .insight-summary { margin: 0; color: var(--text); font-size: 1rem; line-height: 1.55; }
+    #result .key-insights .insight-summary strong { font-weight: 600; }
+    #result .key-insights .insight-limitation, #result .key-insights #result-explanation { margin: 10px 0 0; color: var(--text-secondary); font-size: .9375rem; line-height: 1.5; }
+    .dashboard-grid.long-haul-dashboard { grid-template-columns: minmax(0, 1fr); }
+    .dashboard-grid.long-haul-dashboard > * { grid-column: 1; }
+
+    /* C1 LAX/SNA dumbbell: one row per indicator, filled vs ring markers, no winner colours. */
+    #result .congestion-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 2px 0 10px; color: var(--text-secondary); font-size: .875rem; }
+    #result .legend-entry { display: inline-flex; align-items: center; gap: 7px; color: var(--text); font-weight: 600; }
+    #result .legend-note { font-size: .8125rem; }
+    #result .series-key { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; }
+    #result .series-key-1 { background: var(--text); }
+    #result .series-key-2 { border: 2px solid var(--text); background: transparent; }
+    #result .congestion-dashboard .congestion-bars { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 2px 18px; }
+    #result .congestion-measure { display: grid; align-content: center; gap: 6px; min-height: 68px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+    #result .congestion-measure:last-child { border-bottom: 0; }
+    #result .measure-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+    #result .congestion-measure-title { margin: 0; font-size: 1rem; font-weight: 600; }
+    #result .measure-head .comparison-tracks { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+    #result .comparison-value { display: inline-flex; align-items: center; gap: 7px; min-height: 0; margin: 0; font-size: .9375rem; line-height: 1.3; }
+    #result .comparison-value .comparison-label { color: var(--text-secondary); font-size: .9375rem; font-weight: 600; letter-spacing: .02em; }
+    #result .comparison-value .comparison-exact { color: var(--text); font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    #result .comparison-value .not-plotted { color: var(--text-secondary); font-size: .8125rem; }
+    #result .measure-track { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) 4.5rem; align-items: center; gap: 12px; }
+    #result .measure-track .congestion-scale { margin: 0; color: var(--text-secondary); font-size: .8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #result .measure-track .congestion-scale:last-child { text-align: end; }
+    #result .measure-track .comparison-dumbbell { grid-column: auto; display: block; width: 100%; height: 28px; overflow: visible; }
+    #result .dumbbell-axis { stroke: rgba(252,241,208,.18); stroke-width: 2px; }
+    #result .dumbbell-zero { stroke: var(--text-secondary); stroke-width: 1px; }
+    #result .dumbbell-connector { stroke: rgba(252,241,208,.5); stroke-width: 3px; }
+    #result .dumbbell-point-1 { fill: var(--text); stroke: var(--bg); stroke-width: 2px; }
+    #result .dumbbell-point-2 { fill: var(--surface); stroke: var(--text); stroke-width: 2.5px; }
+
+    /* C2 ANC donut + returned counts */
+    #result .long-haul-share-label { margin: 4px 0 8px; font-size: 1rem; font-weight: 600; }
+    #result .long-haul-figure { display: flex; flex-wrap: wrap; align-items: center; gap: 20px 32px; }
+    #result .share-ring { flex: none; width: 168px; height: 168px; margin: 0; }
+    #result .share-ring-center { font-variant-numeric: tabular-nums; }
+    #result .share-ring-caption { fill: var(--text-secondary); font-weight: 600; letter-spacing: .08em; }
+    #result .long-haul-stats { display: grid; gap: 14px; margin: 0; }
+    #result .long-haul-stats > div { display: flex; flex-direction: column-reverse; }
+    #result .long-haul-stats dd { margin: 0; color: var(--text); font-size: 1.375rem; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+    #result .long-haul-stats dt { color: var(--text-secondary); font-size: .875rem; }
+
+    /* C3 New England ranking */
+    #result .ranking-list { grid-template-columns: minmax(0, 1fr); gap: 0; }
+    #result .ranking-list .ranking-row { display: grid; grid-template-columns: 2rem 3.25rem minmax(3rem, 1fr) 4.25rem; align-items: center; gap: 12px; min-height: 42px; padding: 0; border-bottom: 1px solid var(--border); }
+    #result .ranking-list .ranking-row h3 { margin: 0; font-size: .9375rem; font-weight: 600; letter-spacing: .02em; }
+    #result .ranking-list .backend-rank { margin: 0; color: var(--text-secondary); font-size: .9375rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #result .ranking-list .score-track { height: 8px; margin: 0; border-radius: 4px; background: rgba(252,241,208,.1); }
+    #result .ranking-list .score-fill { border-radius: 4px; }
+    #result .ranking-list .ranking-row .score-value { margin: 0; font-size: 1rem; font-weight: 600; text-align: end; white-space: nowrap; }
+    #result .ranking-list .ranking-row > h3 + .score-value { grid-column: 3 / -1; color: var(--text-secondary); font-size: .875rem; font-weight: 400; text-align: start; white-space: normal; }
+    #result .full-ranking-disclosure { margin-top: 8px; padding: 0; border: 0; }
+    #result .full-ranking-disclosure > summary { padding: 10px 0; color: var(--text-secondary); font-size: .9375rem; font-weight: 600; }
+
+    /* C4 SFO monthly chart */
+    #result .series-caption { color: var(--text-secondary); font-size: .875rem; }
+    #result .series-chart { position: relative; margin-top: 8px; }
+    #result .series-panel.feature-chart .series-chart svg { width: 100%; height: auto; min-height: 0; max-height: none; }
+    #result .series-chart .series-axis-label { fill: var(--text-secondary); font-size: 15px; }
+    #result .series-chart .series-line { stroke: var(--text); stroke-width: 3px; }
+    #result .series-hover-guide { stroke: rgba(252,241,208,.35); stroke-width: 1px; vector-effect: non-scaling-stroke; opacity: 0; }
+    #result .series-hover-point { fill: var(--text); stroke: var(--bg); stroke-width: 2px; vector-effect: non-scaling-stroke; opacity: 0; }
+    #result svg.is-hovering .series-hover-guide, #result svg.is-hovering .series-hover-point { opacity: 1; }
+    #result .series-tooltip { position: absolute; left: 0; top: 0; margin: -46px 0 0 12px; padding: 6px 10px; border: 1px solid var(--border-strong); border-radius: 8px; background: rgba(1,7,54,.96); color: var(--text); font-size: .9375rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+    #result .series-tooltip.is-flipped { margin-left: -12px; translate: -100% 0; }
+
+    /* D progressive disclosure: two collapsed panels + technical details at the bottom. */
+    #result > details { margin: 12px 0 0; }
+    #result > details > summary, #result > .evidence-source-group > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; list-style: none; color: var(--text); font-size: 1rem; font-weight: 600; }
+    #result > details > summary::-webkit-details-marker { display: none; }
+    #result > details > summary::after { content: "›"; color: var(--text-secondary); font-size: 1.25rem; line-height: 1; transition: transform 160ms var(--ease-out); }
+    #result > details[open] > summary::after { transform: rotate(90deg); }
+    #result > .evidence-source-group, #result > .methodology-group { padding: 2px 16px; border: 1px solid var(--border); border-radius: 12px; background: rgba(13,28,66,.72); }
+    #result > details[open]:is(.evidence-source-group, .methodology-group) { padding-bottom: 14px; }
+    #result > details > p, #result > details li, #result .evidence-item p, #result .source-item p, #result .methodology-detail p { font-size: .9375rem; }
+    #result .evidence-item, #result .source-item { padding: 10px 0; border-top: 1px solid var(--border); }
+    #result .evidence-item p, #result .source-item p { margin: 2px 0; }
+    #result .evidence-source { color: var(--text); font-weight: 600; }
+    #result .methodology-group .table-region { margin: 8px 0 12px; }
+    #result .methodology-group .table-region:not(.congestion-table-region) :is(th, td):nth-child(2) { text-align: end; font-variant-numeric: tabular-nums; }
+    #result > .technical-details { padding: 0 4px !important; border: 0 !important; }
+    #result > .technical-details > summary { min-height: 44px; color: var(--text-secondary); font-size: .875rem; }
+    #result > .technical-details > p { margin: 4px 0; color: var(--text-secondary); font-size: .875rem; overflow-wrap: anywhere; }
+
+    @media (max-width: 600px) {
+      #result .measure-track { grid-template-columns: 3.5rem minmax(0, 1fr) 3.5rem; gap: 8px; }
+    }
+
+    /* Round 2 readability floor: 16px for readable copy, 13px for muted labels. */
+    #result .key-insights .insight-limitation, #result .key-insights #result-explanation { font-size: 1rem; }
+    #result .kpi-card h3 { font-size: 1rem; font-weight: 600; }
+    #result > .technical-details > summary { font-size: 1rem; }
+    #result .share-ring-track, #result .share-ring-value { stroke-width: 12px; }
+    .eyebrow, #demo-title, .coverage-note, .contact, .more-examples > summary, #scope-panel > summary,
+    #analyze .more-examples .prompt, #analyze .more-examples .prompt strong, .draft-summary .metric-note,
+    .back-to-analysis span, .globe-motion-toggle [data-motion-icon] { font-size: .8125rem; }
+    #feedback, .result-actions button, #result-panel .result-actions button { font-size: .875rem; }
+    .prompt span, #scope-help, .airport-picker-help { font-size: .875rem; }
+    @media (prefers-reduced-motion: reduce) {
+      #result-panel :is(#result, #result-title, #result-actions), .globe-marker, .globe-marker::before, #result > details > summary::after { transition: none !important; }
+      #feedback[data-loading="true"]::after { animation: none; transform: none; opacity: .5; }
+      /* Must follow the final-pass composer rule above, or that rule wins the cascade. */
+      .conversation-composer, .conversation-composer.is-open { transition: none; transform: translate(-50%, 0); }
+    }
