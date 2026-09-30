@@ -31,7 +31,7 @@ class Settings(BaseModel):
     source_max_bytes: Annotated[int, Field(strict=True, gt=0, le=10 * 1024 * 1024)] = 10 * 1024 * 1024
 
     model_timeout_seconds: Annotated[int, Field(strict=True, gt=0, le=20)] = 20
-    model_max_output_tokens: Annotated[int, Field(strict=True, gt=0, le=512)] = 512
+    model_max_output_tokens: Annotated[int, Field(strict=True, gt=0, le=1024)] = 1024
     model_max_prompt_tokens: Annotated[int, Field(strict=True, gt=0, le=8000)] = 8000
 
     # Candidate evaluation may use model_access_available (a key is set). Runtime
@@ -40,8 +40,10 @@ class Settings(BaseModel):
     # quota and budget, not by process-local accounting.
     model_api_key: SecretStr | None = None
     model_name: Annotated[str, Field(min_length=1, max_length=100)] = DEFAULT_GEMINI_MODEL
-    # Gemini thinking tokens count against the output cap; 0 turns thinking off on
-    # Flash models. None omits thinkingConfig for models that reject a budget.
+    # Gemini thinking tokens count against the output cap. A budget of 0 does not
+    # fully stop gemini-3.8-flash from thinking (up to ~490 tokens were measured on
+    # 2026-09-30), so the cap leaves room for thinking plus the short JSON answer.
+    # None omits thinkingConfig for models that reject a budget.
     model_thinking_budget: Annotated[int, Field(strict=True, ge=0, le=24576)] | None = 0
     model_runtime_enabled: Annotated[bool, Field(strict=True)] = False
     model_admitted_name: Annotated[str, Field(min_length=1, max_length=100)] | None = None

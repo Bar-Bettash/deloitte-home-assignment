@@ -51,7 +51,7 @@ All settings are environment variables. For a local run the backend also reads `
 | `MAX_CONCURRENT_QUERIES` | Optional. The limit is per instance: 1–16, default 4 when hosted. |
 | `GEMINI_API_KEY` | Needed for free text and for the live evaluation. A key alone never turns free text on. |
 | `GEMINI_MODEL` | Optional. Default `gemini-3.8-flash`, the admitted model. |
-| `GEMINI_THINKING_BUDGET` | Optional. Default `0` (thinking off, so answers fit the 512-token cap). `default` lets the model decide. |
+| `GEMINI_THINKING_BUDGET` | Optional. Default `0`. `gemini-3.8-flash` may still think briefly, so the output cap is 1,024 tokens. `default` lets the model decide. |
 | `MODEL_RUNTIME_ENABLED`, `MODEL_ADMITTED_NAME`, `MODEL_ADMITTED_ADAPTER_SHA256` | Free text only, and only after the model passes the evaluation. See below. |
 
 ## Enable free text

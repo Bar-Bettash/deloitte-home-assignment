@@ -89,7 +89,7 @@ async def test_one_request_exact_gemini_contract_and_validated_analysis() -> Non
     assert payload["contents"][0]["role"] == "user"
     assert payload["generationConfig"] == {
         "responseFormat": {"text": {"mimeType": "APPLICATION_JSON", "schema": OUTPUT_SCHEMA}},
-        "maxOutputTokens": 512,
+        "maxOutputTokens": 1024,
         "temperature": 0,
         "thinkingConfig": {"thinkingBudget": 0},
     }
