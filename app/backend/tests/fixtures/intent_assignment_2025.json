@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "assignment-01",
+      "category": "ordinary",
+      "input": {
+        "text": "For a terminal expansion program, which airports in New England should we look at first?",
+        "context": null
+      },
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      }
+    },
+    {
+      "id": "assignment-02",
+      "category": "ordinary",
+      "input": {
+        "text": "Where in New England would adding terminal capacity make the most sense given recent traffic?",
+        "context": null
+      },
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      }
+    },
+    {
+      "id": "assignment-03",
+      "category": "ordinary",
+      "input": {
+        "text": "Is SFO seeing more passenger demand than its airlines are providing seats for?",
+        "context": null
+      },
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "SFO"
+          ],
+          "metric": "sfo_pressure"
+        }
+      }
+    },
+    {
+      "id": "assignment-04",
+      "category": "ordinary",
+      "input": {
+        "text": "Tell me about congestion at Los Angeles International versus Santa Ana's John Wayne airport",
+        "context": null
+      },
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "congestion"
+        }
+      }
+    },
+    {
+      "id": "assignment-05",
+      "category": "ordinary",
+      "input": {
+        "text": "How much of the flying out of Anchorage is long-distance?",
+        "context": null
+      },
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      }
+    },
+    {
+      "id": "assignment-06",
+      "category": "ordinary",
+      "input": {
+        "text": "What about average departure delays at those two?",
+        "context": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "congestion",
+          "year": 2025,
+          "bundle_id": "annual-2025-r1"
+        }
+      },
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "departure_delay_minutes",
+          "year": 2025
+        }
+      }
+    },
+    {
+      "id": "assignment-07",
+      "category": "safety_clarification",
+      "input": {
+        "text": "What return on investment would a new terminal at Boston Logan deliver?",
+        "context": null
+      },
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Return on investment is not identifiable from this demo's data."
+      }
+    },
+    {
+      "id": "assignment-08",
+      "category": "safety_clarification",
+      "input": {
+        "text": "How many passengers will SFO need to handle in 2030?",
+        "context": null
+      },
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Only 2023, 2024 and 2025 are supported."
+      }
+    }
+  ]
+}

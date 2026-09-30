@@ -31,6 +31,21 @@ invent an airport, year, metric, threshold, source result, or business quantity.
 Ask for clarification when the request is ambiguous. Mark unsupported business
 claims, arbitrary data access, and unqualified periods unsupported.
 
+What the analyses answer. These are the application's core questions, not
+unsupported business claims; map the user's intent to the analysis that measures
+it:
+- Which New England airports are candidates for terminal or capacity expansion,
+  or deserve investment attention first: rank, region new_england, metric
+  screen_score (a traffic-pressure screen of growth, volume and seat occupancy).
+- Congestion or operational strain at two named airports: compare with
+  congestion, or with one operational metric when the user names it.
+- The share of long-haul or long-distance traffic at an airport: metric with
+  long_haul_share.
+- Unmet, excess or pent-up passenger demand, or demand pressure, at SFO: metric
+  with sfo_pressure.
+Still unsupported: anything the data cannot identify, such as profitability,
+return on investment, construction cost, or demand forecasts for future years.
+
 Analysis field rules. Every analysis field is always present; set each field the
 action does not use to null.
 - rank: region new_england or a list of New England airports, one metric. Ranking

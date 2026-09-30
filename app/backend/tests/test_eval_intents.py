@@ -409,3 +409,17 @@ def test_rejected_output_is_costed_and_only_no_response_calls_are_unknown(monkey
     assert report["aggregate_cost_usd"] == pytest.approx(300 / 1_000_000)
     assert report["rejected_output_costed_calls"] == 1
     assert report["unknown_cost_calls"] == 29
+
+
+ASSIGNMENT = Path(__file__).parent / "fixtures" / "intent_assignment_2025.json"
+
+
+def test_assignment_cases_load_under_their_policy_and_are_unseen():
+    cases = load_and_validate_cases(ASSIGNMENT, eval_intents.ASSIGNMENT_POLICY)
+    assert len(cases) == 8
+    seen = {case["input"]["text"].lower() for path, policy in (
+        (CORPUS, eval_intents.CORPUS_POLICY), (HOLDOUT, eval_intents.HOLDOUT_POLICY))
+        for case in load_and_validate_cases(path, policy)}
+    assert not {case["input"]["text"].lower() for case in cases} & seen
+    with pytest.raises(CorpusValidationError):
+        load_and_validate_cases(ASSIGNMENT)
