@@ -1597,3 +1597,344 @@ test('model-unavailable copy differs from the unsupported-scope message and expo
   assert.notEqual(unavailable, unsupported);
   assert.doesNotMatch(unavailable, /Gemini|adapter|ai_unavailable|503/);
 });
+
+// ── Rising chat card ──────────────────────────────────────────────────────────
+// Fixtures mirror real /api/query results for the accepted 2025 bundle (values
+// captured from the local server's preset responses).
+const chatScope = (airports, metric, extra = {}) => ({ airports, year: 2025, bundle_id: 'annual-2025-r1', baseline_year: 2024, comparison_year: 2025, metric, threshold_miles: null, population: 'Accepted cohort', ...extra });
+const chatMetric = (key, value, unit, extra = {}) => ({ key, value, unit, status: 'ok', numerator: null, denominator: null, eligible_count: null, comparison_direction: null, source_ids: ['src-1'], ...extra });
+const chatResult = (id, scope, rows, summary, extra = {}) => ({ result_id: id, request_id: `request-${id}`, status: 'ok', scope, summary, rows, series: [],
+  sources: [{ id: 'src-1', name: 'BTS', url: 'https://example.test', snapshot_id: 'snap', period: '2025', retrieved_at: null }], evidence: [], limitations: [], exclusions: [], ...extra });
+const NEW_ENGLAND = 'ACK AUG BDL BGR BHB BID BOS BTV EWB HVN HYA LEB MHT MVY ORH PQI PSM PVC PVD PWM RKD RUT WST'.split(' ');
+function newEnglandScreen() {
+  const order = [['HVN', 1, 74.76], ['BGR', 2, 72.86], ['PWM', 2, 72.86], ['BOS', 4, 71.9], ...'PVD PSM BDL BTV MHT BID MVY WST HYA ACK ORH RUT EWB PQI BHB RKD LEB AUG'.split(' ').map((code, index) => [code, index + 5, 70 - index * 3])];
+  return chatResult('ne-screen', chatScope(NEW_ENGLAND, 'screen_score'), order.map(([airport, rank, score]) => ({ airport, rank, metrics: [chatMetric('screen_score', score, 'score')] })),
+    'Top of 22 ranked airports on screening score: HVN (74.76), BGR (72.86), PWM (72.86); scores are normalized against the full eligible cohort.',
+    { status: 'partial', exclusions: ['PVC: 2025 coverage is incomplete (missing months: 1, 2, 3, 4, 12)'] });
+}
+function laxSnaCongestion() {
+  const values = { LAX: [[0.6904, 1315, 190472], [0.304, 579, 190472], [13.8, 2602393, 188578], [17.73, 3342809, 188578]], SNA: [[1.0467, 471, 44997], [0.2911, 131, 44997], [15.17, 673564, 44395], [16.05, 712687, 44395]] };
+  const keys = [['cancellation_rate', 'percent'], ['diversion_rate', 'percent'], ['departure_delay_minutes', 'minutes'], ['taxi_out_minutes', 'minutes']];
+  return chatResult('lax-sna', chatScope(['LAX', 'SNA'], 'congestion'), ['LAX', 'SNA'].map((airport) => ({ airport, metrics: keys.map(([key, unit], index) => {
+    const [value, numerator, denominator] = values[airport][index];
+    return chatMetric(key, value, unit, { numerator, denominator });
+  }) })), 'Mixed picture: LAX is higher on 2 and SNA on 2 of 4 comparable operational-strain indicators.');
+}
+function laxSnaCancellation() {
+  return chatResult('lax-sna-cancel', chatScope(['LAX', 'SNA'], 'cancellation_rate'), [['LAX', 0.6904, 1315, 190472], ['SNA', 1.0467, 471, 44997]].map(([airport, value, numerator, denominator]) => ({ airport,
+    metrics: [chatMetric('cancellation_rate', value, 'percent', { numerator, denominator })] })), 'Cancellation rate: SNA 1.05% versus LAX 0.69%.');
+}
+function ancLongHaul() {
+  return chatResult('anc', chatScope(['ANC'], 'long_haul_share', { threshold_miles: 3000 }), [{ airport: 'ANC', metrics: [chatMetric('long_haul_share', 2.7719, 'percent', { numerator: 999, denominator: 36040 })] }],
+    'Long-haul share (routes of 3,000+ miles): ANC 2.77% (999 of 36,040 eligible departures).');
+}
+function sfoPressure(gap) {
+  return chatResult('sfo', chatScope(['SFO'], 'sfo_pressure'), [{ airport: 'SFO', metrics: [chatMetric('passenger_growth', 4.7017, 'percent'),
+    chatMetric('seat_occupancy', 82.31, 'percent', { numerator: 26477602, denominator: 32169113 }), chatMetric('sfo_pressure', gap, 'percentage_points')] }],
+  'SFO transported-traffic growth, occupancy and operational indicators are descriptive only; precise unmet demand is not identifiable.');
+}
+const chatItems = (ui) => ui.nodes.get('#chat-transcript').children;
+const chatText = (item) => findDescendant(item, node => node.className === 'chat-text')?.textContent;
+const chatLink = (item) => findDescendant(item, node => node.className === 'chat-view-link');
+function sendChat(ui, text) {
+  const question = ui.nodes.get('#question');
+  question.value = text;
+  question.listeners.input();
+  ui.nodes.get('#chat-form').listeners.submit({ preventDefault() {} });
+}
+
+test('compact chat replies are formatted from returned values for each analysis type', () => {
+  const ui = setup();
+  const reply = (payload) => { ui.context.payload = payload; return ui.run('compactReply(validateResult(payload))'); };
+  assert.equal(reply(newEnglandScreen()), 'HVN ranks highest in the current screen, followed by BGR and PWM. 22 of 23 airports were assessable.');
+  assert.equal(reply(laxSnaCongestion()), 'The operational picture is mixed: LAX is higher on 2 indicators and SNA on 2.');
+  assert.equal(reply(laxSnaCancellation()), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
+  assert.equal(reply(ancLongHaul()), '2.77% of eligible ANC departures were at least 3,000 miles: 999 of 36,040.');
+  assert.equal(reply(sfoPressure(0.8)), 'The data shows demand pressure, but it cannot quantify precise unmet demand.');
+  assert.equal(reply(sfoPressure(-1.2247)), 'Passengers grew 4.70%, 1.22 percentage points slower than seats. The data shows pressure signals but cannot quantify precise unmet demand.',
+    'a negative growth gap is not described as demand pressure');
+  const trend = chatResult('trend', chatScope(['SFO'], 'sfo_enplaned_trend'), [{ airport: 'SFO', metrics: [chatMetric('sfo_enplaned_trend', 27250806, 'count')] }], 'SFO enplaned passengers in 2025: 27,250,806.');
+  assert.equal(reply(trend), 'SFO enplaned passengers in 2025: 27,250,806.', 'other analyses fall back to the deterministic backend summary');
+  const oneSided = laxSnaCongestion(); for (const metric of oneSided.rows[1].metrics) metric.value = 0;
+  assert.equal(reply(oneSided), 'LAX is higher on 4 of 4 indicators.');
+  for (const text of [reply(newEnglandScreen()), reply(laxSnaCongestion()), reply(ancLongHaul())]) assert.doesNotMatch(text, /_rate|screen_score|src-|request-/, 'no raw keys or identifiers');
+});
+
+test('a follow-up shows the question, then Analyzing…, then the compact reply in the same bubble; the body carries no transcript', async () => {
+  const bodies = [];
+  let respond;
+  const ui = setup((_url, init) => { bodies.push(JSON.parse(init.body)); return bodies.length === 1 ? Promise.resolve(success(laxSnaCongestion())) : new Promise(resolve => { respond = resolve; }); });
+  await ui.run('runPreset(demos["lax-sna"])');
+  assert.equal(chatItems(ui).length, 1, 'a preset adds one assistant line and no user bubble');
+  assert.equal(findDescendant(chatItems(ui)[0], node => node.className === 'chat-context').textContent, 'Preset · LAX vs SNA congestion');
+  assert.equal(chatText(chatItems(ui)[0]), 'The operational picture is mixed: LAX is higher on 2 indicators and SNA on 2.');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'Just the cancellation rates, please.');
+  const composer = ui.nodes.get('#conversation-composer');
+  assert.equal(composer.classList.contains('is-expanded'), true, 'typing raises the card');
+  const [, user, pending] = chatItems(ui);
+  assert.equal(user.className, 'chat-message chat-message-user');
+  assert.equal(chatText(user), 'Just the cancellation rates, please.');
+  assert.equal(pending.className, 'chat-message chat-message-assistant');
+  assert.equal(chatText(pending), 'Analyzing…');
+  assert.equal(pending.getAttribute('data-state'), 'pending');
+  assert.equal(chatLink(pending).hidden, true);
+  respond(success(laxSnaCancellation()));
+  await flush(); await flush();
+  assert.equal(chatItems(ui).length, 3, 'the reply replaces the Analyzing bubble instead of adding one');
+  assert.equal(chatItems(ui)[2], pending);
+  assert.equal(chatText(pending), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
+  assert.equal(pending.getAttribute('data-state'), 'done');
+  assert.equal(chatLink(pending).hidden, false, 'the reply that produced the shown result links to it');
+  assert.equal(chatLink(pending).getAttribute('aria-disabled'), 'false');
+  const older = chatLink(chatItems(ui)[0]);
+  assert.equal(older.hidden, false, 'an older reply keeps its link row, so nothing above the new reply changes height');
+  assert.equal(older.getAttribute('aria-disabled'), 'true', 'an older reply no longer links to the replaced result');
+  assert.equal(older.textContent, 'Earlier analysis');
+  assert.deepEqual(bodies, [{ analysis: { action: 'compare', airports: ['LAX', 'SNA'], metric: 'congestion' } },
+    { message: 'Just the cancellation rates, please.', context_result_id: 'lax-sna' }], 'presets send only the analysis; follow-ups only the question and context id');
+  assert.equal(ui.run('latestSuccessfulResult.result_id'), 'lax-sna-cancel', 'the analytics view updates from the same result');
+  assert.equal(ui.nodes.get('#question').getAttribute('placeholder'), 'Ask a follow-up…');
+  assert.equal(ui.nodes.get('#question').value, '');
+});
+
+test('the transcript survives re-renders, presets, Back, and closing and reopening the card', async () => {
+  const { query, bodies } = queuedFetch([success(newEnglandScreen()), success(laxSnaCancellation()), success(ancLongHaul()), success(sfoPressure(-1.2247))]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["new-england"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'Compare LAX and SNA cancellations');
+  await flush(); await flush();
+  const before = [...chatItems(ui)];
+  assert.equal(before.length, 3);
+  ui.run('renderResult(latestSuccessfulResult, true)');
+  ui.run('renderResult(latestSuccessfulResult, false)');
+  assert.ok(ui.run('$("#chat-transcript")'), 'renderResult never detaches the transcript');
+  assert.deepEqual(chatItems(ui), before);
+  await ui.run('runPreset(demos["anc-long-haul"])');
+  assert.equal(chatItems(ui).length, 4);
+  ui.documentListeners.get('keydown')({ key: 'Escape' });
+  ui.documentListeners.get('keydown')({ key: 'Escape' });
+  assert.equal(ui.nodes.get('#conversation-composer').inert, true, 'the card is closed');
+  ui.nodes.get('#back-to-analysis').click();
+  assert.equal(chatItems(ui).length, 4, 'Back keeps the conversation');
+  assert.ok(chatItems(ui).every(item => !chatLink(item) || chatLink(item).hidden || chatLink(item).getAttribute('aria-disabled') === 'true'), 'with no result shown, no reply links to one');
+  ui.nodes.get('#ask-trigger').click();
+  assert.equal(ui.nodes.get('#conversation-composer').inert, false);
+  assert.deepEqual(chatItems(ui).slice(0, 3), before, 'reopening shows the same history');
+  assert.equal(ui.nodes.get('#question').getAttribute('placeholder'), 'Ask a follow-up…');
+  await ui.run('runPreset(demos["sfo-pressure"])');
+  assert.equal(chatItems(ui).length, 5);
+  assert.equal(bodies.length, 4);
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const resultMarkup = html.match(/<section id="result"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.doesNotMatch(resultMarkup, /chat-transcript/, 'the transcript is not inside the container renderResult replaces');
+  const composerMarkup = html.match(/<section id="conversation-composer"[\s\S]*?<\/section>/)?.[0] || '';
+  assert.match(composerMarkup, /id="chat-transcript"[^>]*role="log"[^>]*aria-live="off"/, 'the history is a log read in order, not a live region');
+  assert.match(composerMarkup, /id="chat-status"[^>]*role="status"[^>]*aria-live="polite"/, 'outcomes are announced once in a separate status region');
+  assert.match(composerMarkup, /aria-labelledby="chat-title"/);
+  assert.match(composerMarkup, /<h2 id="chat-title"[^>]*>Airport analyst<\/h2>/);
+});
+
+test('the transcript is in memory only: no browser storage is read or written', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  assert.doesNotMatch(source, /localStorage|sessionStorage|indexedDB|document\.cookie/);
+  assert.match(source, /let conversation = \[\];/);
+  const touched = [];
+  const storage = new Proxy({}, { get(_target, key) { touched.push(String(key)); return () => null; } });
+  const { query } = queuedFetch([success(laxSnaCongestion()), success(laxSnaCancellation())]);
+  const ui = setup(query, { localStorage: storage, sessionStorage: storage, indexedDB: storage });
+  await ui.run('runPreset(demos["lax-sna"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'Just the cancellation rates, please.');
+  await flush(); await flush();
+  assert.equal(chatItems(ui).length, 3);
+  assert.deepEqual(touched, []);
+});
+
+test('an unsupported or unclear question is answered; a model or service failure stays on the turn with Retry', async () => {
+  const cases = [
+    ['unsupported_scope', 422, 'That question is outside the supported airport analyses and periods.', 'That question is outside the supported airport analyses and periods.', 'note'],
+    ['clarification_required', 422, 'Which airport should I compare with LAX?', 'Which airport should I compare with LAX?', 'note'],
+    ['ai_unavailable', 503, 'AI interpretation is unavailable.', 'Natural-language analysis is temporarily unavailable. Preset analyses still work.', 'error'],
+    ['query_timeout', 504, 'The analysis took too long.', 'The analysis took too long.', 'error'],
+  ];
+  for (const [code, status, message, expected, state] of cases) {
+    const { query } = queuedFetch([success(laxSnaCongestion()), { ok: false, status, json: async () => errorEnvelope(code, message) }]);
+    const ui = setup(query);
+    await ui.run('runPreset(demos["lax-sna"])');
+    ui.nodes.get('#ask-trigger').click();
+    sendChat(ui, 'What about the weather?');
+    await flush(); await flush();
+    const [, user, reply] = chatItems(ui);
+    assert.equal(reply.getAttribute('data-state'), state, code);
+    assert.equal(reply.getAttribute('aria-busy'), 'false', code);
+    assert.equal(chatText(reply), expected, code);
+    assert.equal(chatText(user), 'What about the weather?', `${code}: the question text stays on the turn`);
+    const failure = findDescendant(user, node => node.className === 'chat-failure');
+    assert.equal(user.getAttribute('data-state'), state === 'error' ? 'failed' : 'sent', code);
+    assert.equal(failure.hidden, state !== 'error', `${code}: only a failure offers Retry`);
+    if (state === 'error') {
+      assert.equal(content(failure).trim(), 'Not sent ·  Retry');
+      assert.equal(findDescendant(failure, node => node.className === 'chat-retry').tagName, 'button', 'Retry is a real button');
+    }
+    assert.doesNotMatch(content(reply) + content(user), /123e4567|request|_scope|_required|_unavailable|_timeout|\b(422|503|504)\b|Gemini/i, `${code}: no codes or IDs in the transcript`);
+    assert.equal(chatLink(reply).hidden, true);
+    assert.equal(ui.nodes.get('#question').value, 'What about the weather?', 'the question is kept for editing');
+    assert.equal(ui.run('latestSuccessfulResult.result_id'), 'lax-sna', 'the previous result stays');
+    const fieldError = ui.nodes.get('#question-error');
+    assert.equal(fieldError.hidden, false);
+    assert.equal(fieldError.textContent, expected);
+    assert.equal(fieldError.getAttribute('data-mirrored'), 'true', 'the open card shows the error once, in the bubble');
+    assert.equal(ui.run('busy'), false);
+  }
+});
+
+test('a superseded follow-up never leaves its bubble saying Analyzing', async () => {
+  let respond;
+  const ui = setup((_url, init) => JSON.parse(init.body).message ? new Promise(resolve => { respond = resolve; }) : Promise.resolve(success(laxSnaCongestion())));
+  await ui.run('runPreset(demos["lax-sna"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'Just the cancellation rates, please.');
+  ui.nodes.get('#back-to-analysis').click();
+  respond(success(laxSnaCancellation()));
+  await flush(); await flush();
+  const [, user, reply] = chatItems(ui);
+  assert.equal(reply.getAttribute('data-state'), 'error');
+  assert.equal(reply.getAttribute('aria-busy'), 'false');
+  assert.equal(chatText(reply), 'Stopped: the analysis changed before this answer arrived.');
+  assert.equal(user.getAttribute('data-state'), 'failed', 'a stopped turn can be retried');
+  assert.equal(ui.run('latestSuccessfulResult'), null, 'the late answer does not restore a result after Back');
+});
+
+test('Retry re-sends the same text on the same turn, and the in-flight composer stays editable with one request at a time', async () => {
+  const bodies = [];
+  const pendingResponses = [];
+  const ui = setup((_url, init) => { bodies.push(JSON.parse(init.body)); return new Promise(resolve => pendingResponses.push(resolve)); });
+  const preset = ui.run('runPreset(demos["lax-sna"])');
+  pendingResponses.shift()(success(laxSnaCongestion()));
+  await preset;
+  ui.nodes.get('#ask-trigger').click();
+  const question = ui.nodes.get('#question');
+  const send = ui.nodes.get('#chat-form button');
+  sendChat(ui, 'Just the cancellation rates, please.');
+  const [, user, reply] = chatItems(ui);
+  assert.equal(reply.getAttribute('aria-busy'), 'true', 'the working indicator is marked busy');
+  assert.equal(question.disabled, undefined, 'the textarea is never disabled while a request is in flight');
+  assert.equal(send.disabled, undefined, 'Send is never disabled (that would drop focus)');
+  assert.equal(send.getAttribute('aria-disabled'), 'true');
+  question.value = 'What about Anchorage long-haul share?';
+  question.listeners.input();
+  let prevented = false;
+  question.listeners.keydown({ key: 'Enter', shiftKey: false, isComposing: false, keyCode: 13, preventDefault() { prevented = true; } });
+  ui.nodes.get('#chat-form').listeners.submit({ preventDefault() {} });
+  assert.equal(prevented, true);
+  assert.equal(bodies.length, 2, 'a second send while busy is dropped');
+  assert.equal(chatItems(ui).length, 3, 'a dropped send adds no message');
+  assert.equal(question.value, 'What about Anchorage long-haul share?', 'the drafted next question stays in the composer');
+  pendingResponses.shift()({ ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') });
+  await flush(); await flush();
+  assert.equal(user.getAttribute('data-state'), 'failed');
+  assert.equal(send.getAttribute('aria-disabled'), 'false');
+  findDescendant(user, node => node.className === 'chat-retry').click();
+  assert.equal(chatItems(ui).length, 3, 'Retry reuses the failed turn');
+  assert.equal(user.getAttribute('data-state'), 'sent');
+  assert.equal(reply.getAttribute('data-state'), 'pending');
+  assert.equal(chatText(reply), 'Analyzing…');
+  assert.deepEqual(bodies[2], { message: 'Just the cancellation rates, please.', context_result_id: 'lax-sna' }, 'Retry re-sends the same text and context id only');
+  pendingResponses.shift()(success(laxSnaCancellation()));
+  await flush(); await flush();
+  assert.equal(chatText(reply), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
+  assert.equal(reply.getAttribute('aria-busy'), 'false');
+  assert.equal(question.value, 'What about Anchorage long-haul share?', 'a draft typed while waiting survives the reply');
+  assert.equal(ui.nodes.get('#chat-status').textContent, 'Analyst: Cancellation rate: LAX 0.69% · SNA 1.05%', 'the outcome is announced once');
+});
+
+test('a reply follows the reader only when they were at the end; the sender always sees their own message', async () => {
+  const run = async (scrollTop) => {
+    let respond;
+    const ui = setup((_url, init) => JSON.parse(init.body).message ? new Promise(resolve => { respond = resolve; }) : Promise.resolve(success(laxSnaCongestion())));
+    await ui.run('runPreset(demos["lax-sna"])');
+    ui.nodes.get('#ask-trigger').click();
+    const body = ui.run('$(".chat-body")');
+    Object.assign(body, { scrollHeight: 1000, clientHeight: 400, scrollTop: 0 });
+    const question = ui.nodes.get('#question');
+    question.value = 'Just the cancellation rates, please.';
+    question.listeners.input();
+    body.scrollTop = 0; // the reader scrolled up before sending
+    ui.nodes.get('#chat-form').listeners.submit({ preventDefault() {} });
+    assert.equal(body.scrollTop, 1000, 'sending scrolls the user\'s own message into view');
+    body.scrollTop = scrollTop;
+    respond(success(laxSnaCancellation()));
+    await flush(); await flush();
+    return body.scrollTop;
+  };
+  assert.equal(await run(560), 1000, 'within 48px of the end: the reply is followed');
+  assert.equal(await run(200), 200, 'scrolled up: the reader stays where they are');
+});
+
+test('the bar raises the card on click or typing; Escape lowers it to the bar, then closes it', async () => {
+  const ui = setup(async () => success(laxSnaCongestion()));
+  await ui.run('runPreset(demos["lax-sna"])');
+  const composer = ui.nodes.get('#conversation-composer');
+  const question = ui.nodes.get('#question');
+  ui.nodes.get('#ask-trigger').click();
+  assert.equal(composer.classList.contains('is-expanded'), false, 'opening shows the collapsed bar');
+  assert.equal(question.getAttribute('placeholder'), 'Ask a follow-up…', 'the preset reply already counts as history');
+  ui.nodes.get('#chat-form').listeners.click();
+  assert.equal(composer.classList.contains('is-expanded'), true, 'clicking the bar raises the card');
+  assert.equal(ui.nodes.get('#chat-collapse').getAttribute('aria-expanded'), 'true');
+  question.focused = false;
+  ui.documentListeners.get('keydown')({ key: 'Escape' });
+  assert.equal(composer.classList.contains('is-expanded'), false, 'Escape lowers the card');
+  assert.equal(composer.inert, false, 'the bar stays open');
+  assert.equal(question.focused, true, 'focus returns to the bar');
+  question.listeners.input();
+  assert.equal(composer.classList.contains('is-expanded'), true, 'typing raises the card');
+  ui.nodes.get('#chat-collapse').click();
+  assert.equal(composer.classList.contains('is-expanded'), false, 'the header button lowers the card');
+  ui.documentListeners.get('keydown')({ key: 'Escape' });
+  assert.equal(composer.inert, true, 'a second Escape closes the bar');
+  assert.equal(ui.nodes.get('#ask-trigger').focused, true);
+});
+
+test('a second Escape during the collapse motion closes the bar', async () => {
+  const ui = setup(async () => success(laxSnaCongestion()));
+  await ui.run('runPreset(demos["lax-sna"])');
+  ui.window.matchMedia = () => ({ matches: false }); // motion on: the collapse animates
+  const composer = ui.nodes.get('#conversation-composer');
+  ui.nodes.get('#ask-trigger').click();
+  ui.nodes.get('#chat-form').listeners.click();
+  ui.documentListeners.get('keydown')({ key: 'Escape' });
+  assert.equal(composer.classList.contains('is-collapsing'), true, 'the card is animating down');
+  ui.documentListeners.get('keydown')({ key: 'Escape' });
+  assert.equal(composer.inert, true, 'the second Escape closes the bar instead of restarting the collapse');
+  assert.equal(composer.classList.contains('is-expanded'), false);
+});
+
+test('Explain stays a result-panel action: deterministic, one request, and it adds nothing to the chat', async () => {
+  const explained = { ...laxSnaCongestion(), summary: 'LAX / SNA operational comparison: cancellation rate LAX 0.69%, SNA 1.05%.' };
+  const { query, bodies } = queuedFetch([success(laxSnaCongestion()), success(explained)]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["lax-sna"])');
+  const before = chatItems(ui).length;
+  ui.nodes.get('#explain').click();
+  await flush(); await flush();
+  assert.deepEqual(bodies[1], { analysis: { action: 'explain' }, context_result_id: 'lax-sna' });
+  assert.equal(findDescendant(ui.nodes.get('#result'), node => node.id === 'result-explanation').textContent, explained.summary, 'the explanation is the returned text');
+  assert.equal(chatItems(ui).length, before, 'Explain adds no chat message');
+  assert.equal(bodies.length, 2, 'one request per action; the chat adds no model call');
+});
+
+test('View analysis focuses the result title the reply produced', async () => {
+  const ui = setup(async () => success(ancLongHaul()));
+  await ui.run('runPreset(demos["anc-long-haul"])');
+  const reply = chatItems(ui)[0];
+  assert.equal(chatText(reply), '2.77% of eligible ANC departures were at least 3,000 miles: 999 of 36,040.');
+  const link = chatLink(reply);
+  assert.equal(link.hidden, false);
+  assert.equal(link.textContent, 'View analysis →');
+  link.click();
+  assert.equal(ui.nodes.get('#result-title').focused, true);
+  assert.equal(chatItems(ui).length, 1, 'viewing the analysis sends nothing and adds no message');
+});
