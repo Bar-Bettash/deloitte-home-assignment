@@ -639,8 +639,8 @@
     #result .congestion-measure-title { margin: 0; font-size: 1rem; font-weight: 600; }
     #result .measure-head .comparison-tracks { display: flex; flex-wrap: wrap; gap: 4px 20px; }
     #result .comparison-value { display: inline-flex; align-items: center; gap: 7px; min-height: 0; margin: 0; font-size: .9375rem; line-height: 1.3; }
-    #result .comparison-value .comparison-label { color: var(--text-secondary); font-size: .875rem; font-weight: 600; letter-spacing: .02em; }
-    #result .comparison-value .comparison-exact { color: var(--text); font-size: .9375rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    #result .comparison-value .comparison-label { color: var(--text-secondary); font-size: .9375rem; font-weight: 600; letter-spacing: .02em; }
+    #result .comparison-value .comparison-exact { color: var(--text); font-size: 1rem; font-weight: 600; font-variant-numeric: tabular-nums; }
     #result .comparison-value .not-plotted { color: var(--text-secondary); font-size: .8125rem; }
     #result .measure-track { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) 4.5rem; align-items: center; gap: 12px; }
     #result .measure-track .congestion-scale { margin: 0; color: var(--text-secondary); font-size: .8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -667,10 +667,10 @@
     #result .ranking-list { grid-template-columns: minmax(0, 1fr); gap: 0; }
     #result .ranking-list .ranking-row { display: grid; grid-template-columns: 2rem 3.25rem minmax(3rem, 1fr) 4.25rem; align-items: center; gap: 12px; min-height: 42px; padding: 0; border-bottom: 1px solid var(--border); }
     #result .ranking-list .ranking-row h3 { margin: 0; font-size: .9375rem; font-weight: 600; letter-spacing: .02em; }
-    #result .ranking-list .backend-rank { margin: 0; color: var(--text-secondary); font-size: .875rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    #result .ranking-list .backend-rank { margin: 0; color: var(--text-secondary); font-size: .9375rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
     #result .ranking-list .score-track { height: 8px; margin: 0; border-radius: 4px; background: rgba(252,241,208,.1); }
     #result .ranking-list .score-fill { border-radius: 4px; }
-    #result .ranking-list .ranking-row .score-value { margin: 0; font-size: .9375rem; font-weight: 600; text-align: end; white-space: nowrap; }
+    #result .ranking-list .ranking-row .score-value { margin: 0; font-size: 1rem; font-weight: 600; text-align: end; white-space: nowrap; }
     #result .ranking-list .ranking-row > h3 + .score-value { grid-column: 3 / -1; color: var(--text-secondary); font-size: .875rem; font-weight: 400; text-align: start; white-space: normal; }
     #result .full-ranking-disclosure { margin-top: 8px; padding: 0; border: 0; }
     #result .full-ranking-disclosure > summary { padding: 10px 0; color: var(--text-secondary); font-size: .9375rem; font-weight: 600; }
