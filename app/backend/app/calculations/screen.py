@@ -32,6 +32,10 @@ class ScreenRow:
     seat_occupancy_percent: float
     screen_score: float
     rank: int
+    # Weighted percentile points; they sum to screen_score (40 + 30 + 30 at most).
+    growth_points: float = 0.0
+    volume_points: float = 0.0
+    occupancy_points: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,16 +124,16 @@ def calculate_screen(
     volume_percentiles = _percentiles([(candidate.airport, candidate.passengers) for candidate in eligible])
     occupancy_percentiles = _percentiles([(candidate.airport, candidate.occupancy) for candidate in eligible])
     score_by_airport: dict[str, float] = {}
+    points_by_airport: dict[str, tuple[float, float, float]] = {}
     candidate_by_airport = {candidate.airport: candidate for candidate in eligible}
     for candidate in eligible:
-        score_by_airport[candidate.airport] = float(
-            100
-            * (
-                Fraction(2, 5) * growth_percentiles[candidate.airport]
-                + Fraction(3, 10) * volume_percentiles[candidate.airport]
-                + Fraction(3, 10) * occupancy_percentiles[candidate.airport]
-            )
+        parts = (
+            100 * Fraction(2, 5) * growth_percentiles[candidate.airport],
+            100 * Fraction(3, 10) * volume_percentiles[candidate.airport],
+            100 * Fraction(3, 10) * occupancy_percentiles[candidate.airport],
         )
+        score_by_airport[candidate.airport] = float(sum(parts))
+        points_by_airport[candidate.airport] = tuple(float(part) for part in parts)
 
     if sort_by == "screen_score":
         sorted_candidates = sorted(
@@ -154,6 +158,9 @@ def calculate_screen(
                 for airport, other_value in order_values.items()
                 if airport != candidate.airport
             ),
+            growth_points=points_by_airport[candidate.airport][0],
+            volume_points=points_by_airport[candidate.airport][1],
+            occupancy_points=points_by_airport[candidate.airport][2],
         )
         for candidate in sorted_candidates
         if selected is None or candidate.airport in selected

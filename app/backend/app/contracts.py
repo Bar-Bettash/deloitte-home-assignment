@@ -151,6 +151,9 @@ class QueryRequest(StrictModel):
     message: Annotated[StrictStr, Field(min_length=1, max_length=4000)] | None = None
     analysis: AnalysisRequest | None = None
     context_result_id: UUID | None = None
+    # The two airports of the last comparison clarification, echoed back so a short
+    # reply such as "congestion" keeps them. Codes only; nothing else is carried.
+    pending_comparison: list[StrictStr] | None = Field(default=None, min_length=2, max_length=2)
 
     @field_validator("context_result_id", mode="before")
     @classmethod
@@ -172,6 +175,11 @@ class QueryRequest(StrictModel):
             raise ValueError("provide exactly one of message or analysis")
         if self.analysis is not None and self.analysis.action == "explain" and self.context_result_id is None:
             raise ValueError("explain requires context_result_id")
+        if self.pending_comparison is not None:
+            if self.message is None:
+                raise ValueError("pending_comparison accompanies a typed message only")
+            if len(set(self.pending_comparison)) != 2 or not set(self.pending_comparison) <= AIRPORTS:
+                raise ValueError("pending_comparison must name two different supported airports")
         return self
 
 
@@ -180,7 +188,7 @@ class MetricValue(StrictModel):
         "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
         "long_haul_share", "screen_score", "cancellation_rate", "diversion_rate",
         "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "enplaned_growth",
-        "sfo_pressure",
+        "sfo_pressure", "growth_points", "volume_points", "occupancy_points",
     ]
     value: WireNumber | None
     unit: Literal["count", "percent", "percentage_points", "minutes", "score"]
@@ -219,6 +227,8 @@ class MetricValue(StrictModel):
             "departure_delay_minutes": "minutes", "taxi_out_minutes": "minutes",
             "sfo_enplaned_trend": "count", "enplaned_growth": "percent",
             "sfo_pressure": "percentage_points",
+            # Weighted screen-score components: points out of 40, 30 and 30.
+            "growth_points": "score", "volume_points": "score", "occupancy_points": "score",
         }[self.key]
         if self.unit != expected_unit:
             raise ValueError(f"{self.key} must use {expected_unit}")
@@ -401,6 +411,9 @@ class ErrorDetail(StrictModel):
     code: ErrorCode
     message: Annotated[StrictStr, Field(min_length=1, max_length=500)]
     request_id: UUID
+    # Only on a comparison clarification: the two airports the question is about,
+    # for the client to send back with the reply.
+    pending_comparison: list[StrictStr] | None = Field(default=None, min_length=2, max_length=2)
 
     @field_validator("request_id", mode="before")
     @classmethod

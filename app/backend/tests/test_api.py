@@ -16,9 +16,9 @@ from app.calculations.operations import calculate_operations
 from app.calculations.screen import ScreenExclusion, ScreenResult
 from app.calculations.sfo import SFOTrendError, calculate_sfo_enplaned_trend
 from app.calculations.traffic import MetricResult, calculate_traffic_batch
-from app.contracts import MAX_REQUEST_BYTES
+from app.contracts import MAX_REQUEST_BYTES, MetricValue
 from app.dispatch import DispatchFailure
-from app.model_adapter import ModelAdapterError, ModelInterpretation, ModelUsage
+from app.model_adapter import ModelAdapterError, ModelInterpretation, ModelUsage, comparison_question
 from app.settings import Settings, load_hosting
 from app.sources.bundle import DEFAULT_DATA_ROOT as BUNDLE_DATA_ROOT
 from app.sources.bundle import load_bundle
@@ -552,6 +552,87 @@ def test_admitted_free_text_dispatches_validated_analysis_and_stores_request(mon
     assert claims.result_id == UUID(response.json()["result_id"])
     assert claims.request.metric == "sfo_enplaned_trend"
 
+
+def test_follow_up_comparison_clarification_reaches_the_client_as_worded_by_the_server(monkeypatch):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+    first = client.post("/api/query", json={"analysis": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}})
+    seen = []
+
+    async def interpret(_message, *, settings, context):
+        seen.append(context)
+        return ModelInterpretation("clarification_required", None, "provider-controlled prose", ModelUsage(10, 5),
+                                   ("SFO", "LAX"))
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    response = client.post("/api/query", json={"message": "Compare it with LAX", "context_result_id": first.json()["result_id"]})
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "clarification_required"
+    # Worded by the server from the two codes and the signed previous request; the adapter's text is never echoed.
+    assert error["message"] == comparison_question(["SFO", "LAX"], seen[0])
+    assert error["message"].startswith("SFO demand pressure is measured only for SFO. Which measure should I compare for SFO and LAX:")
+    assert "provider-controlled" not in response.text
+    assert seen[0]["metric"] == "sfo_pressure"
+    # The previous result stays current: a clarification never replaces the context.
+    assert context_claims(client).result_id == UUID(first.json()["result_id"])
+
+
+
+def test_short_reply_to_a_comparison_clarification_keeps_the_pending_pair(monkeypatch):
+    """SFO pressure -> "Compare it with LAX" -> which measure? -> "congestion" compares SFO and LAX."""
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+    first = client.post("/api/query", json={"analysis": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}})
+    assert first.status_code == 200, first.text
+    calls = []
+
+    async def interpret(message, *, settings, context, pending_comparison=None):
+        calls.append((message, context, pending_comparison))
+        if pending_comparison is None:
+            return ModelInterpretation("clarification_required", None, "provider prose", ModelUsage(10, 5), ("SFO", "LAX"))
+        analysis = main.AnalysisRequest(action="compare", airports=list(pending_comparison), metric="congestion")
+        return ModelInterpretation("analysis", analysis, None, ModelUsage(10, 5))
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    context_id = first.json()["result_id"]
+    asked = client.post("/api/query", json={"message": "Compare it with LAX", "context_result_id": context_id})
+    assert asked.status_code == 422
+    error = asked.json()["error"]
+    assert error["code"] == "clarification_required"
+    assert error["pending_comparison"] == ["SFO", "LAX"]
+    # The clarification does not replace the signed context: the SFO result stays current.
+    assert context_claims(client).result_id == UUID(context_id)
+
+    answered = client.post("/api/query", json={
+        "message": "congestion", "context_result_id": context_id, "pending_comparison": error["pending_comparison"]})
+    assert answered.status_code == 200, answered.text
+    assert answered.json()["scope"]["airports"] == ["SFO", "LAX"]
+    assert answered.json()["scope"]["metric"] == "congestion"
+    # One model call per typed message; the reply reached the model with the pair and the SFO context.
+    assert [call[0] for call in calls] == ["Compare it with LAX", "congestion"]
+    assert calls[1][1]["metric"] == "sfo_pressure" and calls[1][2] == ["SFO", "LAX"]
+    assert context_claims(client).request.airports == ["SFO", "LAX"]
+
+
+@pytest.mark.parametrize("body", [
+    {"analysis": {"action": "metric", "airports": ["SFO"], "metric": "passengers"}, "pending_comparison": ["SFO", "LAX"]},
+    {"message": "congestion", "pending_comparison": ["SFO"]},
+    {"message": "congestion", "pending_comparison": ["SFO", "SFO"]},
+    {"message": "congestion", "pending_comparison": ["SFO", "XXX"]},
+    {"message": "congestion", "pending_comparison": ["sfo", "LAX"]},
+    {"message": "congestion", "pending_comparison": ["SFO", "LAX", "SNA"]},
+    {"message": "congestion", "pending_comparison": "SFO,LAX"},
+])
+def test_pending_comparison_is_validated_before_any_model_call(monkeypatch, body):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def interpret(*_args, **_kwargs):
+        raise AssertionError("no model call for an invalid request")
+
+    monkeypatch.setattr(main, "interpret_message", interpret)
+    response = client.post("/api/query", json=body)
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_request"
+    assert "pending_comparison" not in response.json()["error"]
 
 def test_each_model_call_logs_metadata_without_question_text(monkeypatch, caplog):
     monkeypatch.setattr(main, "load_settings", admitted_settings)
@@ -1141,7 +1222,8 @@ def test_real_operations_congestion_compare_uses_accepted_snapshot():
     assert payload["sources"][0]["snapshot_id"] == expected[0].source.snapshot_id
     assert payload["sources"][0]["snapshot_id"] == expected[1].source.snapshot_id
     assert payload["sources"][0]["retrieved_at"] is None
-    assert "comparable operational" in payload["summary"]
+    assert "LAX" in payload["summary"] and "SNA" in payload["summary"]
+    assert "No single airport is uniformly more congested" in payload["summary"] or "operational indicators" in payload["summary"]
     directions = set()
     for left, right in zip(payload["rows"][0]["metrics"], payload["rows"][1]["metrics"]):
         directions.add(left["comparison_direction"])
@@ -1157,14 +1239,19 @@ def test_real_operations_congestion_compare_uses_accepted_snapshot():
 
 def test_mixed_congestion_summary_states_each_airports_count():
     rows = [
-        {"airport": "LAX", "metrics": [{"value": 2}, {"value": 1}, {"value": None}, {"value": 5}]},
-        {"airport": "SNA", "metrics": [{"value": 1}, {"value": 3}, {"value": 4}, {"value": 5}]},
+        {"airport": "LAX", "metrics": [{"key": key, "value": value} for key, value in zip(dispatch.CONGESTION_KEYS, (2, 1, None, 5))]},
+        {"airport": "SNA", "metrics": [{"key": key, "value": value} for key, value in zip(dispatch.CONGESTION_KEYS, (1, 3, 4, 5))]},
     ]
     summary = dispatch._comparison_summary("congestion", rows)
     assert summary == (
-        "Mixed picture: LAX is higher on 1 and SNA on 1 of 3 comparable operational-strain indicators."
+        "No single airport is uniformly more congested. LAX has the higher cancellation rate, "
+        "while SNA has the higher diversion rate."
     )
     assert "favor" not in summary
+    one_sided = [rows[0], {"airport": "SNA", "metrics": [{"key": key, "value": value} for key, value in zip(dispatch.CONGESTION_KEYS, (1, 0, 4, 5))]}]
+    assert dispatch._comparison_summary("congestion", one_sided) == (
+        "LAX is higher than SNA on 2 of 3 comparable operational indicators: cancellation rate and diversion rate; 1 is tied."
+    )
 
 
 @pytest.mark.parametrize("year", [2024, 2025])
@@ -1303,7 +1390,9 @@ def test_explain_ranked_cohort_is_a_short_narrative_not_a_row_dump(year):
     for row in ranked[:3]:
         score = next(metric for metric in row.metrics if metric.key == "screen_score")
         assert f"{row.airport} ({dispatch._format_value(score.value, score.unit)})" in summary
-    assert "not proof" in summary and "profitable" in summary
+    assert "not a profitability model" in summary and "square footage" in summary
+    # Why the leader leads, from its own component points against the next airport.
+    assert f"{ranked[0].airport} ranks first" in summary and f"ahead of {ranked[1].airport}" in summary
     # Not a dump of every airport: exact values already live in the ranking and methodology.
     assert not any(f"{row.airport} " in summary or f"{row.airport} (" in summary for row in ranked[3:])
     assert 3 <= summary.count(". ") + 1 <= 6
@@ -1378,3 +1467,114 @@ def test_sfo_pressure_returns_datasf_enplaned_growth(year):
     assert (growth["numerator"], growth["denominator"]) == (comparison - baseline, baseline)
     assert growth["value"] == pytest.approx((comparison - baseline) / baseline * 100)
     assert metrics["sfo_enplaned_trend"]["value"] == comparison
+
+
+def _metric(key, value, unit):
+    return MetricValue(key=key, value=value, unit=unit, status="ok",
+                       numerator=1 if key == "seat_occupancy" else None,
+                       denominator=2 if key == "seat_occupancy" else None, source_ids=["t100-x"])
+
+
+@pytest.mark.parametrize("gap, opening", [
+    (-1.2246, "No sign in 2025 that airline seat supply at SFO fell behind passenger traffic: supplied seats grew 1.22 percentage points faster"),
+    (0.8, "Passenger traffic at SFO outpaced airline seat supply in 2025: passengers grew 0.80 percentage points faster"),
+    (0.001, "Passenger traffic and airline seat supply at SFO grew at the same pace in 2025"),
+])
+def test_sfo_answer_states_the_direction_of_the_growth_gap(gap, opening):
+    by_key = {"sfo_pressure": _metric("sfo_pressure", gap, "percentage_points"),
+              "passenger_growth": _metric("passenger_growth", 4.7, "percent"),
+              "seat_occupancy": _metric("seat_occupancy", 82.31, "percent")}
+    answer = dispatch._sfo_answer(by_key, 2025)
+    assert answer.startswith(opening)
+    assert "seat occupancy was 82.31%" in answer and "passengers who flew" in answer
+    # A negative gap (seats grew faster) is never described as pressure or a shortage.
+    if gap < 0:
+        assert "pressure" not in answer and "shortage" not in answer
+    unavailable = MetricValue(key="sfo_pressure", value=None, unit="percentage_points", status="unavailable",
+                              reason="unavailable", source_ids=[])
+    assert dispatch._sfo_answer({**by_key, "sfo_pressure": unavailable}, 2025) is None
+
+
+def test_delay_cause_sentence_orders_exact_shares_and_skips_unavailable_mixes():
+    from app.calculations.operations import DelayCauseMix
+    mix = DelayCauseMix("ok", 3, 100.0, (("carrier_delay", 30.0, 30.0), ("weather_delay", 4.0, 4.0),
+                                        ("nas_delay", 20.0, 20.0), ("security_delay", 0.0, 0.0),
+                                        ("late_aircraft_delay", 46.0, 46.0)))
+    assert dispatch._delay_cause_sentence("SFO", mix) == (
+        "Reported delays on SFO departures were mostly attributed to late-arriving aircraft (46.0%), carrier issues (30.0%) "
+        "and national airspace system factors such as air traffic control and traffic volume (20.0%); extreme weather 4.0% "
+        "and security 0.0%. These shares explain operational delays, not latent demand or terminal capacity.")
+    assert dispatch._delay_cause_sentence("SFO", None) is None
+    assert dispatch._delay_cause_sentence("SFO", DelayCauseMix("unavailable", 0, 0.0, (), "insufficient data")) is None
+
+
+def test_sfo_pressure_answers_directly_with_the_real_delay_cause_mix():
+    payload = client.post("/api/query", json={"analysis": {
+        "action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}}).json()
+    metrics = {metric["key"]: metric for metric in payload["rows"][0]["metrics"]}
+    gap = metrics["sfo_pressure"]["value"]
+    mix = calculate_operations("SFO", year=payload["scope"]["year"],
+                               bundle=load_bundle(payload["scope"]["bundle_id"])).delay_causes
+    summary = payload["summary"]
+    assert mix.status == "ok" and sum(share for _f, _m, share in mix.causes) == pytest.approx(100)
+    assert f"{abs(gap):.2f} percentage points" in summary
+    assert summary.startswith("No sign" if round(gap, 2) < 0 else "Passenger traffic")
+    top_field, _minutes, top_share = max(mix.causes, key=lambda item: item[2])
+    assert f"{dispatch._DELAY_CAUSE_LABELS[top_field]} ({top_share:.1f}%)" in summary
+    assert "not latent demand or terminal capacity" in summary
+    assert dispatch._DELAY_CAUSE_SCOPE in payload["limitations"]
+    assert "pressure signals" not in summary and "_" not in summary
+
+
+def test_sfo_explain_derives_seat_growth_from_the_same_gap():
+    previous = dispatch.dispatch_analysis(main.AnalysisRequest(action="metric", airports=["SFO"], metric="sfo_pressure"), uuid4())
+    metrics = {metric.key: metric for metric in previous.rows[0].metrics}
+    growth, gap = metrics["passenger_growth"].value, metrics["sfo_pressure"].value
+    summary = dispatch.dispatch_analysis(main.AnalysisRequest(action="explain"), uuid4(), previous=previous).summary
+    assert f"supplied seats grew {dispatch._format_value(growth - gap, 'percent')}" in summary
+    assert "latent demand is neither measured nor ruled out" in summary
+    assert "Reported delays on SFO departures" in summary
+
+
+@pytest.mark.parametrize("year", [2024, 2025])
+def test_screen_component_points_sum_to_the_unchanged_score(year):
+    result = dispatch.dispatch_analysis(
+        main.AnalysisRequest(action="rank", region="new_england", metric="screen_score", year=year), uuid4())
+    scored = 0
+    for row in result.rows:
+        metrics = {metric.key: metric for metric in row.metrics}
+        if metrics["screen_score"].status != "ok":
+            assert not {"growth_points", "volume_points", "occupancy_points"} & set(metrics)
+            continue
+        scored += 1
+        parts = [metrics[key].value for key in ("growth_points", "volume_points", "occupancy_points")]
+        assert all(metrics[key].unit == "score" for key in ("growth_points", "volume_points", "occupancy_points"))
+        assert 0 <= parts[0] <= 40 and 0 <= parts[1] <= 30 and 0 <= parts[2] <= 30
+        assert sum(parts) == pytest.approx(metrics["screen_score"].value, abs=1e-9)
+    assert scored >= 2
+    first, second = result.rows[0], result.rows[1]
+    assert f"{first.airport} ranks first" in result.summary and f"ahead of {second.airport}" in result.summary
+    assert result.limitations[0] == dispatch._SCREEN_LIMITATION
+
+
+def test_growth_ranking_does_not_carry_screen_components_or_screen_limitation():
+    result = dispatch.dispatch_analysis(
+        main.AnalysisRequest(action="rank", region="new_england", metric="passenger_growth"), uuid4())
+    assert not any(metric.key.endswith("_points") for row in result.rows for metric in row.metrics)
+    assert "ranks first" not in result.summary and result.limitations[0] != dispatch._SCREEN_LIMITATION
+
+
+def test_long_haul_scope_caveat_matches_the_t100_filter():
+    import duckdb
+    from app.sources import t100
+
+    result = dispatch.dispatch_analysis(main.AnalysisRequest(
+        action="metric", airports=["ANC"], metric="long_haul_share", threshold_miles=3000), uuid4())
+    assert result.limitations[0] == dispatch._LONG_HAUL_SCOPE
+    # Only scheduled passenger service (class F) with reported seats is in the accepted data.
+    assert t100.ALLOWED_CLASSES & t100.OBSERVED_CLASSES == {"F"}
+    path = str(load_bundle(result.scope.bundle_id).sources["t100"].data_path)
+    with duckdb.connect() as connection:
+        classes, min_seats = connection.execute(
+            "SELECT list(DISTINCT class), min(seats) FROM read_parquet(?)", [path]).fetchone()
+    assert classes == ["F"] and min_seats > 0

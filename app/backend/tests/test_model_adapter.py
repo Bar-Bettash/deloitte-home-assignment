@@ -432,3 +432,82 @@ async def test_unsupported_year_from_model_fails_closed() -> None:
     with pytest.raises(ModelAdapterError) as exc:
         await _captured_payload(_settings(), {"kind": "analysis", "analysis": analysis})
     assert exc.value.code == "model_invalid_response"
+
+
+def _hint(airports, **fields) -> dict[str, object]:
+    return {"kind": "clarification_required", "analysis": {
+        "action": "compare", "airports": airports, "region": None, "metric": None, "year": None,
+        "threshold_miles": None, **fields}}
+
+
+async def _clarify(outcome: dict[str, object], context: dict[str, object] | None):
+    async with _client(lambda request: httpx.Response(200, json=_response(outcome))) as client:
+        return await interpret_message("follow-up", settings=_settings(), context=context, client=client)
+
+
+@run_async
+@pytest.mark.parametrize(("context", "airports", "message"), [
+    ({"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, ["SFO", "LAX"],
+     ("SFO demand pressure is measured only for SFO. Which measure should I compare for SFO and LAX: passenger growth, "
+     "seat occupancy, passengers, long-haul share or congestion? For example: “Compare SFO and LAX congestion.”")),
+    ({"action": "rank", "region": "new_england", "metric": "screen_score"}, ["bos", "PVD"],
+     ("The screening score ranks New England airports rather than comparing two. Which measure should I compare for BOS "
+     "and PVD: passenger growth, seat occupancy, passengers or long-haul share? For example: “Compare BOS and PVD "
+     "passenger growth.”")),
+    ({"action": "compare", "airports": ["LAX", "SNA"], "metric": "congestion"}, ["LAX", "BOS"],
+     ("Operational measures cover only LAX, SNA and SFO. Which measure should I compare for LAX and BOS: passenger growth, "
+     "seat occupancy, passengers or long-haul share? For example: “Compare LAX and BOS passenger growth.”")),
+    (None, ["ANC", "BOS"],
+     ("Which measure should I compare for ANC and BOS: passenger growth, seat occupancy, passengers or long-haul share? "
+     "For example: “Compare ANC and BOS passenger growth.”")),
+])
+async def test_comparison_clarification_names_only_comparable_measures(context, airports, message) -> None:
+    result = await _clarify(_hint(airports), context)
+    assert result.kind == "clarification_required" and result.analysis is None
+    assert result.compare_airports == tuple(code.upper() for code in airports)
+    assert result.message == message and len(result.message) <= 500
+    assert model_adapter.comparison_question(list(result.compare_airports), context) == message
+
+
+@run_async
+@pytest.mark.parametrize("outcome", [
+    _hint(["SFO"]),
+    _hint(["SFO", "SFO"]),
+    _hint(["SFO", "XXX"]),
+    _hint(["SFO", "LAX"], metric="congestion"),
+    _hint(["SFO", "LAX"], year=2025),
+    _hint(["SFO", "LAX"], action="metric"),
+    _hint(["SFO", "LAX"], note="provider prose"),
+    {"kind": "unsupported_scope", "analysis": _hint(["SFO", "LAX"])["analysis"]},
+])
+async def test_malformed_comparison_hints_fail_closed(outcome) -> None:
+    with pytest.raises(ModelAdapterError) as exc:
+        await _clarify(outcome, None)
+    assert exc.value.code == "model_invalid_response"
+
+
+@run_async
+async def test_pending_comparison_is_sent_only_when_supplied_and_validated_before_the_call() -> None:
+    sent_inputs = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent_inputs.append(json.loads(json.loads(request.content)["contents"][0]["parts"][0]["text"]))
+        outcome = {"kind": "analysis", "analysis": {**_analysis(), "action": "compare", "airports": ["SFO", "LAX"],
+                                                    "metric": "congestion", "year": 2025, "threshold_miles": None}}
+        return httpx.Response(200, json=_response(outcome))
+
+    context = {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}
+    async with _client(handler) as client:
+        answered = await interpret_message("congestion", settings=_settings(), context=context, client=client,
+                                           pending_comparison=["SFO", "LAX"])
+        await interpret_message("congestion", settings=_settings(), context=context, client=client)
+        for pair in (["SFO"], ["SFO", "SFO"], ["SFO", "XXX"], ["sfo", "LAX"], ["SFO", "LAX", "SNA"]):
+            with pytest.raises(ModelAdapterError) as exc:
+                await interpret_message("congestion", settings=_settings(), context=context, client=client,
+                                        pending_comparison=pair)
+            assert exc.value.code == "model_invalid_response"
+    assert answered.analysis.airports == ["SFO", "LAX"] and answered.analysis.metric == "congestion"
+    assert sent_inputs[0] == {"question": "congestion", "previous_analysis": context, "pending_comparison": ["SFO", "LAX"]}
+    # Without a pending clarification the model input is exactly as before.
+    assert sent_inputs[1] == {"question": "congestion", "previous_analysis": context}
+    assert len(sent_inputs) == 2

@@ -459,3 +459,64 @@ def test_regression_policy_needs_19_of_20_every_safety_case_and_no_errors():
 
     assert missing(ordinary_miss)["candidate_acceptance"] is True
     assert missing(safety_miss)["candidate_acceptance"] is False
+
+
+FOLLOWUP = Path(__file__).parent / "fixtures" / "intent_followup_2025.json"
+
+
+def test_followup_cases_load_under_their_policy_and_are_new():
+    cases = load_and_validate_cases(FOLLOWUP, eval_intents.FOLLOWUP_POLICY)
+    assert Counter(case["category"] for case in cases) == {"safety_clarification": 4, "ordinary": 6}
+    seen = {case["input"]["text"].lower() for path, policy in (
+        (CORPUS, eval_intents.CORPUS_POLICY), (HOLDOUT, eval_intents.HOLDOUT_POLICY),
+        (ASSIGNMENT, eval_intents.ASSIGNMENT_POLICY), (REGRESSION, eval_intents.REGRESSION_POLICY))
+        for case in load_and_validate_cases(path, policy)}
+    assert not {case["input"]["text"].lower() for case in cases} & seen
+    # Every case is a follow-up over a validated previous result, and none copies the prompt.
+    assert all(case["input"]["context"] is not None for case in cases)
+    assert not any(case["input"]["text"].lower().rstrip("?.") in eval_intents.model_adapter.SYSTEM_PROMPT.lower()
+                   for case in cases)
+    policy = eval_intents.FOLLOWUP_POLICY
+    assert (policy.case_count, policy.overall_correct_min, policy.all_correct) == (10, 9, ("safety_clarification",))
+
+
+PENDING = Path(__file__).parent / "fixtures" / "intent_pending_2025.json"
+
+
+def test_pending_cases_load_under_their_policy_and_each_carries_a_pair():
+    cases = load_and_validate_cases(PENDING, eval_intents.PENDING_POLICY)
+    assert Counter(case["category"] for case in cases) == {"demonstration": 2, "safety_clarification": 3, "ordinary": 5}
+    assert all(len(case["input"]["pending_comparison"]) == 2 for case in cases)
+    # The reviewer's acceptance example: SFO pressure, pending SFO/LAX, reply "congestion".
+    assert cases[0]["input"] == {"text": "congestion", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"},
+                                 "pending_comparison": ["SFO", "LAX"]}
+    assert cases[0]["expected"]["analysis"] == {"action": "compare", "airports": ["SFO", "LAX"], "metric": "congestion"}
+    # Multi-word replies are not copied from the prompt (bare measure names are its vocabulary).
+    prompt = eval_intents.model_adapter.SYSTEM_PROMPT.lower()
+    assert not any(case["input"]["text"].lower().rstrip("?.") in prompt
+                   for case in cases if len(case["input"]["text"].split()) > 2)
+    policy = eval_intents.PENDING_POLICY
+    assert (policy.case_count, policy.overall_correct_min, policy.all_correct) == (10, 9, ("demonstration", "safety_clarification"))
+
+
+@pytest.mark.parametrize("pair", [["SFO"], ["SFO", "SFO"], ["SFO", "XXX"], "SFO,LAX", None])
+def test_pending_pair_in_a_case_must_be_two_supported_airports(tmp_path, pair):
+    data = json.loads(PENDING.read_text(encoding="utf-8"))
+    data["cases"][0]["input"]["pending_comparison"] = pair
+    path = tmp_path / "cases.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    with pytest.raises(CorpusValidationError, match="pending_comparison"):
+        load_and_validate_cases(path, eval_intents.PENDING_POLICY)
+
+
+def test_pending_pair_reaches_the_candidate_only_for_cases_that_carry_one():
+    cases = load_and_validate_cases(PENDING, eval_intents.PENDING_POLICY)
+    seen = []
+
+    def parser(text, context, **pending):
+        seen.append(pending)
+        return {"kind": "unsupported_scope", "message": "no"}
+
+    evaluate_cases(cases[:1] + load_and_validate_cases(FOLLOWUP, eval_intents.FOLLOWUP_POLICY)[:1], parser,
+                   mode="baseline", policy=eval_intents.PENDING_POLICY)
+    assert seen == [{"pending_comparison": ["SFO", "LAX"]}, {}]

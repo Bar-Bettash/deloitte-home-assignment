@@ -23,7 +23,7 @@ const resultPanel = $("#result");
 // because every render replaces that container's children.
 const askTrigger = $("#ask-trigger");
 const resultActions = $("#result-actions");
-const connectionFailureMessage = "The backend is unavailable or returned an invalid response. The previous result is retained. Check the local server and retry explicitly.";
+const connectionFailureMessage = "The analysis service is unavailable or returned an invalid response. The previous result is kept; try again in a moment.";
 let latestSuccessfulResult = null;
 let contextResultId = null;
 let requestGeneration = 0;
@@ -33,6 +33,19 @@ let rendererReady = false;
 let explanation = null;
 let methodologyExtras = [];
 const metricRenderers = Object.create(null);
+// The chat transcript lives only in this page's memory: a refresh clears it,
+// while closing the card, presets, Back and new analyses keep it. It is never
+// persisted and never sent — a follow-up still carries only the question, the
+// signed context_result_id and, after a "which measure?" reply, its two airports.
+let conversation = [];
+// The two airports of an unanswered "which measure?" clarification. Sent once,
+// with the next typed message, then cleared; presets, a new analysis and a reload
+// clear it too. It holds two supported codes and nothing else.
+let pendingComparison = null;
+const presetLabels = {
+  "new-england": "New England expansion", "lax-sna": "LAX vs SNA congestion", "anc-long-haul": "ANC long-haul share",
+  "sfo-pressure": "SFO demand pressure", "sfo-trend": "SFO passenger trend", "bos-pvd": "BOS vs PVD growth", "growth": "New England growth ranking",
+};
 
 function dispatchGlobeEvent(type, detail) {
   window.dispatchEvent(new CustomEvent(type, { detail, bubbles: false }));
@@ -103,10 +116,12 @@ let loadingHintTimer = null;
 function setLoading(value) {
   busy = value;
   $("#controls").setAttribute("aria-busy", String(value));
-  for (const button of document.querySelectorAll("button[data-send]")) button.disabled = value;
+  // The composer is never `disabled` while a request is in flight: that would drop
+  // focus to <body> and block drafting the next question. Send is aria-disabled and
+  // the synchronous `busy` guard keeps exactly one request in flight.
+  for (const button of document.querySelectorAll("button[data-send]:not(.composer-send)")) button.disabled = value;
   $("#explain").disabled = value || !contextResultId;
-  $("#question").disabled = value;
-  $("#chat-form button").disabled = value;
+  $("#chat-form button").setAttribute("aria-disabled", String(value));
   document.body?.classList?.toggle("is-analyzing", value);
   $("#result-panel").classList.toggle("is-loading", value);
   if (!value) {
@@ -189,14 +204,19 @@ const newEnglandAirports = new Set("BDL HVN PWM BGR PQI RKD BHB AUG BOS ACK ORH 
 const operationalMetrics = new Set(["congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"]);
 const t100Metrics = new Set(["passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share"]);
 const rankMetrics = new Set(["screen_score", "passengers", "passenger_growth", "seat_occupancy"]);
+// A follow-up rejected for these reasons gets a written answer; any other failure
+// (model, service, timeout, connection) is a failed turn with an inline Retry.
+const chatReplyCodes = new Set(["unsupported_scope", "clarification_required", "insufficient_data", "invalid_request", "request_too_large", "session_expired", "result_mismatch"]);
 const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_too_large", "invalid_request", "unsupported_scope", "clarification_required", "insufficient_data", "busy", "session_expired", "result_mismatch", "ai_unavailable", "data_unavailable", "query_timeout", "internal_error"]);
 
 function parseErrorResponse(payload) {
   if (!isRecord(payload) || payload.success !== false || !isRecord(payload.error)) return null;
-  const { code, message, request_id: requestId } = payload.error;
+  const { code, message, request_id: requestId, pending_comparison: pair } = payload.error;
   if (!errorCodes.has(code) || typeof message !== "string" || !message || message.length > 500
       || typeof requestId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) return null;
-  return { code, message, requestId };
+  const validPair = code === "clarification_required" && Array.isArray(pair) && pair.length === 2 && pair[0] !== pair[1]
+    && pair.every((airport) => supportedAirports.has(airport));
+  return { code, message, requestId, pendingComparison: validPair ? [...pair] : null };
 }
 
 function errorRecovery(detail, status) {
@@ -261,6 +281,7 @@ function clearQuestionError() {
   const question = $("#question");
   const message = $("#question-error");
   question.removeAttribute?.("aria-invalid");
+  message.removeAttribute?.("data-mirrored");
   message.textContent = "";
   message.hidden = true;
 }
@@ -268,16 +289,20 @@ function clearQuestionError() {
 function showQuestionError(text) {
   const question = $("#question");
   const message = $("#question-error");
+  message.removeAttribute?.("data-mirrored");
   message.textContent = text;
   message.hidden = false;
   question.setAttribute("aria-invalid", "true");
 }
 
 // A failed chat request is reported next to the composer, which stays open with
-// the question kept for editing; the previous result is left untouched.
-function showChatError(text) {
+// the question kept for editing; the previous result is left untouched. When the
+// same text is already the assistant's reply in the open card, the line above the
+// input is marked as mirrored so the card shows it once (it stays the field's alert).
+function showChatError(text, mirrored = false) {
   feedback.hidden = true;
   showQuestionError(text);
+  if (mirrored) $("#question-error").setAttribute("data-mirrored", "true");
   $("#question-error").scrollIntoView?.({ block: "nearest", behavior: "smooth" });
 }
 
@@ -336,12 +361,18 @@ function requestKind(request) {
   return request.message != null ? "followup" : "analysis";
 }
 
-async function submitRequest(request) {
+// `chat.presetLabel` only annotates the transcript; it never enters the request body.
+async function submitRequest(request, chat = {}) {
   if (busy) return;
   const kind = requestKind(request);
+  // A preset or scoped analysis is a new question: no clarification is pending.
+  if (kind === "analysis") pendingComparison = null;
   const generation = ++requestGeneration;
   const controller = new AbortController();
   let timeout = null;
+  // A follow-up shows the question at once, then an "Analyzing…" reply in the slot
+  // the answer will land in. A retry reuses its failed turn instead of adding one.
+  const turn = kind === "followup" ? startChatTurn(request.message, chat.retryOf || null) : null;
   setLoading(true);
   try {
     // Follow-ups and explanations keep the current result labeled as current:
@@ -359,20 +390,40 @@ async function submitRequest(request) {
     if (generation !== requestGeneration) return;
     if (!response.ok) {
       const detail = parseErrorResponse(payload);
-      if (kind === "followup") { showChatError(chatErrorMessage(detail)); return; }
+      if (kind === "followup") {
+        const message = chatErrorMessage(detail);
+        // An unsupported or unclear question is an answer, not a failure; a model,
+        // service or timeout failure stays on the question with an inline Retry.
+        // An answer uses up the pending pair; only a new "which measure?" sets one.
+        if (detail && chatReplyCodes.has(detail.code)) {
+          pendingComparison = detail.pendingComparison;
+          settleChatReply(turn, message, "note");
+        } else failChatTurn(turn, message);
+        showChatError(message, chatExpanded());
+        return;
+      }
       if (detail) showRequestError(detail, response.status);
       else showFeedback(connectionFailureMessage, true);
       if (latestSuccessfulResult && kind === "analysis") renderResult(latestSuccessfulResult, true);
       return;
     }
     const result = validateResult(payload);
-    if (kind === "explain") {
+    if (kind !== "explain") pendingComparison = null;
+    // A typed "why?" can come back as an explanation: the same result, recomputed,
+    // with an explanatory summary. It is answered like Explain, never shown as new.
+    const explained = kind === "explain" || (kind === "followup" && result.result_id === latestSuccessfulResult?.result_id);
+    if (explained) {
       // Explain recomputes the referenced result; it never replaces it.
       if (!latestSuccessfulResult || result.result_id !== latestSuccessfulResult.result_id) throw new Error("Explanation does not match the displayed result");
       explanation = { resultId: result.result_id, text: result.summary || "No explanation was returned." };
       renderResult(latestSuccessfulResult, resultIsPrevious);
-      showFeedback("Explanation received.", false, resultActions);
-      feedback.setAttribute("data-complete", "true");
+      if (kind === "followup") {
+        if ($("#question").value.trim() === request.message) { $("#question").value = ""; fitComposer(); }
+        settleChatReply(turn, explanation.text, "done", result.result_id);
+      } else {
+        showFeedback("Explanation received.", false, resultActions);
+        feedback.setAttribute("data-complete", "true");
+      }
       return;
     }
     const panelWasHidden = $("#result-panel").hidden;
@@ -382,21 +433,35 @@ async function submitRequest(request) {
     contextResultId = result.result_id;
     resultIsPrevious = false;
     explanation = null;
-    if (kind === "followup") $("#question").value = "";
+    // Only the sent text is cleared: a next question drafted while waiting is kept.
+    if (kind === "followup" && $("#question").value.trim() === request.message) { $("#question").value = ""; fitComposer(); }
     renderResult(result, false);
     fadeInResult(panelWasHidden);
     scrollResultIntoView();
     showResultReady(result.status === "partial" ? "Analysis received. Some airports or values were unavailable; see the coverage note." : "Analysis received.");
+    if (kind === "followup") settleChatReply(turn, compactReply(result), "done", result.result_id);
+    else if (chat.presetLabel) addChatMessage("assistant", compactReply(result), { resultId: result.result_id, context: `Preset · ${chat.presetLabel}` });
   } catch (error) {
     if (generation !== requestGeneration) return;
     const failure = error.name === "AbortError"
       ? "Request timed out. The previous result is retained. Retry explicitly; no retry was sent."
       : connectionFailureMessage;
-    if (kind === "followup") { showChatError(failure); return; }
+    if (kind === "followup") {
+      failChatTurn(turn, failure);
+      showChatError(failure, chatExpanded());
+      return;
+    }
     showFeedback(failure, true);
     if (latestSuccessfulResult && kind === "analysis") renderResult(latestSuccessfulResult, true);
   } finally {
     clearTimeout(timeout);
+    // A turn is never left saying "Analyzing…": a superseded request (Back, a
+    // scope edit) or a failure while showing the answer still settles it.
+    if (turn?.pending.state === "pending") {
+      failChatTurn(turn, generation === requestGeneration
+        ? "This answer could not be shown. The previous result is kept."
+        : "Stopped: the analysis changed before this answer arrived.");
+    }
     if (generation === requestGeneration) setLoading(false);
   }
 }
@@ -533,6 +598,7 @@ function renderResult(result, previous) {
   $("#view-evidence").onclick = () => { evidenceGroup.open = true; evidenceHeading.focus(); };
   updateContextStrip(result, previous);
   publishResultState();
+  refreshChatViewLinks();
 }
 
 // Exclusions are reported as coverage ("22 of 23 airports assessed"), calmly and
@@ -724,6 +790,8 @@ function openQuestionComposer(takeFocus = true) {
   const animateOpen = () => composer.classList.add("is-open");
   if (typeof requestAnimationFrame === "function") requestAnimationFrame(animateOpen);
   else setTimeout(animateOpen, 0);
+  updateChatPlaceholder();
+  // Opening shows the collapsed bar; clicking it or typing raises the card.
   if (takeFocus) $("#question").focus();
 }
 
@@ -731,7 +799,9 @@ let composerCloseTimer = null;
 function closeQuestionComposer(returnFocus = true) {
   const composer = $("#conversation-composer");
   if (composer.hidden) return;
-  composer.classList.remove("is-open");
+  clearTimeout(chatCollapseTimer);
+  for (const name of ["is-open", "is-expanded", "is-collapsing"]) composer.classList.remove(name);
+  document.body?.classList?.remove("chat-expanded");
   document.body?.classList?.remove("composer-open");
   composer.setAttribute("aria-hidden", "true");
   composer.inert = true;
@@ -740,6 +810,264 @@ function closeQuestionComposer(returnFocus = true) {
   clearTimeout(composerCloseTimer);
   composerCloseTimer = setTimeout(() => { composer.hidden = true; }, window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 210);
   if (returnFocus) askTrigger.focus();
+}
+
+// ── Rising chat card ──────────────────────────────────────────────────────────
+// The composer bar is the card's collapsed state. Clicking the bar or typing
+// expands it into the transcript; Escape or the header button collapses it back.
+// The card sits outside #result, so renderResult() never touches the transcript.
+const CHAT_MOTION_MS = 200;
+let chatCollapseTimer = null;
+// A card that is animating down already counts as collapsed, so a second Escape
+// during the motion closes the bar instead of restarting the collapse.
+function chatExpanded() {
+  const composer = $("#conversation-composer");
+  return composer.classList.contains("is-expanded") && !composer.classList.contains("is-collapsing");
+}
+function updateChatPlaceholder() {
+  $("#question").setAttribute("placeholder", conversation.length ? "Ask a follow-up…" : "Ask the airport analyst…");
+  $("#chat-empty").hidden = conversation.length > 0;
+}
+// Scroll anchoring: the transcript is top-anchored, so an arriving message never
+// moves the ones above it. The user's own message always scrolls into view; a
+// reply follows only when the reader was already at (or within 48px of) the end,
+// measured before it lands. Programmatic scrolls are instant (no smooth race).
+const CHAT_FOLLOW_PX = 48;
+function transcriptNearBottom() {
+  const body = $(".chat-body");
+  if (!body || !Number.isFinite(body.scrollHeight)) return false;
+  return body.scrollHeight - body.scrollTop - body.clientHeight <= CHAT_FOLLOW_PX;
+}
+function scrollTranscriptToEnd() {
+  const body = $(".chat-body");
+  if (body && Number.isFinite(body.scrollHeight)) body.scrollTop = body.scrollHeight;
+}
+// One line, growing to about five, then scrolling inside the field. If the reader
+// was at the end of the transcript, growth keeps the latest message in view.
+function fitComposer() {
+  const question = $("#question");
+  if (!question.style || !Number.isFinite(question.scrollHeight)) return;
+  const follow = transcriptNearBottom();
+  question.style.height = "auto";
+  question.style.height = `${Math.min(question.scrollHeight, 132)}px`;
+  if (follow) scrollTranscriptToEnd();
+}
+function expandChat(takeFocus = true) {
+  const composer = $("#conversation-composer");
+  if (composer.hidden || composer.inert) return;
+  clearTimeout(chatCollapseTimer);
+  composer.classList.remove("is-collapsing");
+  composer.classList.add("is-expanded");
+  document.body?.classList?.add("chat-expanded");
+  $("#chat-collapse").setAttribute("aria-expanded", "true");
+  updateChatPlaceholder();
+  scrollTranscriptToEnd();
+  if (takeFocus) $("#question").focus();
+}
+function collapseChat(returnFocus = true) {
+  const composer = $("#conversation-composer");
+  if (!chatExpanded()) return;
+  clearTimeout(chatCollapseTimer);
+  $("#chat-collapse").setAttribute("aria-expanded", "false");
+  document.body?.classList?.remove("chat-expanded");
+  const finish = () => { composer.classList.remove("is-expanded"); composer.classList.remove("is-collapsing"); };
+  if (prefersReducedMotion()) finish();
+  else {
+    composer.classList.add("is-collapsing");
+    chatCollapseTimer = setTimeout(finish, CHAT_MOTION_MS);
+  }
+  if (returnFocus) $("#question").focus();
+}
+
+// States: user "sent" | "failed"; assistant "pending" | "done" | "note" (an
+// unsupported or unclear question, answered in words). The history is a role="log"
+// read in DOM order, not a live region; outcomes are announced once in #chat-status.
+function addChatMessage(role, text, options = {}) {
+  const follow = options.follow ?? (role === "user" || transcriptNearBottom());
+  const message = { role, text, state: options.state || (role === "user" ? "sent" : "done"), resultId: options.resultId || null, turn: null, node: null, textNode: null, link: null, failure: null };
+  const item = document.createElement("li");
+  item.className = `chat-message chat-message-${role}`;
+  const speaker = document.createElement("span");
+  speaker.className = "visually-hidden";
+  speaker.textContent = role === "user" ? "You: " : "Analyst: ";
+  item.append(speaker);
+  if (options.context) paragraph(item, options.context).className = "chat-context";
+  message.textNode = paragraph(item, text);
+  message.textNode.className = "chat-text";
+  if (role === "assistant") {
+    const link = document.createElement("button");
+    link.type = "button";
+    link.className = "chat-view-link";
+    link.textContent = "View analysis →";
+    link.hidden = true;
+    link.addEventListener("click", viewAnalysis);
+    item.append(link);
+    message.link = link;
+  } else {
+    // A failed turn keeps its text and offers a real Retry button on the message.
+    const failure = document.createElement("p");
+    failure.className = "chat-failure";
+    failure.hidden = true;
+    const note = document.createElement("span");
+    note.textContent = "Not sent · ";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "chat-retry";
+    retry.textContent = "Retry";
+    retry.addEventListener("click", () => retryChatTurn(message.turn));
+    failure.append(note, retry);
+    item.append(failure);
+    message.failure = failure;
+  }
+  message.node = item;
+  conversation.push(message);
+  $("#chat-transcript").append(item);
+  setChatState(message, message.state);
+  updateChatPlaceholder();
+  refreshChatViewLinks();
+  if (follow) scrollTranscriptToEnd();
+  return message;
+}
+function setChatState(message, state) {
+  message.state = state;
+  message.node.setAttribute("data-state", state);
+  if (message.role === "assistant") message.node.setAttribute("aria-busy", String(state === "pending"));
+  if (message.failure) message.failure.hidden = state !== "failed";
+}
+function startChatTurn(text, retryOf) {
+  if (retryOf) {
+    setChatState(retryOf.user, "sent");
+    retryOf.pending.text = "Analyzing…";
+    retryOf.pending.textNode.textContent = "Analyzing…";
+    setChatState(retryOf.pending, "pending");
+    return retryOf;
+  }
+  const user = addChatMessage("user", text);
+  // The working indicator takes the slot the reply will land in (same user action).
+  const pending = addChatMessage("assistant", "Analyzing…", { state: "pending", follow: true });
+  const turn = { user, pending };
+  user.turn = turn;
+  pending.turn = turn;
+  expandChat(false);
+  return turn;
+}
+function settleChatReply(turn, text, state, resultId = null) {
+  if (!turn) return;
+  const follow = transcriptNearBottom();
+  turn.pending.text = text;
+  turn.pending.resultId = resultId;
+  turn.pending.textNode.textContent = text;
+  setChatState(turn.pending, state);
+  refreshChatViewLinks();
+  if (follow) scrollTranscriptToEnd();
+  // Notes are also the field's alert; announcing them here too would read them twice.
+  if (state === "done") $("#chat-status").textContent = `Analyst: ${text}`;
+}
+function failChatTurn(turn, reason) {
+  if (!turn) return;
+  const follow = transcriptNearBottom();
+  turn.pending.text = reason;
+  turn.pending.resultId = null;
+  turn.pending.textNode.textContent = reason;
+  setChatState(turn.pending, "error");
+  setChatState(turn.user, "failed");
+  refreshChatViewLinks();
+  if (follow) scrollTranscriptToEnd();
+}
+function followUpRequest(text) {
+  const request = { message: text };
+  if (contextResultId) request.context_result_id = contextResultId;
+  if (pendingComparison) request.pending_comparison = [...pendingComparison];
+  return request;
+}
+// Retry re-sends the same text on the same turn; one request stays in flight.
+function retryChatTurn(turn) {
+  if (busy || !turn || turn.user.state !== "failed") return;
+  clearQuestionError();
+  // The Retry button hides once the turn is re-sent; keep focus in the composer
+  // instead of letting it fall back to the page.
+  $("#question").focus({ preventScroll: true });
+  void submitRequest(followUpRequest(turn.user.text), { retryOf: turn });
+}
+// Every reply that produced a result keeps its link row, so a newer answer never
+// changes the height of the messages above it. Only the reply behind the result on
+// screen is live; earlier ones stay in place, labelled and inactive.
+function refreshChatViewLinks() {
+  const shownId = latestSuccessfulResult && !$("#result-panel").hidden ? latestSuccessfulResult.result_id : null;
+  for (const message of conversation) {
+    if (!message.link) continue;
+    message.link.hidden = message.state !== "done" || !message.resultId;
+    const live = Boolean(shownId) && message.resultId === shownId;
+    message.link.textContent = live ? "View analysis →" : "Earlier analysis";
+    message.link.setAttribute("aria-disabled", String(!live));
+  }
+}
+function viewAnalysis(event) {
+  if (event?.currentTarget?.getAttribute?.("aria-disabled") === "true") return;
+  const title = $("#result-title");
+  if (!latestSuccessfulResult || title.hidden) return;
+  const behavior = prefersReducedMotion() ? "auto" : "smooth";
+  // A narrow card covers much of the page, so it steps aside and the page scrolls
+  // to the title; on desktop the result pane returns to its top.
+  if (window.matchMedia?.("(max-width: 999px)").matches) {
+    collapseChat(false);
+    title.scrollIntoView?.({ block: "start", behavior });
+  } else scrollResultIntoView();
+  title.focus({ preventScroll: true });
+}
+
+// Deterministic one-line replies, built only from the returned result's values.
+function joinAnd(items) {
+  return items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+function compactReply(result) {
+  const { metric, airports } = result.scope;
+  const rowFor = (code) => result.rows.find((row) => row.airport === code);
+  const valueOf = (row, key) => row?.metrics.find((item) => item.key === key);
+  const usable = (item) => item?.status === "ok" && Number.isFinite(item.value);
+  const fallback = result.summary || "The analysis is ready in the result panel.";
+  if (metric === "sfo_pressure") {
+    // The backend's direct answer also names the reported delay causes (the "why").
+    if (result.summary) return result.summary;
+    // The gap is passenger growth minus seat growth, in percentage points: seats
+    // outpacing passengers is not a seat shortage; only a positive gap is pressure.
+    const row = rowFor("SFO");
+    const gap = valueOf(row, "sfo_pressure");
+    const growth = valueOf(row, "passenger_growth");
+    const occupancy = valueOf(row, "seat_occupancy");
+    if (!usable(gap) || !usable(growth)) return fallback;
+    const points = `${formatNumber(Math.abs(gap.value))} percentage points`;
+    const occupied = usable(occupancy) ? `, with seat occupancy at ${formatMetric(occupancy)}` : "";
+    const rounded = Math.round(gap.value * 100) / 100;
+    if (rounded < 0) return `No sign that seat supply fell behind: seats grew ${points} faster than passengers (${formatMetric(growth)})${occupied}. Traffic data cannot show travellers who could not fly.`;
+    if (rounded > 0) return `Passengers grew ${points} faster than seats (${formatMetric(growth)})${occupied}: a demand-pressure signal, not a measured unmet demand.`;
+    return `Passengers and seats grew at the same pace (${formatMetric(growth)})${occupied}. Traffic data cannot show travellers who could not fly.`;
+  }
+  // The backend's congestion headline already names which airport is higher on what.
+  if (metric === "sfo_enplaned_trend" || metric === "congestion") return fallback;
+  if (metric === "long_haul_share" && airports.length === 1) {
+    const share = valueOf(rowFor(airports[0]), "long_haul_share");
+    if (!usable(share) || share.numerator == null || share.denominator == null || result.scope.threshold_miles == null) return fallback;
+    return `${formatMetric(share)} of eligible ${airports[0]} departures were at least ${formatNumber(result.scope.threshold_miles)} miles: ${formatNumber(share.numerator)} of ${formatNumber(share.denominator)}.`;
+  }
+  const ranked = result.rows.filter((row) => Number.isInteger(row.rank) && usable(valueOf(row, metric)));
+  if (ranked.length >= 2) {
+    const ordered = [...ranked].sort((a, b) => a.rank - b.rank);
+    const top = ordered.filter((row) => row.rank === ordered[0].rank).map((row) => row.airport);
+    const next = ordered.filter((row) => row.rank !== ordered[0].rank).slice(0, 2).map((row) => row.airport);
+    const where = metric === "screen_score" ? "in the current screen" : `on ${humanMetricLabel(metric).toLowerCase()}`;
+    let text = top.length === 1 ? `${top[0]} ranks highest ${where}` : `${joinAnd(top)} share the top rank ${where}`;
+    text += next.length ? `, followed by ${joinAnd(next)}.` : ".";
+    if (ranked.length < airports.length) text += ` ${ranked.length} of ${airports.length} airports were assessable.`;
+    return text;
+  }
+  const parts = airports.map((code) => {
+    const item = valueOf(rowFor(code), metric);
+    if (!item) return null;
+    return `${code} ${usable(item) ? formatMetric(item) : "unavailable"}`;
+  }).filter(Boolean);
+  if (parts.length && parts.length <= 4) return `${humanScopeMetricLabel(metric)}: ${parts.join(" · ")}`;
+  return fallback;
 }
 
 function describePeriod(scope) {
@@ -994,6 +1322,14 @@ function renderScreeningView(result, target) {
       fill.setAttribute("style", `width:${Math.max(0, Math.min(100, score.value))}%`); scoreBar.append(fill); item.append(scoreBar);
       paragraph(item, compact ? formatNumber(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
     } else if (score?.status === "ok") paragraph(item, compact ? formatNumber(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
+    // Where the score comes from: growth (of 40), volume (of 30) and occupancy (of 30) points.
+    const parts = ["growth_points", "volume_points", "occupancy_points"].map((key) => row.metrics.find((value) => value.key === key));
+    if (score?.status === "ok" && parts.every((part) => part?.status === "ok")) {
+      const [growth, volume, occupancy] = parts.map((part) => part.value.toFixed(1));
+      const breakdown = paragraph(item, `Growth ${growth} · Volume ${volume} · Occupancy ${occupancy}`);
+      breakdown.className = "ranking-detail score-parts";
+      breakdown.setAttribute("aria-label", `${growth} of 40 growth points, ${volume} of 30 volume points, ${occupancy} of 30 occupancy points`);
+    }
     // Supporting values and source IDs for every row are listed once in the
     // methodology and technical disclosures.
     list.append(item);
@@ -1165,7 +1501,7 @@ function renderGenericMetricTable(result, target) {
 function validateResult(result) {
   const fail = () => { throw new Error("Invalid analysis response"); };
   const scopeMetrics = new Set(["passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share", "screen_score", "congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "sfo_pressure"]);
-  const metricUnits = { passengers: "count", seats: "count", departures: "count", passenger_growth: "percent", seat_occupancy: "percent", long_haul_share: "percent", screen_score: "score", cancellation_rate: "percent", diversion_rate: "percent", departure_delay_minutes: "minutes", taxi_out_minutes: "minutes", sfo_enplaned_trend: "count", enplaned_growth: "percent", sfo_pressure: "percentage_points" };
+  const metricUnits = { passengers: "count", seats: "count", departures: "count", passenger_growth: "percent", seat_occupancy: "percent", long_haul_share: "percent", screen_score: "score", cancellation_rate: "percent", diversion_rate: "percent", departure_delay_minutes: "minutes", taxi_out_minutes: "minutes", sfo_enplaned_trend: "count", enplaned_growth: "percent", sfo_pressure: "percentage_points", growth_points: "score", volume_points: "score", occupancy_points: "score" };
   const ratioMetrics = new Set(["seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"]);
   if (!isRecord(result) || !["ok", "partial"].includes(result.status)
       || typeof result.result_id !== "string" || typeof result.request_id !== "string"
@@ -1229,7 +1565,7 @@ function isSafeHttpUrl(value) {
 function label(value) { return value.replaceAll("_", " "); }
 function humanDirection(value) { return ({ higher: "Higher", lower: "Lower", tied: "Tied", unavailable: "Unavailable" })[value] || "Direction unavailable"; }
 function humanMetricLabel(key) {
-  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi-out time", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap" };
+  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi-out time", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap", growth_points: "Growth points", volume_points: "Volume points", occupancy_points: "Occupancy points" };
   return names[key] || label(key);
 }
 function humanScopeMetricLabel(key) { return key === "sfo_pressure" ? "SFO demand pressure" : humanMetricLabel(key); }
@@ -1261,7 +1597,10 @@ $("#scope-panel").insertBefore(draftSummary, $("#scope-form"));
 renderDraftSummary();
 function yearLabel(value) { return value === String(DEFAULT_YEAR) ? `${DEFAULT_YEAR} (vs 2024)` : value; }
 function formatNumber(value) { return new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value); }
+// Weighted screen-score components and the most points each can contribute.
+const screenPointMax = { growth_points: 40, volume_points: 30, occupancy_points: 30 };
 function formatMetric(metric) {
+  if (screenPointMax[metric.key]) return `${metric.value.toFixed(1)} of ${screenPointMax[metric.key]} points`;
   const value = metric.unit === "count" ? formatNumber(metric.value) : metric.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (metric.unit === "percentage_points") return `${value} pp`;
   return `${value}${({ percent: "%", percentage_points: " percentage points", minutes: " min", score: " / 100", count: "" })[metric.unit]}`;
@@ -1301,7 +1640,8 @@ function runPreset(analysis) {
   fillScope(analysis);
   changedDraft();
   showScopeErrors([]);
-  return submitRequest({ analysis });
+  const presetKey = Object.keys(demos).find((key) => demos[key] === analysis);
+  return submitRequest({ analysis }, { presetLabel: presetLabels[presetKey] || null });
 }
 function startNewAnalysis() {
   closeQuestionComposer(false);
@@ -1317,6 +1657,7 @@ function startNewAnalysis() {
   setLoading(false);
   latestSuccessfulResult = null;
   contextResultId = null;
+  pendingComparison = null;
   explanation = null;
   resultIsPrevious = false;
   $("#hero-layout").classList.remove("has-result");
@@ -1335,6 +1676,7 @@ function startNewAnalysis() {
   clearQuestionError();
   $("#context-summary").textContent = COVERAGE_SUMMARY;
   $("#explain").disabled = true;
+  refreshChatViewLinks();
   changedDraft(false);
   showScopeErrors([]);
   showFeedback("New analysis selected. Choose a preset or submit a complete scope.");
@@ -1360,7 +1702,7 @@ for (const button of document.querySelectorAll("[data-preset]")) {
 for (const input of document.querySelectorAll("input, select, textarea")) if (input.id !== "airport-picker") input.addEventListener("input", () => {
   // Typing a follow-up is not a scope change: the shown result stays current
   // and any in-flight request continues until a question is actually sent.
-  if (input.id === "question") { clearQuestionError(); return; }
+  if (input.id === "question") { clearQuestionError(); expandChat(false); fitComposer(); return; }
   changedDraft();
   if (["action", "airports", "metric", "year", "threshold"].includes(input.id)) clearScopeError(input.id);
 });
@@ -1379,16 +1721,29 @@ $("#scope-form").addEventListener("submit", (event) => {
 });
 $("#chat-form").addEventListener("submit", (event) => {
   event.preventDefault();
-  const request = { message: $("#question").value.trim() };
+  const request = followUpRequest($("#question").value.trim());
   clearQuestionError();
   if (!request.message) {
     showQuestionError("Enter a question before sending.");
     $("#question").focus();
     return;
   }
-  if (contextResultId) request.context_result_id = contextResultId;
+  // Sending the text of the latest failed turn again is that turn's Retry, not a
+  // second copy of the question in the transcript.
+  const failed = [...conversation].reverse().find((message) => message.role === "user" && message.state === "failed");
+  if (failed?.turn && failed.text === request.message) {
+    retryChatTurn(failed.turn);
+    return;
+  }
   void submitRequest(request);
 });
+// Mobile: keep the card above the on-screen keyboard where the browser overlays it.
+if (window.visualViewport && document.documentElement?.style) {
+  const viewport = window.visualViewport;
+  const syncKeyboardInset = () => document.documentElement.style.setProperty("--keyboard-inset", `${Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop))}px`);
+  viewport.addEventListener("resize", syncKeyboardInset);
+  viewport.addEventListener("scroll", syncKeyboardInset);
+}
 // Enter sends; Shift+Enter keeps a newline. IME composition (isComposing / 229)
 // is left alone so confirming a candidate never sends a half-typed question.
 $("#question").addEventListener("keydown", (event) => {
@@ -1400,9 +1755,15 @@ $("#question").addEventListener("keydown", (event) => {
   else form.dispatchEvent(new Event("submit", { cancelable: true }));
 });
 askTrigger.addEventListener("click", openQuestionComposer);
+// Clicking anywhere on the collapsed bar raises the card (focus alone does not).
+$("#chat-form").addEventListener("click", () => expandChat(false));
+$("#chat-collapse").addEventListener("click", () => collapseChat());
 $("#back-to-analysis").addEventListener("click", startNewAnalysis);
+// Escape first lowers an expanded card to its bar, then closes the bar.
 document.addEventListener?.("keydown", (event) => {
-  if (event.key === "Escape" && !$("#conversation-composer").hidden) closeQuestionComposer();
+  if (event.key !== "Escape" || $("#conversation-composer").hidden) return;
+  if (chatExpanded()) collapseChat();
+  else closeQuestionComposer();
 });
 $("#explain").addEventListener("click", () => {
   if (contextResultId) void submitRequest({ analysis: { action: "explain" }, context_result_id: contextResultId });

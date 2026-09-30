@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "pd-sfo-lax-congestion",
+      "category": "demonstration",
+      "input": {"text": "congestion", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, "pending_comparison": ["SFO", "LAX"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["SFO", "LAX"], "metric": "congestion"}}
+    },
+    {
+      "id": "pd-sfo-lax-passenger-growth",
+      "category": "demonstration",
+      "input": {"text": "Passenger growth, please.", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, "pending_comparison": ["SFO", "LAX"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["SFO", "LAX"], "metric": "passenger_growth"}}
+    },
+    {
+      "id": "pd-sfo-sna-cancellations",
+      "category": "ordinary",
+      "input": {"text": "the cancellation rate", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_enplaned_trend"}, "pending_comparison": ["SFO", "SNA"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["SFO", "SNA"], "metric": "cancellation_rate"}}
+    },
+    {
+      "id": "pd-bos-pvd-occupancy",
+      "category": "ordinary",
+      "input": {"text": "Seat occupancy.", "context": {"action": "rank", "region": "new_england", "metric": "screen_score"}, "pending_comparison": ["BOS", "PVD"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["BOS", "PVD"], "metric": "seat_occupancy"}}
+    },
+    {
+      "id": "pd-sfo-anc-long-haul",
+      "category": "ordinary",
+      "input": {"text": "long-haul share", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, "pending_comparison": ["SFO", "ANC"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["SFO", "ANC"], "metric": "long_haul_share"}}
+    },
+    {
+      "id": "pd-sfo-lax-passengers-2024",
+      "category": "ordinary",
+      "input": {"text": "Passengers in 2024.", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, "pending_comparison": ["SFO", "LAX"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["SFO", "LAX"], "metric": "passengers", "year": 2024}}
+    },
+    {
+      "id": "pd-new-question-anc",
+      "category": "ordinary",
+      "input": {"text": "What is Anchorage's long-haul share?", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, "pending_comparison": ["SFO", "LAX"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "metric", "airports": ["ANC"], "metric": "long_haul_share"}}
+    },
+    {
+      "id": "pd-bos-pvd-congestion",
+      "category": "safety_clarification",
+      "input": {"text": "congestion", "context": {"action": "rank", "region": "new_england", "metric": "screen_score"}, "pending_comparison": ["BOS", "PVD"]},
+      "expected": {"kind": "clarification_required", "message": "Which measure should I compare for these two airports?"}
+    },
+    {
+      "id": "pd-sfo-lax-demand-pressure",
+      "category": "safety_clarification",
+      "input": {"text": "The demand pressure one.", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, "pending_comparison": ["SFO", "LAX"]},
+      "expected": {"kind": "clarification_required", "message": "Which measure should I compare for these two airports?"}
+    },
+    {
+      "id": "pd-sfo-lax-roi",
+      "category": "safety_clarification",
+      "input": {"text": "Which of the two gives the better return on investment?", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, "pending_comparison": ["SFO", "LAX"]},
+      "expected": {"kind": "unsupported_scope", "message": "Return on investment is outside the supported analyses."}
+    }
+  ]
+}

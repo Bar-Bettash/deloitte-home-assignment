@@ -1,8 +1,19 @@
 # ADR 001: Bounded local demo architecture
 
-- **Status:** Accepted for the assignment prototype
+- **Status:** Superseded (2026-09-30) by [ARCHITECTURE.md](../ARCHITECTURE.md). Kept as a record of the first design.
 - **Date:** 2026-09-26
 - **Scope:** Design recorded by README step 0.1; implementation remains separate.
+
+**What changed, clause by clause.**
+
+| This ADR said | Now | Where it is defined |
+|---|---|---|
+| One process bound to `127.0.0.1` | The same single FastAPI app also runs hosted on Vercel behind a Host and Origin guard | ARCHITECTURE.md, "Hosting mode, host and Origin guard" |
+| Latest result and an opaque session mapping kept in process memory | No server state: a signed, HttpOnly `airport_context` cookie carries the resolved request, and the result is recomputed and digest-checked | ARCHITECTURE.md, "Follow-up context (stateless)" |
+| DuckDB over validated Parquet snapshots; deterministic Python calculations | Unchanged, now over the hash-bound accepted bundle `annual-2025-r1` | ARCHITECTURE.md, "Scope and data bundles" and "Numerical definitions" |
+| One bounded model call may interpret free text; presets work without it | Unchanged, with a fail-closed admission gate on the exact model and adapter hash | ARCHITECTURE.md, "Model gate" |
+| Same-origin HTTP: `GET /`, static files, `/health`, one `POST /api/query` | Unchanged | [API_UI_MAP.md](../API_UI_MAP.md) |
+| Conversation history | Browser memory only (the chat card); never sent to or stored by the server | API_UI_MAP.md, "Conversation card" |
 
 ## Decision
 
