@@ -221,8 +221,10 @@ test('congestion comparison aligns both backend airport columns and preserves pa
   const render = payload => { const ui = setup(async () => success(payload)); ui.context.payload = payload; ui.run('renderResult(validateResult(payload), false)'); return ui; };
   const complete = render(build(0));
   const view = findDescendant(complete.nodes.get('#result'), node => node.id === 'metric-view');
-  const exact = disclosureByTitle(view, 'Exact values and methodology');
-  assert.equal(exact.children[0].textContent, 'Exact values and methodology');
+  assert.equal(findDescendant(view, node => node.tagName === 'details'), null, 'no methodology disclosure inside the primary visual');
+  const exact = disclosureByTitle(complete.nodes.get('#result'), 'Methodology & limitations');
+  assert.equal(exact.className, 'methodology-group');
+  assert.equal(exact.open, false);
   const region = exact.children.find(node => (node.className || '').includes('table-region'));
   const body = region.children[0].children[2];
   assert.deepEqual(body.children.map(row => row.children.map(cell => cell.textContent)), [
@@ -235,12 +237,20 @@ test('congestion comparison aligns both backend airport columns and preserves pa
   const plot = findDescendant(view, node => node.className === 'comparison-dumbbell');
   assert.equal(plot.getAttribute('role'), 'img');
   assert.match(plot.getAttribute('aria-label'), /zero-inclusive/);
-  assert.equal(plot.children.filter(node => (node.getAttribute('class') || '').startsWith('dumbbell-point')).length, 2);
+  const points = plot.children.filter(node => (node.getAttribute('class') || '').startsWith('dumbbell-point'));
+  assert.equal(points.length, 2);
+  assert.deepEqual(points.map(node => node.getAttribute('class')), ['dumbbell-point dumbbell-point-1', 'dumbbell-point dumbbell-point-2'], 'each airport keeps one consistent marker style');
+  assert.equal(plot.getAttribute('viewBox'), null, 'percent positions and pixel radii keep dots round at any width');
+  assert.deepEqual(points.map(node => node.getAttribute('cx')), ['0%', '100%']);
+  const legend = findDescendant(view, node => node.className === 'congestion-legend');
+  assert.match(content(legend), /LAX.*SNA.*further right is higher/);
+  assert.doesNotMatch(content(view), /green|red|winner/i);
   const methodology = exact.children.find(node => node.className === 'methodology-detail');
   assert.match(content(methodology), /Numerator \/ denominator: 0 \/ 100/);
   assert.match(content(methodology), /Eligible observations: 100/);
   assert.match(content(methodology), /Direction: higher/);
-  assert.match(content(methodology), /Source IDs: source/);
+  const technical = findDescendant(complete.nodes.get('#result'), node => node.className === 'technical-details');
+  assert.match(content(technical), /Source IDs: source/);
   assert.doesNotMatch(content(view), /4 of 4|combined congestion/i);
   const partialPayload = build(.5, true);
   partialPayload.rows[0].metrics = partialPayload.rows[0].metrics.slice(0, 3);
@@ -303,14 +313,20 @@ test('long-haul share shows supplied percent, threshold, and exact counts withou
   const complete = render(make('ok', 25, 5, 20));
   const text = content(findDescendant(complete.nodes.get('#result'), node => node.id === 'metric-view'));
   assert.match(text, /25\.00%/);
-  assert.match(text, /at least 3,000 miles/);
-  assert.match(text, /Long-haul performed departures.*5/);
-  assert.match(text, /Eligible performed departures: 20/);
+  assert.match(text, /Threshold ≥ 3,000 mi/);
+  assert.match(text, /Long-haul departures 5/);
+  assert.match(text, /Eligible departures 20/);
+  const stats = findDescendant(complete.nodes.get('#result'), node => node.className === 'long-haul-stats');
+  assert.deepEqual(stats.children.map(item => item.children.map(child => [child.tagName, child.textContent])), [
+    [['dt', 'Long-haul departures'], ['dd', '5']],
+    [['dt', 'Eligible departures'], ['dd', '20']],
+    [['dt', 'Threshold'], ['dd', '≥ 3,000 mi']],
+  ], 'counts and threshold come straight from the returned metric and scope');
   assert.doesNotMatch(text, /25\/100|calculated|approx/i);
   const ring = findDescendant(complete.nodes.get('#result'), node => node.className === 'share-ring');
   assert.equal(ring.getAttribute('role'), 'img');
   assert.match(ring.getAttribute('aria-label'), /25\.00%/);
-  assert.equal(ring.children[1].getAttribute('stroke-dasharray').split(' ')[0], String(2 * Math.PI * 36 * .25));
+  assert.equal(ring.children[1].getAttribute('stroke-dasharray').split(' ')[0], String(2 * Math.PI * 64 * .25));
   assert.equal(content(findDescendant(complete.nodes.get('#result'), node => node.className === 'long-haul-share-label')), 'Long-haul share');
   assert.equal(ring.children.find(node => node.getAttribute('class') === 'share-ring-center').textContent, '25.00%');
   const returnedShare = render(make('ok', 2.373991, 950, 40017));
@@ -318,7 +334,7 @@ test('long-haul share shows supplied percent, threshold, and exact counts withou
   assert.equal(returnedRing.children.find(node => node.getAttribute('class') === 'share-ring-center').textContent, '2.37%', 'center label is formatted directly from the returned metric.value');
   const zero = render(make('ok', 0, 0, 0));
   assert.match(content(zero.nodes.get('#result')), /0\.00%/);
-  assert.match(content(zero.nodes.get('#result')), /Eligible performed departures: 0/);
+  assert.match(content(zero.nodes.get('#result')), /Eligible departures 0/);
   const missing = render(make('unavailable', null, null, null, 'Coverage incomplete'));
   assert.match(content(missing.nodes.get('#result')), /Unavailable: Coverage incomplete/);
   assert.doesNotMatch(content(missing.nodes.get('#result')), /0\.00%/);
@@ -407,18 +423,30 @@ test('two-year monthly chart labels returned year boundaries and keeps exact ser
   assert.match(resultContent(ui), /2024-12/);
 });
 
-test('request and source technical identifiers stay within the closed evidence disclosure', () => {
+test('request and source technical identifiers stay within the closed technical disclosure at the bottom', () => {
   const ui = setup(); ui.context.payload = result();
   ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
-  const group = findDescendant(ui.nodes.get('#result'), node => node.className === 'evidence-source-group');
+  const panel = ui.nodes.get('#result');
+  const group = findDescendant(panel, node => node.className === 'evidence-source-group');
   assert.ok(group);
-  assert.equal(group.open, false, 'evidence, source lineage and technical details are initially contained');
-  const technical = findDescendant(group, node => node.className === 'technical-details');
+  assert.equal(group.open, false, 'evidence and source lineage are initially contained');
+  const technical = findDescendant(panel, node => node.className === 'technical-details');
+  assert.equal(panel.children.at(-1), technical, 'technical details are the last section of the result');
+  assert.equal(technical.children[0].textContent, 'Technical details');
   assert.equal(technical.open, false, 'technical identifiers are disclosed only on request');
   assert.match(content(technical), /Request ID: request-1/);
-  assert.match(resultContent(ui), /BTS/);
-  assert.match(resultContent(ui), /Source ID: source/);
-  assert.match(resultContent(ui), /Snapshot: snap/);
+  assert.match(content(technical), /Result ID: result-1/);
+  assert.match(content(technical), /Source ID: source/);
+  assert.match(content(technical), /Snapshot: snap/);
+  assert.match(content(technical), /Source IDs: source/);
+  assert.match(content(group), /BTS/);
+  // Identifiers never appear above the fold or in the evidence/methodology panels.
+  const openText = panel.children.filter(node => node.tagName !== 'details').map(content).join(' ');
+  assert.doesNotMatch(openText, /request-1|result-1|Source IDs?:|Snapshot:/);
+  assert.doesNotMatch(content(group), /Snapshot:|Source IDs:/);
+  const methodology = findDescendant(panel, node => node.className === 'methodology-group');
+  assert.doesNotMatch(content(methodology), /Source IDs:|Snapshot:|request-1/);
+  assert.equal(panel.children.filter(node => node.tagName === 'details').length, 3, 'evidence, methodology and technical details only');
 });
 
 test('partial metric is explicitly unavailable rather than zero', () => {
@@ -763,8 +791,8 @@ test('missing source references render diagnostic copy and a valid next action',
   assert.ok(!text.includes('source confidence'));
   const evidenceGroup = findDescendant(ui.nodes.get('#result'), node => node.className === 'evidence-source-group');
   assert.equal(evidenceGroup.open, false, 'the recovery action remains in the expandable evidence and source group');
-  const sources = findDescendant(evidenceGroup, node => node.children.some(child => child.textContent === 'Values and sources'));
-  const action = sources.children.find(node => node.textContent === 'Review scope');
+  assert.equal(evidenceGroup.children[0].textContent, 'Evidence & sources');
+  const action = evidenceGroup.children.find(node => node.textContent === 'Review scope');
   assert.ok(action, 'missing sources include a recovery action');
   action.click();
   assert.equal(ui.run('$("#setup-controls").open'), true);
@@ -853,11 +881,12 @@ test('current and previous result states remain labeled and keep the returned su
   assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result');
   assert.equal(content(ui.nodes.get('#result')).split(result().summary).length - 1, 1);
   const evidenceGroup = findDescendant(ui.nodes.get('#result'), node => node.className === 'evidence-source-group');
-  const limits = findDescendant(evidenceGroup, node => node.className === 'limits-detail');
+  const limits = findDescendant(ui.nodes.get('#result'), node => node.className === 'methodology-group');
   assert.equal(ui.nodes.get('#result-title').textContent, 'Partial result', 'partial status remains visible outside the closed disclosure');
   assert.equal(evidenceGroup.open, false);
   assert.equal(limits.open, false, 'limitations remain available inside the expandable disclosure');
-  assert.match(content(evidenceGroup), /PVC incomplete/);
+  assert.equal(limits.children[0].textContent, 'Methodology & limitations');
+  assert.match(content(limits), /PVC incomplete/);
   ui.run('renderResult(latestSuccessfulResult, true)');
   assert.equal(ui.nodes.get('#result-title').textContent, 'Previous result');
   assert.equal(findDescendant(ui.nodes.get('#result'), node => node.className === 'evidence-source-group').open, false);
@@ -1361,4 +1390,111 @@ test('KPI cards render whichever metrics the rows return, with units, and are om
   payload.rows = [{ airport: 'SFO', metrics: [] }];
   ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
   assert.equal(findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row'), null, 'no empty KPI section');
+});
+
+test('loading copy says Analyzing, never names a deadline, and adds a hint only after a pause', async () => {
+  const source = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8') + fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  assert.doesNotMatch(source, /30 seconds|30-second|thirty seconds/i, 'product UI never mentions the request deadline');
+  const timers = [];
+  const fakeSetTimeout = (callback, delay) => { timers.push({ callback, delay }); return timers.length; };
+  let respond;
+  const ui = setup(() => new Promise(resolve => { respond = resolve; }), { setTimeout: fakeSetTimeout, clearTimeout: () => {} });
+  const pending = ui.run('submitRequest({analysis: demos["anc-long-haul"]})');
+  const feedback = ui.nodes.get('#feedback');
+  assert.equal(feedback.textContent, 'Analyzing…');
+  assert.equal(feedback.getAttribute('data-loading'), 'true');
+  assert.equal(ui.nodes.get('#result-panel').classList.contains('is-loading'), true);
+  const hint = timers.find(timer => timer.delay === 4000);
+  assert.ok(hint, 'a delayed hint is scheduled at about four seconds');
+  hint.callback();
+  assert.equal(feedback.textContent, 'Analyzing… This may take a few more seconds.');
+  const payload = result(); payload.scope.metric = 'long_haul_share'; payload.scope.airports = ['ANC']; payload.scope.threshold_miles = 3000; payload.status = 'ok';
+  payload.rows = [{ airport: 'ANC', metrics: [{ key: 'long_haul_share', value: 2.77, unit: 'percent', status: 'ok', numerator: 999, denominator: 36040, eligible_count: null, comparison_direction: null, source_ids: ['source'] }] }];
+  respond(success(payload));
+  await pending;
+  assert.equal(feedback.getAttribute('data-loading'), null, 'the loading state is cleared once the result lands');
+  assert.equal(ui.nodes.get('#result-panel').classList.contains('is-loading'), false);
+  const stats = findDescendant(ui.nodes.get('#result'), node => node.className === 'long-haul-stats');
+  assert.deepEqual(stats.children.map(item => item.children[1].textContent), ['999', '36,040', '≥ 3,000 mi']);
+});
+
+test('a new result dims the shown one, swaps, then settles; reduced motion swaps at once', async () => {
+  const run = async (reduce) => {
+    const ui = setup(async () => success(result()));
+    ui.window.matchMedia = () => ({ matches: reduce });
+    const panel = ui.run('$("#result-panel")');
+    const log = [];
+    const add = panel.classList.add, remove = panel.classList.remove;
+    panel.classList.add = value => { log.push(`+${value}`); add(value); };
+    panel.classList.remove = value => { if (panel.classList.values.has(value)) log.push(`-${value}`); remove(value); };
+    await ui.run('submitRequest({analysis: demos["lax-sna"]})');
+    log.length = 0;
+    await ui.run('submitRequest({analysis: demos["lax-sna"]})');
+    return { log: log.filter(entry => /leaving|entering/.test(entry)), title: ui.nodes.get('#result-title').textContent, hidden: panel.hidden };
+  };
+  const animated = await run(false);
+  assert.deepEqual(animated.log, ['+is-leaving', '-is-leaving', '+is-entering', '-is-entering']);
+  assert.equal(animated.title, 'Partial result');
+  assert.equal(animated.hidden, false, 'the result panel is never blanked during the swap');
+  const reduced = await run(true);
+  assert.deepEqual(reduced.log, [], 'reduced motion replaces the result without transition classes');
+  assert.equal(reduced.title, 'Partial result');
+});
+
+test('key insight keeps the returned summary verbatim and emphasises only its lead label', () => {
+  const ui = setup(); const payload = result();
+  payload.summary = 'Mixed picture: LAX is higher on 2 and SNA on 2 of 4 comparable operational-strain indicators.';
+  ui.context.payload = payload; ui.run('renderResult(validateResult(payload), false)');
+  const insights = findDescendant(ui.nodes.get('#result'), node => node.className === 'key-insights');
+  assert.equal(insights.children[0].textContent, 'Key insight');
+  const summary = insights.children[1];
+  assert.equal(summary.children.map(child => child.textContent).join(''), payload.summary);
+  assert.equal(summary.children[0].tagName, 'strong');
+  assert.equal(summary.children[0].textContent, 'Mixed picture:');
+  assert.equal(insights.children.filter(node => (node.className || '') === 'insight-limitation').length, 1, 'one concise limitation above the fold');
+});
+
+test('monthly chart sits in a tooltip wrapper and its exact values move into the methodology disclosure', () => {
+  const payload = result(); payload.scope.metric = 'sfo_enplaned_trend'; payload.scope.airports = ['SFO'];
+  payload.rows = [{ airport: 'SFO', metrics: [{ key: 'sfo_enplaned_trend', value: 24, unit: 'count', status: 'ok', source_ids: ['source'] }] }];
+  payload.series = [{ period: '202401', value: 100, unit: 'count', status: 'ok' }, { period: '202402', value: 120, unit: 'count', status: 'ok' }];
+  const ui = setup(); ui.context.payload = payload; ui.run('renderResult(validateResult(payload), false)');
+  const wrapper = findDescendant(ui.nodes.get('#result'), node => node.className === 'series-chart');
+  assert.ok(wrapper.children.some(node => node.tagName === 'svg'));
+  const tooltip = wrapper.children.find(node => node.className === 'series-tooltip');
+  assert.equal(tooltip.hidden, true);
+  assert.equal(tooltip.getAttribute('aria-hidden'), 'true', 'the pointer tooltip duplicates the exact table and stays out of the accessibility tree');
+  const methodology = findDescendant(ui.nodes.get('#result'), node => node.className === 'methodology-group');
+  assert.ok(content(methodology).includes('Exact monthly values'));
+  assert.ok(content(methodology).includes('2024-02'));
+  const feature = findDescendant(ui.nodes.get('#result'), node => (node.className || '').includes('feature-chart'));
+  assert.equal(findDescendant(feature, node => node.tagName === 'details'), null, 'the chart is not followed by a nested disclosure');
+});
+
+test('reduced motion disables the composer transition after every composer motion rule', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../styles.css'), 'utf8');
+  const motionRules = [...css.matchAll(/\.conversation-composer\s*\{[^}]*transition:\s*opacity/g)].map(match => match.index);
+  assert.ok(motionRules.length, 'the composer has an animated rule');
+  const reducedBlocks = [...css.matchAll(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\s*\}\n|@media \(prefers-reduced-motion: reduce\) \{([^\n]*)\}\s*\}/g)]
+    .filter(match => /\.conversation-composer[^{]*\{[^}]*transition:\s*none/.test(match[0]));
+  assert.ok(reducedBlocks.length, 'a reduced-motion block covers the composer');
+  assert.ok(reducedBlocks.at(-1).index > motionRules.at(-1), 'the reduced-motion override follows the last composer motion rule, so it wins the cascade');
+});
+
+test('a superseded result swap never leaves the shown result dimmed', async () => {
+  for (const supersede of ['changedDraft()', 'requestGeneration += 1', 'startNewAnalysis()']) {
+    const timers = [];
+    const ui = setup(async () => success(result()), { setTimeout: (callback, delay) => { timers.push({ callback, delay }); return timers.length; }, clearTimeout: () => {} });
+    ui.window.matchMedia = () => ({ matches: false });
+    ui.run('$("#result-panel").hidden = true'); // as in index.html: no result yet, so the first swap does not fade
+    await ui.run('submitRequest({analysis: demos["lax-sna"]})');
+    const panel = ui.run('$("#result-panel")');
+    const pending = ui.run('submitRequest({analysis: demos["lax-sna"]})');
+    for (let i = 0; i < 20 && !timers.some(timer => timer.delay === 120); i += 1) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(panel.classList.contains('is-leaving'), true, 'the fade-out started');
+    ui.run(supersede);
+    timers.find(timer => timer.delay === 120).callback();
+    await pending;
+    assert.equal(panel.classList.contains('is-leaving'), false, `${supersede} must not leave the result dimmed`);
+  }
 });

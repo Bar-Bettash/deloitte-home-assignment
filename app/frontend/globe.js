@@ -7,6 +7,24 @@
   const MAX_ZOOM = 1.5;
   const ROTATION_MS = 900000;
   const RESUME_DELAY_MS = 5000;
+  // Scope-change camera flight: 750 ms, cubic-bezier(.22,.61,.36,1) ease-out.
+  const CAMERA_MS = 750;
+  const cubicBezier = (x1, y1, x2, y2) => {
+    const axis = (a, b, t) => ((1 - 3 * b + 3 * a) * t + (3 * b - 6 * a)) * t * t + 3 * a * t;
+    return (x) => {
+      let low = 0, high = 1, t = x;
+      for (let i = 0; i < 20; i += 1) {
+        const estimate = axis(x1, x2, t);
+        if (Math.abs(estimate - x) < 1e-5) break;
+        if (estimate < x) low = t; else high = t;
+        t = (low + high) / 2;
+      }
+      return axis(y1, y2, t);
+    };
+  };
+  const easeOut = cubicBezier(0.22, 0.61, 0.36, 1);
+  // Shortest signed angle, in [-PI, PI).
+  const wrapAngle = (angle) => angle - 2 * Math.PI * Math.floor((angle + Math.PI) / (2 * Math.PI));
   const ASSETS = ["earth-day-2048.webp", "earth-night-2048.webp", "earth-clouds-2048.webp"];
   const vertexSource = `attribute vec2 aPosition; varying vec2 vScreen;
     void main(){ vScreen=aPosition; gl_Position=vec4(aPosition,0.0,1.0); }`;
@@ -126,6 +144,7 @@
     let manualPaused = false, movementPaused = false, motionFrame = null, previousMotionTime = null, resumeMotionTimer = null;
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)") || { matches: false };
     let drag = null;
+    let cameraFlight = null;
     let coordinates = null;
     let markerNodes = [];
     let draftCodes = [];
@@ -151,7 +170,11 @@
       }
     };
     const stopMotion = () => { if (motionFrame !== null) window.cancelAnimationFrame?.(motionFrame); motionFrame = null; previousMotionTime = null; };
-    const canRotate = () => state === "ready" && !manualPaused && !movementPaused && !drag && !document.hidden && !reducedMotion.matches && !markerNodes.some((node) => document.activeElement === node);
+    const cancelCameraFlight = () => {
+      if (cameraFlight?.frame != null) window.cancelAnimationFrame?.(cameraFlight.frame);
+      cameraFlight = null;
+    };
+    const canRotate = () => state === "ready" && !cameraFlight && !manualPaused && !movementPaused && !drag && !document.hidden && !reducedMotion.matches && !markerNodes.some((node) => document.activeElement === node);
     const syncMotion = () => {
       if (!canRotate()) { stopMotion(); return; }
       if (motionFrame !== null || !window.requestAnimationFrame) return;
@@ -167,7 +190,7 @@
       });
     };
     const pauseForManualMovement = () => {
-      movementPaused = true; stopMotion();
+      movementPaused = true; stopMotion(); cancelCameraFlight();
       if (resumeMotionTimer !== null) window.clearTimeout(resumeMotionTimer);
       resumeMotionTimer = window.setTimeout(() => { resumeMotionTimer = null; movementPaused = false; syncMotion(); }, RESUME_DELAY_MS);
     };
@@ -213,6 +236,7 @@
       window.setTimeout(() => window.dispatchEvent(new CustomEvent("globerendererready", { bubbles: false })), 0);
     };
     const stopRenderer = () => {
+      cancelCameraFlight();
       stopMotion();
       occlusionObserver?.disconnect();
       occlusionObserver = null;
@@ -291,6 +315,7 @@
     listen(window, "analysisresultchange", resultChange, undefined, true);
     const changeZoom = (next, reset = false) => {
       if (state !== "ready") return;
+      cancelCameraFlight();
       const bounded = Math.max(MIN_ZOOM, Math.min(currentMaxZoom(), next));
       if (reset) { centerLon = -100 * Math.PI / 180; centerLat = 25 * Math.PI / 180; }
       if (bounded === zoom && !reset) return;
@@ -329,6 +354,8 @@
         return { x: cosLat * Math.cos(lon), y: cosLat * Math.sin(lon), z: Math.sin(lat) };
       }).filter(Boolean);
       if (!vectors.length) return;
+      cancelCameraFlight();
+      const from = { lon: centerLon, lat: centerLat, zoom };
       let x = vectors.reduce((sum, point) => sum + point.x, 0);
       let y = vectors.reduce((sum, point) => sum + point.y, 0);
       let z = vectors.reduce((sum, point) => sum + point.z, 0);
@@ -353,8 +380,34 @@
       }
       zoom = vectors.length === 1 ? Math.min(startingZoom, low) : low;
       pendingFocusCodes = null;
-      draw();
-      syncZoomControls();
+      const to = { lon: centerLon, lat: centerLat, zoom };
+      // Reduced motion (or no rAF): jump straight to the region.
+      if (reducedMotion.matches || !window.requestAnimationFrame) { draw(); syncZoomControls(); return; }
+      // Fly from the current view along the shortest longitude path. Auto-rotation
+      // is suspended for the flight; a drag, key, wheel or reset cancels it.
+      centerLon = from.lon; centerLat = from.lat; zoom = from.zoom;
+      stopMotion();
+      const deltaLon = wrapAngle(to.lon - from.lon);
+      const flight = { frame: null, last: null, elapsed: 0 };
+      cameraFlight = flight;
+      const step = (time) => {
+        if (cameraFlight !== flight) return;
+        // Advance by at most 100ms per frame, so a long frame (the result DOM swap
+        // lands in the same frames) slows the flight instead of skipping it.
+        if (flight.last !== null) flight.elapsed += Math.min(100, Math.max(0, time - flight.last));
+        flight.last = time;
+        const progress = Math.min(1, flight.elapsed / CAMERA_MS);
+        const eased = easeOut(progress);
+        centerLon = from.lon + deltaLon * eased;
+        centerLat = from.lat + (to.lat - from.lat) * eased;
+        zoom = from.zoom + (to.zoom - from.zoom) * eased;
+        draw();
+        if (progress < 1) { flight.frame = window.requestAnimationFrame(step); return; }
+        cameraFlight = null;
+        syncZoomControls();
+        syncMotion();
+      };
+      flight.frame = window.requestAnimationFrame(step);
     };
     updateMarkers = () => {
       if (!coordinates || !canvas || state === "fallback") return;
@@ -472,6 +525,7 @@
       const radius = sphereRadius(rect.width, rect.height);
       if (dx * dx + dy * dy > radius * radius) return;
       stopMotion();
+      cancelCameraFlight();
       drag = { x: event.clientX, y: event.clientY, moved: false };
     };
     const rotate = (dx, dy) => {
