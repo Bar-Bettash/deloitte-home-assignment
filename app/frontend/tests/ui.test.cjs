@@ -2546,6 +2546,11 @@ test('following the transcript also follows controls added to a reply just after
   body.scrollHeight = 506; // Read aloud arrives from voice.js's mutation callback
   for (const callback of frames.splice(0)) callback();
   assert.equal(body.scrollTop, 506);
+  ui.run('scrollTranscriptToEnd()');
+  body.scrollTop = 200; // the reader scrolls up before the next frame
+  body.scrollHeight = 544;
+  for (const callback of frames.splice(0)) callback();
+  assert.equal(body.scrollTop, 200, 'a reader who scrolled up is not pulled back');
 });
 
 test('enlarging again while a restore is still animating keeps the enlarged size', async () => {

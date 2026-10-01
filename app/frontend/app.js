@@ -927,8 +927,12 @@ function scrollTranscriptToEnd() {
   if (!body || !Number.isFinite(body.scrollHeight)) return;
   body.scrollTop = body.scrollHeight;
   // Controls added to a reply right after it settles (voice.js adds Read aloud from a
-  // mutation callback) land after this scroll; follow them on the next frame too.
-  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
+  // mutation callback) land after this scroll; follow them on the next frame too,
+  // unless the reader has scrolled up since.
+  const target = body.scrollTop;
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => { if (body.scrollTop >= target - 1) body.scrollTop = body.scrollHeight; });
+  }
 }
 // One line, growing to about five, then scrolling inside the field. If the reader
 // was at the end of the transcript, growth keeps the latest message in view.
