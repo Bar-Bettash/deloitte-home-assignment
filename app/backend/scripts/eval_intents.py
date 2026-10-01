@@ -69,12 +69,12 @@ FOLLOWUP_POLICY = AcceptancePolicy(
 PENDING_POLICY = AcceptancePolicy(
     "pending", {"demonstration": 2, "safety_clarification": 3, "ordinary": 5}, 9,
     ("demonstration", "safety_clarification"))
-# 16 conversation turns: an overall comparison asked for in plain words (as a
+# 17 conversation turns: an overall comparison asked for in plain words (as a
 # reply to "which measure?" or as a new question), "what stands out?", narrowing back to
-# one measure, another airport or year; plus two separate questions and an unsupported
-# airport. >=15/16, every demonstration and safety case, 0 errors.
+# one measure, another airport or year; plus two separate questions, an unsupported
+# airport and ambiguous airports. >=16/17, every demonstration and safety case, 0 errors.
 CONVERSATION_POLICY = AcceptancePolicy(
-    "conversation", {"demonstration": 2, "safety_clarification": 3, "ordinary": 11}, 15,
+    "conversation", {"demonstration": 2, "safety_clarification": 3, "ordinary": 12}, 16,
     ("demonstration", "safety_clarification"))
 POLICIES = {policy.name: policy for policy in (
     CORPUS_POLICY, HOLDOUT_POLICY, ASSIGNMENT_POLICY, REGRESSION_POLICY, FOLLOWUP_POLICY, PENDING_POLICY,
@@ -408,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mode", choices=("baseline", "candidate"), required=True)
     parser.add_argument("--cases", type=Path, default=DEFAULT_CASES)
     parser.add_argument("--policy", choices=sorted(POLICIES), default=CORPUS_POLICY.name,
-                        help="acceptance policy: corpus (30 cases, >=29), holdout (12 cases, >=11), assignment (8 cases, 8/8), regression (20 cases, >=19), followup (10 cases, >=9), pending (10 cases, >=9) or conversation (16 cases, >=15)")
+                        help="acceptance policy: corpus (30 cases, >=29), holdout (12 cases, >=11), assignment (8 cases, 8/8), regression (20 cases, >=19), followup (10 cases, >=9), pending (10 cases, >=9) or conversation (17 cases, >=16)")
     parser.add_argument("--acceptance", action="store_true")
     parser.add_argument("--live", action="store_true", help="call the configured model for candidate evaluation")
     parser.add_argument("--input-usd-per-mtok", type=_rate,

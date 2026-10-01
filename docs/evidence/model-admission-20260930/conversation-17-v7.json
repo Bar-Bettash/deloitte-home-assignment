@@ -1,0 +1,573 @@
+{
+  "mode": "candidate",
+  "case_count": 17,
+  "correct_count": 17,
+  "accuracy": 1.0,
+  "category_accuracy": {
+    "demonstration": 1.0,
+    "safety_clarification": 1.0,
+    "ordinary": 1.0
+  },
+  "error_count": 0,
+  "candidate_acceptance": true,
+  "acceptance_policy": {
+    "name": "conversation",
+    "case_count_required": 17,
+    "category_counts_required": {
+      "demonstration": 2,
+      "safety_clarification": 3,
+      "ordinary": 12
+    },
+    "overall_correct_min": 16,
+    "demonstration_correct_required": 2,
+    "safety_correct_required": 3,
+    "errors_max": 0
+  },
+  "results": [
+    {
+      "id": "cv-screenshot-overall-reply",
+      "category": "demonstration",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "overview"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "overview"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2017.496,
+      "usage": {
+        "input_tokens": 1663,
+        "output_tokens": 258,
+        "cost_usd": 0.00221475
+      },
+      "error": null,
+      "cost_usd": 0.00221475
+    },
+    {
+      "id": "cv-compare-everything-reply",
+      "category": "demonstration",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "LAX"
+          ],
+          "metric": "overview"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "LAX"
+          ],
+          "metric": "overview"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1646.668,
+      "usage": {
+        "input_tokens": 1673,
+        "output_tokens": 80,
+        "cost_usd": 0.00155475
+      },
+      "error": null,
+      "cost_usd": 0.00155475
+    },
+    {
+      "id": "cv-overall-ambiguous-airports",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "Which two Los Angeles-area airports should I compare?"
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "Please name the airport, metric, and supported period you want to analyze."
+      },
+      "correct": true,
+      "latency_ms": 1850.489,
+      "usage": {
+        "input_tokens": 1654,
+        "output_tokens": 197,
+        "cost_usd": 0.00197925
+      },
+      "error": null,
+      "cost_usd": 0.00197925
+    },
+    {
+      "id": "cv-two-separate-questions",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Submit one analysis at a time."
+      },
+      "actual": {
+        "kind": "unsupported_scope",
+        "message": "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025."
+      },
+      "correct": true,
+      "latency_ms": 1602.521,
+      "usage": {
+        "input_tokens": 1659,
+        "output_tokens": 136,
+        "cost_usd": 0.00175425
+      },
+      "error": null,
+      "cost_usd": 0.00175425
+    },
+    {
+      "id": "cv-overall-unsupported-airport",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Tokyo Narita is not a supported airport."
+      },
+      "actual": {
+        "kind": "unsupported_scope",
+        "message": "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025."
+      },
+      "correct": true,
+      "latency_ms": 1839.698,
+      "usage": {
+        "input_tokens": 1657,
+        "output_tokens": 175,
+        "cost_usd": 0.001899
+      },
+      "error": null,
+      "cost_usd": 0.001899
+    },
+    {
+      "id": "cv-screenshot-opening-question",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "overview"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "overview"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2170.269,
+      "usage": {
+        "input_tokens": 1655,
+        "output_tokens": 72,
+        "cost_usd": 0.00151125
+      },
+      "error": null,
+      "cost_usd": 0.00151125
+    },
+    {
+      "id": "cv-all-of-them-reply",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "BOS",
+            "PVD"
+          ],
+          "metric": "overview"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "BOS",
+            "PVD"
+          ],
+          "metric": "overview"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1293.671,
+      "usage": {
+        "input_tokens": 1677,
+        "output_tokens": 72,
+        "cost_usd": 0.00152775
+      },
+      "error": null,
+      "cost_usd": 0.00152775
+    },
+    {
+      "id": "cv-full-picture-new-question",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "overview"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "overview"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1607.531,
+      "usage": {
+        "input_tokens": 1656,
+        "output_tokens": 72,
+        "cost_usd": 0.001512
+      },
+      "error": null,
+      "cost_usd": 0.001512
+    },
+    {
+      "id": "cv-full-comparison-new-england",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "BOS",
+            "PVD"
+          ],
+          "metric": "overview"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "BOS",
+            "PVD"
+          ],
+          "metric": "overview"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1506.591,
+      "usage": {
+        "input_tokens": 1660,
+        "output_tokens": 72,
+        "cost_usd": 0.001515
+      },
+      "error": null,
+      "cost_usd": 0.001515
+    },
+    {
+      "id": "cv-several-measures-same-pair",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "overview"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "overview"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2111.37,
+      "usage": {
+        "input_tokens": 1657,
+        "output_tokens": 234,
+        "cost_usd": 0.00212025
+      },
+      "error": null,
+      "cost_usd": 0.00212025
+    },
+    {
+      "id": "cv-everything-one-airport",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "overview"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "overview"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1374.714,
+      "usage": {
+        "input_tokens": 1651,
+        "output_tokens": 67,
+        "cost_usd": 0.0014895
+      },
+      "error": null,
+      "cost_usd": 0.0014895
+    },
+    {
+      "id": "cv-what-stands-out",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "explain"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "explain"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1715.785,
+      "usage": {
+        "input_tokens": 1664,
+        "output_tokens": 164,
+        "cost_usd": 0.001863
+      },
+      "error": null,
+      "cost_usd": 0.001863
+    },
+    {
+      "id": "cv-summarize-differences",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "explain"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "explain"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2033.034,
+      "usage": {
+        "input_tokens": 1666,
+        "output_tokens": 170,
+        "cost_usd": 0.001887
+      },
+      "error": null,
+      "cost_usd": 0.001887
+    },
+    {
+      "id": "cv-now-just-congestion",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1957.296,
+      "usage": {
+        "input_tokens": 1663,
+        "output_tokens": 80,
+        "cost_usd": 0.00154725
+      },
+      "error": null,
+      "cost_usd": 0.00154725
+    },
+    {
+      "id": "cv-and-passenger-growth",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "passenger_growth"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "passenger_growth"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1825.111,
+      "usage": {
+        "input_tokens": 1664,
+        "output_tokens": 82,
+        "cost_usd": 0.0015555
+      },
+      "error": null,
+      "cost_usd": 0.0015555
+    },
+    {
+      "id": "cv-same-for-sna",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "SNA"
+          ],
+          "metric": "overview"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "SNA"
+          ],
+          "metric": "overview"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1957.388,
+      "usage": {
+        "input_tokens": 1662,
+        "output_tokens": 68,
+        "cost_usd": 0.0015015
+      },
+      "error": null,
+      "cost_usd": 0.0015015
+    },
+    {
+      "id": "cv-overall-in-2024",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "overview",
+          "year": 2024
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "overview",
+          "year": 2024
+        }
+      },
+      "correct": true,
+      "latency_ms": 1425.979,
+      "usage": {
+        "input_tokens": 1668,
+        "output_tokens": 76,
+        "cost_usd": 0.001536
+      },
+      "error": null,
+      "cost_usd": 0.001536
+    }
+  ],
+  "candidate_status": "evaluated",
+  "model": "gemini-3.8-flash",
+  "prompt_sha256": "2033028d717e5e8964c72289fee40628096fde81651f575c714d98e213c85e45",
+  "adapter_sha256": "f9900e6f35bb5b9cc12965ba3a9bda9b59215a745614459e887c725db77e15ef",
+  "corpus_sha256": "e6a81457cab0db891e03130e3d7c32f2b31ade59875893eff98524303ac973e0",
+  "rate_card_usd_per_million_tokens": {
+    "input": 0.75,
+    "output": 3.75
+  },
+  "aggregate_cost_usd": 0.028968,
+  "rejected_output_costed_calls": 0,
+  "unknown_cost_calls": 0,
+  "latency_ms_p50": 1825.111,
+  "latency_ms_p95": 2170.269
+}

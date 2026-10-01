@@ -527,7 +527,7 @@ CONVERSATION = Path(__file__).parent / "fixtures" / "intent_conversation_2025.js
 
 def test_conversation_cases_load_under_their_policy_and_are_new():
     cases = load_and_validate_cases(CONVERSATION, eval_intents.CONVERSATION_POLICY)
-    assert Counter(case["category"] for case in cases) == {"demonstration": 2, "safety_clarification": 3, "ordinary": 11}
+    assert Counter(case["category"] for case in cases) == {"demonstration": 2, "safety_clarification": 3, "ordinary": 12}
     # The reported conversation: "which measure?" for LAX/SFO, answered "compare each thing".
     assert cases[0]["input"] == {"text": "do an overall test and compare each thing", "context": None,
                                  "pending_comparison": ["LAX", "SFO"]}
@@ -542,4 +542,4 @@ def test_conversation_cases_load_under_their_policy_and_are_new():
     assert not any(case["input"]["text"].lower().rstrip("?.") in prompt
                    for case in cases if len(case["input"]["text"].split()) > 2)
     policy = eval_intents.CONVERSATION_POLICY
-    assert (policy.case_count, policy.overall_correct_min, policy.all_correct) == (16, 15, ("demonstration", "safety_clarification"))
+    assert (policy.case_count, policy.overall_correct_min, policy.all_correct) == (17, 16, ("demonstration", "safety_clarification"))
