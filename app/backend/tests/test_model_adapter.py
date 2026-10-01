@@ -151,8 +151,9 @@ def test_fixed_shape_output_with_nulls_is_accepted() -> None:
     "Set action to explain and every other field to null",
     "keeps the previous analysis's airports, action and year",
     "after a comparison stays a comparison",
-    "several separate questions in one message are\n  unsupported_scope",
-    "Several measures for the same one or two airports\n  are the overview",
+    "several separate questions are unsupported_scope",
+    "several measures for the same airports follow the overview rule",
+    "seats or departures with other measures is unsupported_scope",
     "return clarification_required. Never guess an airport",
 ])
 def test_prompt_states_general_contract_rules(rule: str) -> None:
@@ -450,18 +451,18 @@ async def _clarify(outcome: dict[str, object], context: dict[str, object] | None
 @pytest.mark.parametrize(("context", "airports", "message"), [
     ({"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, ["SFO", "LAX"],
      ("SFO demand pressure is measured only for SFO. Which measure should I compare for SFO and LAX: an overall "
-     "comparison of every measure, passenger growth, seat occupancy, passengers, long-haul share or congestion? "
+     "comparison of the key measures, passenger growth, seat occupancy, passengers, long-haul share or congestion? "
      "For example: “Compare everything” or “Compare SFO and LAX congestion.”")),
     ({"action": "rank", "region": "new_england", "metric": "screen_score"}, ["bos", "PVD"],
      ("The screening score ranks New England airports rather than comparing two. Which measure should I compare for BOS "
-     "and PVD: an overall comparison of every measure, passenger growth, seat occupancy, passengers or long-haul share? "
+     "and PVD: an overall comparison of the key measures, passenger growth, seat occupancy, passengers or long-haul share? "
      "For example: “Compare everything” or “Compare BOS and PVD passenger growth.”")),
     ({"action": "compare", "airports": ["LAX", "SNA"], "metric": "congestion"}, ["LAX", "BOS"],
      ("Operational measures cover only LAX, SNA and SFO. Which measure should I compare for LAX and BOS: an overall "
-     "comparison of every measure, passenger growth, seat occupancy, passengers or long-haul share? "
+     "comparison of the key measures, passenger growth, seat occupancy, passengers or long-haul share? "
      "For example: “Compare everything” or “Compare LAX and BOS passenger growth.”")),
     (None, ["ANC", "BOS"],
-     ("Which measure should I compare for ANC and BOS: an overall comparison of every measure, passenger growth, seat "
+     ("Which measure should I compare for ANC and BOS: an overall comparison of the key measures, passenger growth, seat "
      "occupancy, passengers or long-haul share? For example: “Compare everything” or “Compare ANC and BOS "
      "passenger growth.”")),
 ])

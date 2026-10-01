@@ -2441,11 +2441,11 @@ function overviewResult(airports = ['LAX', 'SFO']) {
     `${airports.join(' vs ')} in 2025, on ${keys.length} comparable measures.`);
 }
 
-test('an overall comparison groups every measure into bars with exact values, and the chat names who is higher on what', async () => {
+test('an overall comparison groups the key measures into bars with exact values, and the chat names who is higher on what', async () => {
   const ui = setup(async () => success(overviewResult()));
   await ui.run('submitRequest({ analysis: { action: "compare", airports: ["LAX", "SFO"], metric: "overview" } })');
   const text = resultContent(ui);
-  for (const part of ['Overall comparison, every measure · 2025', 'Every measure, side by side, 2025', 'Traffic', 'Network', 'Operations',
+  for (const part of ['Overall comparison, key measures · 2025', 'Key measures, side by side, 2025', 'Traffic', 'Network', 'Operations',
     'Calendar year 2025 compared with 2024', 'for operations, higher means more disruption']) assert.ok(text.includes(part), part);
   const measures = [];
   (function walk(node) { if (node.className === 'congestion-measure') measures.push(node); (node.children || []).forEach(walk); })(ui.nodes.get('#result'));
@@ -2464,7 +2464,7 @@ test('an overall comparison groups every measure into bars with exact values, an
 test('a one-airport overview shows a card per measure and a pair outside operations has no operations group', async () => {
   const ui = setup(async () => success(overviewResult(['BOS'])));
   await ui.run('submitRequest({ analysis: { action: "metric", airports: ["BOS"], metric: "overview" } })');
-  assert.ok(resultContent(ui).includes('Airport overview, every measure · 2025'));
+  assert.ok(resultContent(ui).includes('Airport overview, key measures · 2025'));
   const cards = findDescendant(ui.nodes.get('#result'), (node) => node.className === 'kpi-row overview-cards');
   assert.equal(cards.children.length, 3, 'traffic group: passengers, growth and occupancy');
   const pair = setup(async () => success(overviewResult(['BOS', 'SFO'])));
@@ -2498,6 +2498,82 @@ test('a which-measure reply offers its measures; a choice runs that comparison a
   await flush(); await flush();
   const offered = findDescendant(chatItems(ui).at(-1), (node) => node.className === 'chat-choices');
   assert.ok(!offered.children.some((button) => button.textContent === 'Congestion'), 'congestion only where both airports report operations');
+});
+
+test('a chosen measure keeps the period on screen unless that measure has no such period', () => {
+  const ui = setup(async () => success(result()));
+  const pick = (year, metric) => ui.run(`latestSuccessfulResult = ${year ? `{ scope: { year: ${year} } }` : 'null'};
+    JSON.stringify(choiceAnalysis(["LAX", "SNA"], "${metric}"))`);
+  assert.equal(pick(2024, 'passengers'), JSON.stringify({ action: 'compare', airports: ['LAX', 'SNA'], metric: 'passengers', year: 2024 }));
+  assert.equal(JSON.parse(pick(2023, 'long_haul_share')).year, 2023);
+  for (const metric of ['overview', 'passenger_growth', 'congestion']) {
+    assert.equal(JSON.parse(pick(2023, metric)).year, undefined, `${metric} has no 2023 period, so the server default applies`);
+  }
+  assert.equal(JSON.parse(pick(2025, 'overview')).year, undefined, 'the default period is left to the server');
+  assert.equal(JSON.parse(pick(null, 'passengers')).year, undefined);
+});
+
+test('a failed measure choice keeps the pending pair for a typed answer, and Back retires stale choices', async () => {
+  const failed = () => ({ ok: false, status: 503, json: async () => errorEnvelope('data_unavailable', 'Qualified data is unavailable.') });
+  const { query, bodies } = queuedFetch([success(sfoPressure(-1.2247)), measureQuestion(['SFO', 'LAX']), failed(), measureQuestion(['SFO', 'LAX'])]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["sfo-pressure"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'give me an analysis of SFO versus LAX');
+  await flush(); await flush();
+  const choices = findDescendant(chatItems(ui).at(-1), (node) => node.className === 'chat-choices');
+  choices.children.find((button) => button.textContent === 'Congestion').click();
+  await flush(); await flush();
+  assert.equal(ui.run('JSON.stringify(pendingComparison)'), '["SFO","LAX"]', 'a failed choice has not answered the question');
+  sendChat(ui, 'congestion');
+  await flush(); await flush();
+  assert.deepEqual(bodies[3].pending_comparison, ['SFO', 'LAX']);
+  const offered = findDescendant(chatItems(ui).at(-1), (node) => node.className === 'chat-choices');
+  assert.equal(offered.hidden, false);
+  ui.nodes.get('#back-to-analysis').listeners.click();
+  assert.equal(offered.hidden, true, 'a new analysis retires the older choices');
+});
+
+test('following the transcript also follows controls added to a reply just after it settles', () => {
+  const ui = setup(async () => success(result()));
+  const frames = [];
+  ui.context.__frames = frames;
+  ui.run('requestAnimationFrame = (callback) => { __frames.push(callback); }');
+  const body = ui.run('$(".chat-body")');
+  Object.assign(body, { scrollHeight: 468, clientHeight: 453, scrollTop: 0 });
+  ui.run('scrollTranscriptToEnd()');
+  assert.equal(body.scrollTop, 468);
+  body.scrollHeight = 506; // Read aloud arrives from voice.js's mutation callback
+  for (const callback of frames.splice(0)) callback();
+  assert.equal(body.scrollTop, 506);
+});
+
+test('enlarging again while a restore is still animating keeps the enlarged size', async () => {
+  const ui = setup(async () => success(result()));
+  ui.window.matchMedia = () => ({ matches: false });
+  ui.run('openQuestionComposer(false); expandChat(false)');
+  const composer = ui.nodes.get('#conversation-composer');
+  const heights = { compact: 300, comfortable: 420, focus: 700 };
+  composer.getBoundingClientRect = () => ({ height: heights[composer.getAttribute('data-size') || 'compact'] });
+  const animations = [];
+  composer.animate = () => {
+    let resolve; let reject;
+    const finished = new Promise((ok, fail) => { resolve = ok; reject = fail; });
+    finished.catch(() => {}); // as in browsers, a cancelled animation's rejection is marked handled
+    const animation = { finished, cancel() { reject(new Error('cancelled')); }, finish() { resolve(); } };
+    animations.push(animation);
+    return animation;
+  };
+  const resize = ui.nodes.get('#chat-resize');
+  resize.click();
+  resize.click();
+  assert.equal(composer.getAttribute('data-size'), 'focus', 'a restore holds the larger size while its edge lowers');
+  const shrinking = animations.at(-1);
+  resize.click();
+  shrinking.finish();
+  await flush(); await flush();
+  assert.equal(resize.getAttribute('aria-pressed'), 'true');
+  assert.equal(composer.getAttribute('data-size'), 'focus', 'the cancelled restore never lands');
 });
 
 test('the chat grows once a conversation outgrows it, never on its own shrinks, and can be enlarged and restored', async () => {

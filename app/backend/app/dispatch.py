@@ -395,7 +395,7 @@ _OVERVIEW_OPERATIONS_NOTE = ("Operational measures (cancellations, diversions, d
 def _overview(
     request: AnalysisRequest, request_id: UUID, *, bundle: BundleContext | None = None
 ) -> AnalysisResult:
-    """Every measure valid for all requested airports, side by side; no combined score."""
+    """The key measures valid for all requested airports, side by side; no combined score."""
     assert request.airports and request.year
     airports = list(request.airports)
     try:
@@ -1045,6 +1045,8 @@ def _overview_tally(rows) -> str:
         compared += 1
         if left.value != right.value:
             higher[a.airport if left.value > right.value else b.airport].append(_overview_label(left.key))
+    if compared == 0:
+        return f"No measure is comparable for both {a.airport} and {b.airport}"
     parts = [f"{airport} is higher on {len(labels)} of {compared} ({_join_and(labels)})"
              for airport, labels in higher.items() if labels]
     return "; ".join(parts) if parts else f"{a.airport} and {b.airport} are tied on every comparable measure"

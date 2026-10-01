@@ -370,8 +370,9 @@ async function submitRequest(request, chat = {}) {
   if (busy) return;
   const kind = requestKind(request);
   const conversational = kind === "followup" || Boolean(chat.chatText);
-  // A preset or scoped analysis is a new question: no clarification is pending.
-  if (kind === "analysis") pendingComparison = null;
+  // A preset or scoped analysis is a new question: no clarification is pending. A
+  // chosen measure answers the pending question, so the pair stays until it succeeds.
+  if (kind === "analysis" && !chat.chatText) pendingComparison = null;
   const generation = ++requestGeneration;
   // Any new send ends an older send's claim on the field, so only the latest can give text back.
   composerOwner = null;
@@ -553,7 +554,7 @@ function renderResult(result, previous) {
   const airportTitle = heading(scopeHeading, "h2", resultHeadline(result));
   airportTitle.className = "result-airports";
   const measureName = result.scope.metric === "congestion" ? "Airport operations, four indicators"
-    : result.scope.metric === "overview" ? (result.scope.airports.length === 2 ? "Overall comparison, every measure" : "Airport overview, every measure")
+    : result.scope.metric === "overview" ? (result.scope.airports.length === 2 ? "Overall comparison, key measures" : "Airport overview, key measures")
       : humanScopeMetricLabel(result.scope.metric);
   const scopeDetails = paragraph(scopeHeading, `${measureName} · ${result.scope.year}`);
   scopeDetails.className = "result-measure";
@@ -923,7 +924,11 @@ function transcriptNearBottom() {
 }
 function scrollTranscriptToEnd() {
   const body = $(".chat-body");
-  if (body && Number.isFinite(body.scrollHeight)) body.scrollTop = body.scrollHeight;
+  if (!body || !Number.isFinite(body.scrollHeight)) return;
+  body.scrollTop = body.scrollHeight;
+  // Controls added to a reply right after it settles (voice.js adds Read aloud from a
+  // mutation callback) land after this scroll; follow them on the next frame too.
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => { body.scrollTop = body.scrollHeight; });
 }
 // One line, growing to about five, then scrolling inside the field. If the reader
 // was at the end of the transcript, growth keeps the latest message in view.
@@ -946,9 +951,11 @@ function applyChatSize() {
   const composer = $("#conversation-composer");
   const size = chatSize();
   const previous = composer.getAttribute("data-size") || "compact";
-  if (previous === size) return;
+  // A shrink in flight still shows its larger size; cancel it first so it cannot
+  // land on a size the analyst has since toggled away from.
   chatResizeAnimation?.cancel();
   chatResizeAnimation = null;
+  if (previous === size) return;
   const follow = transcriptNearBottom();
   const resize = (value) => {
     composer.setAttribute("data-size", value);
@@ -1141,6 +1148,16 @@ function comparisonChoices(pair) {
   if (pair.every((code) => operationalAirports.has(code))) choices.push(["Congestion", "congestion"]);
   return choices;
 }
+// A chosen measure keeps the period on screen, as a typed answer does, unless that
+// measure has no such period (growth, the overview and congestion need 2024 or 2025).
+const choiceNeedsComparisonYear = new Set(["overview", "passenger_growth", "congestion"]);
+function choiceAnalysis(pair, metric) {
+  const analysis = { action: "compare", airports: [...pair], metric };
+  const year = latestSuccessfulResult?.scope?.year;
+  if (SUPPORTED_YEARS.includes(year) && year !== DEFAULT_YEAR
+      && !(year === 2023 && choiceNeedsComparisonYear.has(metric))) analysis.year = year;
+  return analysis;
+}
 function offerChatChoices(message, pair) {
   const group = document.createElement("div");
   group.className = "chat-choices";
@@ -1154,7 +1171,7 @@ function offerChatChoices(message, pair) {
     button.addEventListener("click", () => {
       if (busy) return;
       $("#question").focus({ preventScroll: true });
-      void submitRequest({ analysis: { action: "compare", airports: [...pair], metric } }, { chatText: text });
+      void submitRequest({ analysis: choiceAnalysis(pair, metric) }, { chatText: text });
     });
     group.append(button);
   }
@@ -1481,7 +1498,7 @@ function renderOverviewView(result, target) {
   const airports = result.scope.airports;
   const returned = new Set(result.rows.flatMap((row) => row.metrics.map((metric) => metric.key)));
   const groups = overviewGroups.map(([name, keys]) => [name, keys.filter((key) => returned.has(key))]).filter(([, keys]) => keys.length);
-  heading(target, "h3", `${airports.length === 2 ? "Every measure, side by side" : "Every measure"}, ${result.scope.year}`);
+  heading(target, "h3", `${airports.length === 2 ? "Key measures, side by side" : "Key measures"}, ${result.scope.year}`);
   if (airports.length === 2) {
     const legend = document.createElement("p");
     legend.className = "congestion-legend";
@@ -2129,6 +2146,7 @@ function startNewAnalysis() {
   latestSuccessfulResult = null;
   contextResultId = null;
   pendingComparison = null;
+  retireChatChoices();
   composerOwner = null;
   explanation = null;
   resultIsPrevious = false;

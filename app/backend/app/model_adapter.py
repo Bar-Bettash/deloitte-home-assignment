@@ -64,9 +64,11 @@ it:
   whether it needs more capacity, at SFO: metric with sfo_pressure.
 - Passenger volume, passenger growth, seats, departures or seat occupancy: that
   metric; a passenger trend at SFO is sfo_enplaned_trend.
-- An overall or full comparison of two named airports, or everything, each
-  measure, the big picture or several measures for the same two airports:
-  compare with overview (for one airport: metric with overview).
+- An overall or full comparison of two named airports, everything, each measure
+  or the big picture: compare with overview (for one airport: metric with
+  overview). Several of passengers, passenger growth, seat occupancy, long-haul
+  share and operational measures for the same airports is also the overview;
+  seats or departures with other measures is unsupported_scope.
 
 Analysis field rules. Every analysis field is always present; set each field the
 action does not use to null.
@@ -80,9 +82,8 @@ action does not use to null.
 - threshold_miles is used only with long_haul_share; otherwise null.
 
 Scope rules.
-- One analysis per message. Several measures for the same one or two airports
-  are the overview; several separate questions in one message are
-  unsupported_scope.
+- One analysis per message: several separate questions are unsupported_scope;
+  several measures for the same airports follow the overview rule.
 - When a place could mean more than one supported airport, or the question names
   no specific airport, return clarification_required. Never guess an airport.
 
@@ -125,7 +126,7 @@ application just asked about: it asked which measure to compare for them.
 Metric scope. sfo_pressure and sfo_enplaned_trend exist only for SFO and cannot be
 compared. congestion and the four operational metrics cover only LAX, SNA and
 SFO. screen_score ranks New England airports; it is not a two-airport comparison.
-passengers, seats, departures, passenger_growth, seat_occupancy and
+passengers, seats, departures, passenger_growth, seat_occupancy,
 long_haul_share and overview can be compared between any two supported airports.
 
 Periods. Supported periods are calendar years 2023, 2024 and 2025. If the user
@@ -349,7 +350,7 @@ def comparison_question(airports: list[str], context: Mapping[str, object] | Non
     """Server-worded clarification naming only measures the contract can compare."""
     first, second = airports
     operational = set(airports) <= _OPERATIONAL_AIRPORTS
-    measures = ["an overall comparison of every measure", "passenger growth", "seat occupancy", "passengers",
+    measures = ["an overall comparison of the key measures", "passenger growth", "seat occupancy", "passengers",
                 "long-haul share"]
     if operational:
         measures.append("congestion")

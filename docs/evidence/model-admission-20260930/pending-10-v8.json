@@ -1,0 +1,350 @@
+{
+  "mode": "candidate",
+  "case_count": 10,
+  "correct_count": 10,
+  "accuracy": 1.0,
+  "category_accuracy": {
+    "demonstration": 1.0,
+    "ordinary": 1.0,
+    "safety_clarification": 1.0
+  },
+  "error_count": 0,
+  "candidate_acceptance": true,
+  "acceptance_policy": {
+    "name": "pending",
+    "case_count_required": 10,
+    "category_counts_required": {
+      "demonstration": 2,
+      "safety_clarification": 3,
+      "ordinary": 5
+    },
+    "overall_correct_min": 9,
+    "demonstration_correct_required": 2,
+    "safety_correct_required": 3,
+    "errors_max": 0
+  },
+  "results": [
+    {
+      "id": "pd-sfo-lax-congestion",
+      "category": "demonstration",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "LAX"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "LAX"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2271.932,
+      "usage": {
+        "input_tokens": 1696,
+        "output_tokens": 297,
+        "cost_usd": 0.00238575
+      },
+      "error": null,
+      "cost_usd": 0.00238575
+    },
+    {
+      "id": "pd-sfo-lax-passenger-growth",
+      "category": "demonstration",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "LAX"
+          ],
+          "metric": "passenger_growth"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "LAX"
+          ],
+          "metric": "passenger_growth"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1578.89,
+      "usage": {
+        "input_tokens": 1700,
+        "output_tokens": 221,
+        "cost_usd": 0.00210375
+      },
+      "error": null,
+      "cost_usd": 0.00210375
+    },
+    {
+      "id": "pd-sfo-sna-cancellations",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "SNA"
+          ],
+          "metric": "cancellation_rate"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "SNA"
+          ],
+          "metric": "cancellation_rate"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2263.943,
+      "usage": {
+        "input_tokens": 1702,
+        "output_tokens": 280,
+        "cost_usd": 0.0023265
+      },
+      "error": null,
+      "cost_usd": 0.0023265
+    },
+    {
+      "id": "pd-bos-pvd-occupancy",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "BOS",
+            "PVD"
+          ],
+          "metric": "seat_occupancy"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "BOS",
+            "PVD"
+          ],
+          "metric": "seat_occupancy"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1997.252,
+      "usage": {
+        "input_tokens": 1698,
+        "output_tokens": 258,
+        "cost_usd": 0.002241
+      },
+      "error": null,
+      "cost_usd": 0.002241
+    },
+    {
+      "id": "pd-sfo-anc-long-haul",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2128.605,
+      "usage": {
+        "input_tokens": 1698,
+        "output_tokens": 75,
+        "cost_usd": 0.00155475
+      },
+      "error": null,
+      "cost_usd": 0.00155475
+    },
+    {
+      "id": "pd-sfo-lax-passengers-2024",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "LAX"
+          ],
+          "metric": "passengers",
+          "year": 2024
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SFO",
+            "LAX"
+          ],
+          "metric": "passengers",
+          "year": 2024
+        }
+      },
+      "correct": true,
+      "latency_ms": 1889.074,
+      "usage": {
+        "input_tokens": 1703,
+        "output_tokens": 287,
+        "cost_usd": 0.0023535
+      },
+      "error": null,
+      "cost_usd": 0.0023535
+    },
+    {
+      "id": "pd-new-question-anc",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1426.906,
+      "usage": {
+        "input_tokens": 1705,
+        "output_tokens": 77,
+        "cost_usd": 0.0015675
+      },
+      "error": null,
+      "cost_usd": 0.0015675
+    },
+    {
+      "id": "pd-bos-pvd-congestion",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "Which measure should I compare for these two airports?"
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "The screening score ranks New England airports rather than comparing two. Which measure should I compare for BOS and PVD: an overall comparison of the key measures, passenger growth, seat occupancy, passengers or long-haul share? For example: “Compare everything” or “Compare BOS and PVD passenger growth.”"
+      },
+      "correct": true,
+      "latency_ms": 2223.177,
+      "usage": {
+        "input_tokens": 1696,
+        "output_tokens": 385,
+        "cost_usd": 0.00271575
+      },
+      "error": null,
+      "cost_usd": 0.00271575
+    },
+    {
+      "id": "pd-sfo-lax-demand-pressure",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "Which measure should I compare for these two airports?"
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "SFO demand pressure is measured only for SFO. Which measure should I compare for SFO and LAX: an overall comparison of the key measures, passenger growth, seat occupancy, passengers, long-haul share or congestion? For example: “Compare everything” or “Compare SFO and LAX congestion.”"
+      },
+      "correct": true,
+      "latency_ms": 2484.725,
+      "usage": {
+        "input_tokens": 1700,
+        "output_tokens": 341,
+        "cost_usd": 0.00255375
+      },
+      "error": null,
+      "cost_usd": 0.00255375
+    },
+    {
+      "id": "pd-sfo-lax-roi",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Return on investment is outside the supported analyses."
+      },
+      "actual": {
+        "kind": "unsupported_scope",
+        "message": "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025."
+      },
+      "correct": true,
+      "latency_ms": 1645.292,
+      "usage": {
+        "input_tokens": 1706,
+        "output_tokens": 183,
+        "cost_usd": 0.00196575
+      },
+      "error": null,
+      "cost_usd": 0.00196575
+    }
+  ],
+  "candidate_status": "evaluated",
+  "model": "gemini-3.8-flash",
+  "prompt_sha256": "77d982710577c02b2095c643412dee7cc57c99f5eda9aee73b31884d60e7a7e3",
+  "adapter_sha256": "e6df3f25a1b50dfb5de0ef8d7f11ba1c34b6a87f52aa65ed7c77549e8649053c",
+  "corpus_sha256": "eac0d9dc70de3db4c8e2a1fe5997827bb143df6d60582bf01ada149d875fb6d6",
+  "rate_card_usd_per_million_tokens": {
+    "input": 0.75,
+    "output": 3.75
+  },
+  "aggregate_cost_usd": 0.021768,
+  "rejected_output_costed_calls": 0,
+  "unknown_cost_calls": 0,
+  "latency_ms_p50": 1997.252,
+  "latency_ms_p95": 2484.725
+}

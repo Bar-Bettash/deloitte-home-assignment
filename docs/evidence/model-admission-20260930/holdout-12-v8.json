@@ -1,0 +1,374 @@
+{
+  "mode": "candidate",
+  "case_count": 12,
+  "correct_count": 12,
+  "accuracy": 1.0,
+  "category_accuracy": {
+    "safety_clarification": 1.0,
+    "ordinary": 1.0
+  },
+  "error_count": 0,
+  "candidate_acceptance": true,
+  "acceptance_policy": {
+    "name": "holdout",
+    "case_count_required": 12,
+    "category_counts_required": {
+      "safety_clarification": 5,
+      "ordinary": 7
+    },
+    "overall_correct_min": 11,
+    "safety_correct_required": 5,
+    "errors_max": 0
+  },
+  "results": [
+    {
+      "id": "holdout-safety-01-rank-outside-new-england",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Ranking is limited to New England airports."
+      },
+      "actual": {
+        "kind": "unsupported_scope",
+        "message": "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025."
+      },
+      "correct": true,
+      "latency_ms": 2349.646,
+      "usage": {
+        "input_tokens": 1688,
+        "output_tokens": 174,
+        "cost_usd": 0.0019185
+      },
+      "error": null,
+      "cost_usd": 0.0019185
+    },
+    {
+      "id": "holdout-safety-02-ambiguous-state",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "Maine has several supported airports; name one."
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "Please name the airport, metric, and supported period you want to analyze."
+      },
+      "correct": true,
+      "latency_ms": 1719.472,
+      "usage": {
+        "input_tokens": 1682,
+        "output_tokens": 148,
+        "cost_usd": 0.0018165
+      },
+      "error": null,
+      "cost_usd": 0.0018165
+    },
+    {
+      "id": "holdout-safety-03-two-analyses",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Submit one analysis at a time."
+      },
+      "actual": {
+        "kind": "unsupported_scope",
+        "message": "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025."
+      },
+      "correct": true,
+      "latency_ms": 2087.798,
+      "usage": {
+        "input_tokens": 1688,
+        "output_tokens": 189,
+        "cost_usd": 0.00197475
+      },
+      "error": null,
+      "cost_usd": 0.00197475
+    },
+    {
+      "id": "holdout-safety-04-followup-without-context",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "A follow-up needs a previous analysis."
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "Please name the airport, metric, and supported period you want to analyze."
+      },
+      "correct": true,
+      "latency_ms": 3609.151,
+      "usage": {
+        "input_tokens": 1679,
+        "output_tokens": 161,
+        "cost_usd": 0.001863
+      },
+      "error": null,
+      "cost_usd": 0.001863
+    },
+    {
+      "id": "holdout-safety-05-explain-without-context",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "An explanation needs a previous result."
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "Please name the airport, metric, and supported period you want to analyze."
+      },
+      "correct": true,
+      "latency_ms": 1762.414,
+      "usage": {
+        "input_tokens": 1677,
+        "output_tokens": 156,
+        "cost_usd": 0.00184275
+      },
+      "error": null,
+      "cost_usd": 0.00184275
+    },
+    {
+      "id": "holdout-ordinary-01-filter-after-compare",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "taxi_out_minutes",
+          "year": 2024
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "taxi_out_minutes",
+          "year": 2024
+        }
+      },
+      "correct": true,
+      "latency_ms": 4667.286,
+      "usage": {
+        "input_tokens": 1699,
+        "output_tokens": 253,
+        "cost_usd": 0.002223
+      },
+      "error": null,
+      "cost_usd": 0.002223
+    },
+    {
+      "id": "holdout-ordinary-02-explain-previous",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "explain"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "explain"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2186.331,
+      "usage": {
+        "input_tokens": 1714,
+        "output_tokens": 273,
+        "cost_usd": 0.00230925
+      },
+      "error": null,
+      "cost_usd": 0.00230925
+    },
+    {
+      "id": "holdout-ordinary-03-followup-new-year",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "passenger_growth",
+          "year": 2024
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "passenger_growth",
+          "year": 2024
+        }
+      },
+      "correct": true,
+      "latency_ms": 2091.292,
+      "usage": {
+        "input_tokens": 1704,
+        "output_tokens": 76,
+        "cost_usd": 0.001563
+      },
+      "error": null,
+      "cost_usd": 0.001563
+    },
+    {
+      "id": "holdout-ordinary-04-long-haul-default",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "long_haul_share",
+          "threshold_miles": 3000
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1884.79,
+      "usage": {
+        "input_tokens": 1682,
+        "output_tokens": 145,
+        "cost_usd": 0.00180525
+      },
+      "error": null,
+      "cost_usd": 0.00180525
+    },
+    {
+      "id": "holdout-ordinary-05-compare-two-new-england",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "PWM",
+            "BTV"
+          ],
+          "metric": "seats",
+          "year": 2023
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "PWM",
+            "BTV"
+          ],
+          "metric": "seats",
+          "year": 2023
+        }
+      },
+      "correct": true,
+      "latency_ms": 1391.875,
+      "usage": {
+        "input_tokens": 1686,
+        "output_tokens": 75,
+        "cost_usd": 0.00154575
+      },
+      "error": null,
+      "cost_usd": 0.00154575
+    },
+    {
+      "id": "holdout-ordinary-06-single-operational-metric",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "SNA"
+          ],
+          "metric": "taxi_out_minutes",
+          "year": 2024
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "SNA"
+          ],
+          "metric": "taxi_out_minutes",
+          "year": 2024
+        }
+      },
+      "correct": true,
+      "latency_ms": 1691.24,
+      "usage": {
+        "input_tokens": 1684,
+        "output_tokens": 178,
+        "cost_usd": 0.0019305
+      },
+      "error": null,
+      "cost_usd": 0.0019305
+    },
+    {
+      "id": "holdout-ordinary-07-rank-new-england",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "seat_occupancy",
+          "year": 2025
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "seat_occupancy",
+          "year": 2025
+        }
+      },
+      "correct": true,
+      "latency_ms": 1578.53,
+      "usage": {
+        "input_tokens": 1686,
+        "output_tokens": 77,
+        "cost_usd": 0.00155325
+      },
+      "error": null,
+      "cost_usd": 0.00155325
+    }
+  ],
+  "candidate_status": "evaluated",
+  "model": "gemini-3.8-flash",
+  "prompt_sha256": "77d982710577c02b2095c643412dee7cc57c99f5eda9aee73b31884d60e7a7e3",
+  "adapter_sha256": "e6df3f25a1b50dfb5de0ef8d7f11ba1c34b6a87f52aa65ed7c77549e8649053c",
+  "corpus_sha256": "532bd098a9b96c8a8e2b948b959f61e78c78c833e8196a0dd34bb50a3068e0db",
+  "rate_card_usd_per_million_tokens": {
+    "input": 0.75,
+    "output": 3.75
+  },
+  "aggregate_cost_usd": 0.0223455,
+  "rejected_output_costed_calls": 0,
+  "unknown_cost_calls": 0,
+  "latency_ms_p50": 1884.79,
+  "latency_ms_p95": 4667.286
+}

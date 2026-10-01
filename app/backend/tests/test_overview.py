@@ -1,4 +1,4 @@
-"""The overall comparison: every measure valid for the airports, side by side, no combined score."""
+"""The overall comparison: the key measures valid for the airports, side by side, no combined score."""
 
 from uuid import UUID, uuid4
 
@@ -96,9 +96,17 @@ def test_explaining_an_overview_names_the_widest_gap_and_states_no_score():
     assert explained.summary.endswith("not terminal capacity, unmet demand or profitability.")
 
 
+def test_explaining_an_overview_with_nothing_comparable_never_calls_it_a_tie():
+    previous = _overview(["BOS", "PVC"])
+    assert all(metric.value is None for metric in previous.rows[1].metrics)
+    explained = dispatch_analysis(AnalysisRequest(action="explain"), uuid4(), previous=previous)
+    assert "No measure is comparable for both BOS and PVC." in explained.summary
+    assert "tied" not in explained.summary
+
+
 def test_clarification_offers_the_overall_comparison_first():
     question = comparison_question(["LAX", "SFO"], None)
-    assert question.startswith("Which measure should I compare for LAX and SFO: an overall comparison of every measure, ")
+    assert question.startswith("Which measure should I compare for LAX and SFO: an overall comparison of the key measures, ")
     assert "“Compare everything”" in question
 
 
@@ -125,7 +133,7 @@ def test_screenshot_conversation_runs_end_to_end(monkeypatch):
     assert asked.status_code == 422
     error = asked.json()["error"]
     assert error["code"] == "clarification_required" and error["pending_comparison"] == ["LAX", "SFO"]
-    assert "an overall comparison of every measure" in error["message"]
+    assert "an overall comparison of the key measures" in error["message"]
 
     overall = http.post("/api/query", json={"message": "do an overall test and compare each thing",
                                             "pending_comparison": error["pending_comparison"]})

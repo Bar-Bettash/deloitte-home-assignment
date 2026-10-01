@@ -74,7 +74,7 @@ PENDING_POLICY = AcceptancePolicy(
 # one measure, another airport or year; plus two separate questions, an unsupported
 # airport and ambiguous airports. >=16/17, every demonstration and safety case, 0 errors.
 CONVERSATION_POLICY = AcceptancePolicy(
-    "conversation", {"demonstration": 2, "safety_clarification": 3, "ordinary": 12}, 16,
+    "conversation", {"demonstration": 2, "safety_clarification": 4, "ordinary": 12}, 17,
     ("demonstration", "safety_clarification"))
 POLICIES = {policy.name: policy for policy in (
     CORPUS_POLICY, HOLDOUT_POLICY, ASSIGNMENT_POLICY, REGRESSION_POLICY, FOLLOWUP_POLICY, PENDING_POLICY,
