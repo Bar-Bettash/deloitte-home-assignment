@@ -75,7 +75,7 @@ Default results compare **CY2024 → CY2025** using the accepted `annual-2025-r1
 
 - The demo password is checked server-side; the password is never stored in Git or browser storage.
 - Authenticated access uses a signed `HttpOnly`, `Secure`, `SameSite=Strict` cookie.
-- Speech recognition turns speech into editable text before using the normal chat path.
+- Speech recognition turns speech into editable text before using the normal chat path. On Send, the composer clears immediately; retryable failures restore the draft for editing.
 - “Read aloud” uses browser speech synthesis. Audio is not stored and does not trigger another Gemini call.
 - Typing remains the fallback when speech recognition is unavailable.
 
@@ -84,7 +84,7 @@ Default results compare **CY2024 → CY2025** using the accepted `annual-2025-r1
 The latest hosted RC2 validation recorded:
 
 - **Backend:** 908 passed, 1 skipped.
-- **Frontend:** 157/157 passed.
+- **Frontend:** 166/166 passed.
 - **Hosted browser:** 104/104 checks across desktop/mobile sizes, zoom, keyboard use, chat, voice, and sign-out.
 - **Hosted API:** 59/60 harness checks; the single reported failure intentionally referenced an older result and the app correctly rejected it. The equivalent latest-result follow-up passed.
 - **Model admission:** all six evaluation sets passed with zero errors for adapter `1873f9e4…`.
