@@ -42,6 +42,7 @@ let conversation = [];
 // with the next typed message, then cleared; presets, a new analysis and a reload
 // clear it too. It holds two supported codes and nothing else.
 let pendingComparison = null;
+let composerOwner = null; // { generation, message } of the send that last emptied the question field
 const presetLabels = {
   "new-england": "New England expansion", "lax-sna": "LAX vs SNA congestion", "anc-long-haul": "ANC long-haul share",
   "sfo-pressure": "SFO demand pressure", "sfo-trend": "SFO passenger trend", "bos-pvd": "BOS vs PVD growth", "growth": "New England growth ranking",
@@ -121,7 +122,7 @@ function setLoading(value) {
   // the synchronous `busy` guard keeps exactly one request in flight.
   for (const button of document.querySelectorAll("button[data-send]:not(.composer-send)")) button.disabled = value;
   $("#explain").disabled = value || !contextResultId;
-  $("#chat-form button").setAttribute("aria-disabled", String(value));
+  $("#chat-form .composer-send").setAttribute("aria-disabled", String(value));
   document.body?.classList?.toggle("is-analyzing", value);
   $("#result-panel").classList.toggle("is-loading", value);
   if (!value) {
@@ -207,7 +208,8 @@ const rankMetrics = new Set(["screen_score", "passengers", "passenger_growth", "
 // A follow-up rejected for these reasons gets a written answer; any other failure
 // (model, service, timeout, connection) is a failed turn with an inline Retry.
 const chatReplyCodes = new Set(["unsupported_scope", "clarification_required", "insufficient_data", "invalid_request", "request_too_large", "session_expired", "result_mismatch"]);
-const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_too_large", "invalid_request", "unsupported_scope", "clarification_required", "insufficient_data", "busy", "session_expired", "result_mismatch", "ai_unavailable", "data_unavailable", "query_timeout", "internal_error"]);
+const editToFixCodes = new Set(["invalid_request", "request_too_large"]);
+const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_too_large", "invalid_request", "unsupported_scope", "clarification_required", "insufficient_data", "busy", "session_expired", "result_mismatch", "ai_unavailable", "data_unavailable", "query_timeout", "internal_error", "access_required"]);
 
 function parseErrorResponse(payload) {
   if (!isRecord(payload) || payload.success !== false || !isRecord(payload.error)) return null;
@@ -368,11 +370,16 @@ async function submitRequest(request, chat = {}) {
   // A preset or scoped analysis is a new question: no clarification is pending.
   if (kind === "analysis") pendingComparison = null;
   const generation = ++requestGeneration;
+  // Any new send ends an older send's claim on the field, so only the latest can give text back.
+  composerOwner = null;
   const controller = new AbortController();
   let timeout = null;
   // A follow-up shows the question at once, then an "Analyzing…" reply in the slot
   // the answer will land in. A retry reuses its failed turn instead of adding one.
   const turn = kind === "followup" ? startChatTurn(request.message, chat.retryOf || null) : null;
+  // The sent question leaves the composer at once, typed or dictated; a failure that
+  // keeps the turn for Retry puts it back for editing.
+  if (kind === "followup") clearSentQuestion(request.message, generation);
   setLoading(true);
   try {
     // Follow-ups and explanations keep the current result labeled as current:
@@ -388,6 +395,11 @@ async function submitRequest(request, chat = {}) {
     });
     const payload = await response.json();
     if (generation !== requestGeneration) return;
+    if (response.status === 401 && parseErrorResponse(payload)?.code === "access_required") {
+      // The shared demo access session ended (8-hour limit or sign-out elsewhere): sign in again.
+      window.location.assign("/login");
+      return;
+    }
     if (!response.ok) {
       const detail = parseErrorResponse(payload);
       if (kind === "followup") {
@@ -398,7 +410,12 @@ async function submitRequest(request, chat = {}) {
         if (detail && chatReplyCodes.has(detail.code)) {
           pendingComparison = detail.pendingComparison;
           settleChatReply(turn, message, "note");
-        } else failChatTurn(turn, message);
+          // "Send a shorter question" asks for an edit, so the text comes back for it.
+          if (editToFixCodes.has(detail.code)) restoreFailedQuestion(generation);
+        } else {
+          failChatTurn(turn, message);
+          restoreFailedQuestion(generation);
+        }
         showChatError(message, chatExpanded());
         return;
       }
@@ -418,7 +435,6 @@ async function submitRequest(request, chat = {}) {
       explanation = { resultId: result.result_id, text: result.summary || "No explanation was returned." };
       renderResult(latestSuccessfulResult, resultIsPrevious);
       if (kind === "followup") {
-        if ($("#question").value.trim() === request.message) { $("#question").value = ""; fitComposer(); }
         settleChatReply(turn, explanation.text, "done", result.result_id);
       } else {
         showFeedback("Explanation received.", false, resultActions);
@@ -433,8 +449,6 @@ async function submitRequest(request, chat = {}) {
     contextResultId = result.result_id;
     resultIsPrevious = false;
     explanation = null;
-    // Only the sent text is cleared: a next question drafted while waiting is kept.
-    if (kind === "followup" && $("#question").value.trim() === request.message) { $("#question").value = ""; fitComposer(); }
     renderResult(result, false);
     fadeInResult(panelWasHidden);
     scrollResultIntoView();
@@ -448,6 +462,7 @@ async function submitRequest(request, chat = {}) {
       : connectionFailureMessage;
     if (kind === "followup") {
       failChatTurn(turn, failure);
+      restoreFailedQuestion(generation);
       showChatError(failure, chatExpanded());
       return;
     }
@@ -461,6 +476,7 @@ async function submitRequest(request, chat = {}) {
       failChatTurn(turn, generation === requestGeneration
         ? "This answer could not be shown. The previous result is kept."
         : "Stopped: the analysis changed before this answer arrived.");
+      restoreFailedQuestion(generation);
     }
     if (generation === requestGeneration) setLoading(false);
   }
@@ -528,15 +544,18 @@ function renderResult(result, previous) {
   askTrigger.setAttribute("aria-expanded", String(composerOpen));
   const scopeHeading = document.createElement("div");
   scopeHeading.className = "result-scope-heading";
-  const airportTitle = heading(scopeHeading, "h2", result.scope.metric === "screen_score" ? "New England screening" : result.scope.airports.length > 2 ? "Airports in scope" : result.scope.airports.join(" / "));
+  const airportTitle = heading(scopeHeading, "h2", resultHeadline(result));
   airportTitle.className = "result-airports";
-  const measureName = result.scope.metric === "congestion" ? `${result.scope.airports.join(" / ")} operational comparison` : humanScopeMetricLabel(result.scope.metric);
+  const measureName = result.scope.metric === "congestion" ? "Airport operations, four indicators" : humanScopeMetricLabel(result.scope.metric);
   const scopeDetails = paragraph(scopeHeading, `${measureName} · ${result.scope.year}`);
   scopeDetails.className = "result-measure";
   paragraph(scopeHeading, describePeriod(result.scope)).className = "result-period";
   resultPanel.append(scopeHeading);
   const kpis = renderKpiRow(result);
   if (kpis) resultPanel.append(kpis);
+  // The plain-language answer sits directly under the figures, before any chart.
+  const takeaway = renderTakeaway(result);
+  if (takeaway) resultPanel.append(takeaway);
   const dashboard = document.createElement("div");
   dashboard.className = "dashboard-grid";
   dashboard.classList.toggle("congestion-dashboard", result.scope.metric === "congestion");
@@ -559,7 +578,9 @@ function renderResult(result, previous) {
   const coverage = coverageNote(result);
   if (coverage) paragraph(insights, coverage).className = "insight-coverage";
   dashboard.classList.toggle("fullwidth-insights", ["sfo_pressure", "sfo_enplaned_trend"].includes(result.scope.metric));
-  dashboard.append(insights);
+  // An operations comparison states its conclusion before the indicator detail.
+  if (result.scope.metric === "congestion") dashboard.insertBefore(insights, metricView);
+  else dashboard.append(insights);
   // Explain output gets its own short section; it never joins the Key insight card.
   if (explanation && explanation.resultId === result.result_id) {
     const explained = document.createElement("section");
@@ -571,13 +592,17 @@ function renderResult(result, previous) {
   if (result.series.length || ["sfo_enplaned_trend", "sfo_pressure"].includes(result.scope.metric)) {
     const seriesPanel = document.createElement("section");
     seriesPanel.className = "series-panel";
-    const headingText = ["sfo_pressure", "sfo_enplaned_trend"].includes(result.scope.metric) ? "DataSF monthly ENPLANED passengers" : "Monthly series";
-    if (["sfo_pressure", "sfo_enplaned_trend"].includes(result.scope.metric)) seriesPanel.classList.add("feature-chart");
+    const sfoSeries = ["sfo_pressure", "sfo_enplaned_trend"].includes(result.scope.metric);
+    const headingText = sfoSeries ? "Monthly passengers boarding at SFO" : "Monthly series";
+    if (sfoSeries) seriesPanel.classList.add("feature-chart");
     heading(seriesPanel, "h3", headingText);
     if (result.series.length) {
       const units = [...new Set(result.series.map((point) => point.unit))];
       const unitCaption = units.length === 1 ? `Unit: ${units[0]}` : `Units vary: ${units.join(", ")}`;
-      paragraph(seriesPanel, `${unitCaption} · ${result.series[0].period.slice(0, 4)}-${result.series[0].period.slice(4)} to ${result.series.at(-1).period.slice(0, 4)}-${result.series.at(-1).period.slice(4)} · returned values only`).className = "series-caption";
+      const range = `${monthLabel(result.series[0].period)} – ${monthLabel(result.series.at(-1).period)}`;
+      paragraph(seriesPanel, sfoSeries && units.length === 1 && units[0] === "count"
+        ? `DataSF enplanements, domestic and international combined · ${range}`
+        : `${unitCaption} · ${range} · returned values only`).className = "series-caption";
       const table = makeTable("Monthly series — complete returned values and units", ["Month", "Value"]);
       for (const point of result.series) {
         const tr = document.createElement("tr");
@@ -585,7 +610,7 @@ function renderResult(result, previous) {
         cell(tr, point.status === "unavailable" ? `Unavailable: Value unavailable · ${point.unit}` : formatMetric(point));
         table.body.append(tr);
       }
-      const chart = renderSeriesChart(result.series);
+      const chart = renderSeriesChart(result.series, sfoSeries ? { title: headingText, noun: "passengers", axis: "Passengers per month" } : {});
       if (chart) seriesPanel.append(chart);
       else paragraph(seriesPanel, "Series not plotted: no usable returned count values.");
       methodologyExtras.push(["Exact monthly values", [table.region]]);
@@ -694,7 +719,7 @@ function renderMethodologyPanel(result) {
   values.className = "methodology-detail";
   for (const row of result.rows) for (const metric of row.metrics) {
     const parts = [`${row.airport} · ${humanMetricLabel(metric.key)}`, metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : `Value: ${formatMetric(metric)}`];
-    if (Number.isInteger(row.rank)) parts.push(`Backend rank ${row.rank}`);
+    if (Number.isInteger(row.rank)) parts.push(`Rank ${row.rank}`);
     if (metric.numerator != null && metric.denominator != null) parts.push(`Numerator / denominator: ${formatNumber(metric.numerator)} / ${formatNumber(metric.denominator)}`);
     if (metric.eligible_count != null) parts.push(`Eligible observations: ${formatNumber(metric.eligible_count)}`);
     if (metric.comparison_direction) parts.push(`Direction: ${label(metric.comparison_direction)}`);
@@ -722,53 +747,102 @@ function renderTechnicalPanel(result) {
 
 function renderKpiRow(result) {
   if (["congestion", "screen_score", "long_haul_share"].includes(result.scope.metric)) return null;
+  const group = document.createElement("section");
+  group.className = "kpi-row";
+  group.setAttribute("aria-label", "Key figures");
+  // A ranking leads with its two ends on the ranked measure; the full order follows.
+  if (result.rows.some((row) => Number.isInteger(row.rank))) return renderRankingKpis(result, group);
   const metricsByKey = new Map();
   for (const row of result.rows) for (const metric of row.metrics) {
     if (!metricsByKey.has(metric.key)) metricsByKey.set(metric.key, []);
-    metricsByKey.get(metric.key).push({ airport: row.airport, rank: row.rank, metric });
+    metricsByKey.get(metric.key).push({ airport: row.airport, metric });
   }
-  // SFO pressure keeps its three primary indicators (the rest are listed as
-  // supporting evidence). Every other metric leads with the requested key when
-  // it is returned, then shows whichever other metrics the rows actually carry.
+  // SFO pressure shows the complete relationship: passenger growth, seat growth,
+  // the gap between them and occupancy (the rest stays in Methodology). Every other
+  // metric leads with the requested key, then whichever metrics the rows carry.
   const candidates = result.scope.metric === "sfo_pressure"
-    ? ["passenger_growth", "sfo_pressure", "seat_occupancy"]
+    ? ["passenger_growth", "seat_growth", "sfo_pressure", "seat_occupancy"]
     : [result.scope.metric, ...metricsByKey.keys()];
   const keys = [...new Set(candidates)].filter((key) => metricsByKey.has(key)).slice(0, 4);
   if (!keys.length) return null;
-  const group = document.createElement("section");
-  group.className = "kpi-row";
-  group.setAttribute("aria-label", "Returned key metrics");
-  for (const key of keys) {
-    const card = document.createElement("article");
-    card.className = "kpi-card";
-    heading(card, "h3", humanMetricLabel(key));
-    const values = metricsByKey.get(key);
-    const selectedValues = result.rows.some((row) => row.rank != null) ? values.slice(0, 1) : values.slice(0, 4);
-    for (const item of selectedValues) {
-      const line = document.createElement("div");
-      line.className = "kpi-value-line";
+  for (const key of keys) group.append(kpiCard(key, metricsByKey.get(key).slice(0, 4), result.scope));
+  return group;
+}
+
+// One card: WHAT is measured (title), the figure with its UNIT, and a short grey
+// line with the comparison, denominator or timeframe. Built only from the returned
+// value and its resolved scope.
+function kpiCard(key, items, scope, title = null) {
+  const card = document.createElement("article");
+  card.className = "kpi-card";
+  card.setAttribute("data-metric-key", key);
+  heading(card, "h3", title || metricLabel(key, scope));
+  const many = items.length > 1;
+  for (const item of items) {
+    const line = document.createElement("div");
+    line.className = "kpi-value-line";
+    if (many || item.showAirport) {
       const airport = document.createElement("span");
       airport.className = "kpi-airport";
       airport.textContent = item.airport;
-      const value = document.createElement("strong");
-      value.className = item.metric.status === "unavailable" ? "is-unavailable" : "";
-      value.textContent = item.metric.status === "unavailable" ? "—" : formatMetric(item.metric);
-      if (item.metric.unit === "percentage_points" && item.metric.status === "ok") value.setAttribute("aria-label", `${formatNumber(item.metric.value)} percentage points`);
-      line.append(airport, value);
-      card.append(line);
-      if (item.metric.status === "unavailable") paragraph(card, item.metric.reason).className = "kpi-reason";
-      else if (key === "long_haul_share" && item.metric.numerator != null && item.metric.denominator != null) paragraph(card, `Qualifying / eligible departures · ${formatNumber(item.metric.numerator)} / ${formatNumber(item.metric.denominator)}`).className = "kpi-note";
-      if (result.scope.metric === "screen_score" && item.rank != null) paragraph(card, `Backend rank ${item.rank}`).className = "kpi-note";
+      line.append(airport);
     }
-    group.append(card);
+    const value = document.createElement("strong");
+    value.className = item.metric.status === "unavailable" ? "kpi-value is-unavailable" : "kpi-value";
+    if (item.metric.status === "unavailable") value.textContent = "—";
+    else appendFigure(value, metricFigure(item.metric));
+    line.append(value);
+    card.append(line);
+    if (item.metric.status === "unavailable") paragraph(card, item.metric.reason).className = "kpi-reason";
+    else if (many) {
+      const detail = metricDetail(item.metric, scope);
+      if (detail) paragraph(card, detail).className = "kpi-detail";
+    } else paragraph(card, item.context || metricContext(item.metric, scope)).className = "kpi-context";
   }
-  if (result.scope.threshold_miles != null) {
-    const note = document.createElement("p");
-    note.className = "kpi-threshold";
-    note.textContent = `Threshold · ${formatNumber(result.scope.threshold_miles)} miles`;
-    group.append(note);
+  const shown = items.find((item) => item.metric.status === "ok");
+  // The shared line is skipped when every airport line already states the comparison.
+  const allDetailed = items.every((item) => item.metric.status === "ok" && metricDetail(item.metric, scope).includes(" vs. "));
+  if (many && shown && !allDetailed) paragraph(card, metricContext({ ...shown.metric, numerator: null, denominator: null }, scope)).className = "kpi-context";
+  return card;
+}
+
+function renderRankingKpis(result, group) {
+  const key = result.scope.metric;
+  const ranked = result.rows
+    .filter((row) => Number.isInteger(row.rank))
+    .map((row) => ({ row, metric: row.metrics.find((item) => item.key === key) }))
+    .filter(({ metric }) => metric?.status === "ok" && Number.isFinite(metric.value))
+    .sort((a, b) => a.row.rank - b.row.rank);
+  if (!ranked.length) return null;
+  const label = metricLabel(key, result.scope).toLowerCase();
+  const values = ranked.map(({ metric }) => metric.value);
+  const ends = [["Highest", ranked[0]], ...(ranked.length > 1 ? [["Lowest", ranked.at(-1)]] : [])];
+  for (const [end, { row, metric }] of ends) {
+    // "Highest"/"Lowest" only when the returned values say so; otherwise the rank speaks.
+    const truthful = end === "Highest" ? metric.value === Math.max(...values) : metric.value === Math.min(...values);
+    const title = truthful ? `${end} ${label}` : `Rank ${row.rank} · ${label}`;
+    const context = `${metricContext({ ...metric, numerator: null, denominator: null }, result.scope)} · rank ${row.rank} of ${ranked.length} ranked`;
+    group.append(kpiCard(key, [{ airport: row.airport, metric, showAirport: true, context }], result.scope, title));
   }
   return group;
+}
+
+// The SFO answer in one deterministic sentence, chosen by the sign of the returned gap.
+function renderTakeaway(result) {
+  if (result.scope.metric !== "sfo_pressure") return null;
+  const gap = result.rows.find((row) => row.airport === "SFO")?.metrics.find((item) => item.key === "sfo_pressure");
+  if (gap?.status !== "ok" || !Number.isFinite(gap.value)) return null;
+  const year = result.scope.year;
+  const rounded = Number(gap.value.toFixed(2));
+  const answer = rounded < 0
+    ? `Seat supply grew faster than passenger traffic in ${year}, so these data do not show a shortage of airline seat capacity.`
+    : rounded > 0
+      ? `Passenger traffic grew faster than seat supply in ${year}: a sign of pressure on airline seat capacity, not a measure of unmet demand.`
+      : `Passenger traffic and seat supply grew at the same pace in ${year}, so these data show no added pressure on airline seat capacity.`;
+  const node = document.createElement("p");
+  node.className = "result-takeaway";
+  node.textContent = `${answer} Latent demand cannot be measured from observed traffic alone.`;
+  return node;
 }
 
 function focusQuestionChoices() {
@@ -934,6 +1008,26 @@ function setChatState(message, state) {
   if (message.role === "assistant") message.node.setAttribute("aria-busy", String(state === "pending"));
   if (message.failure) message.failure.hidden = state !== "failed";
 }
+// Only the sent text is cleared; a different draft in the field is left alone. The
+// send that emptied the field owns it until a newer send or Back takes it over.
+function clearSentQuestion(message, generation) {
+  const question = $("#question");
+  if (question.value.trim() !== message) return;
+  question.value = "";
+  fitComposer();
+  composerOwner = { generation, message };
+}
+// A failed or stopped send ("Not sent · Retry") gives its text back for editing,
+// but only while it still owns the field and the analyst has not started another question.
+function restoreFailedQuestion(generation) {
+  if (composerOwner?.generation !== generation) return;
+  const { message } = composerOwner;
+  composerOwner = null;
+  const question = $("#question");
+  if (question.value.trim()) return;
+  question.value = message;
+  fitComposer();
+}
 function startChatTurn(text, retryOf) {
   if (retryOf) {
     setChatState(retryOf.user, "sent");
@@ -983,6 +1077,8 @@ function followUpRequest(text) {
 // Retry re-sends the same text on the same turn; one request stays in flight.
 function retryChatTurn(turn) {
   if (busy || !turn || turn.user.state !== "failed") return;
+  // The question is going out again: dictation still arriving must not refill the field.
+  window.airportVoice?.discardListening?.();
   clearQuestionError();
   // The Retry button hides once the turn is re-sent; keep focus in the composer
   // instead of letting it fall back to the page.
@@ -1048,14 +1144,17 @@ function compactReply(result) {
   if (metric === "long_haul_share" && airports.length === 1) {
     const share = valueOf(rowFor(airports[0]), "long_haul_share");
     if (!usable(share) || share.numerator == null || share.denominator == null || result.scope.threshold_miles == null) return fallback;
-    return `${formatMetric(share)} of eligible ${airports[0]} departures were at least ${formatNumber(result.scope.threshold_miles)} miles: ${formatNumber(share.numerator)} of ${formatNumber(share.denominator)}.`;
+    return `${formatMetric(share)} of eligible ${airports[0]} departures were at least ${formatNumber(result.scope.threshold_miles)} miles: ${formatNumber(share.numerator)} of ${formatNumber(share.denominator)} scheduled passenger departures. Cargo-only and charter flights are not included.`;
   }
   const ranked = result.rows.filter((row) => Number.isInteger(row.rank) && usable(valueOf(row, metric)));
   if (ranked.length >= 2) {
     const ordered = [...ranked].sort((a, b) => a.rank - b.rank);
     const top = ordered.filter((row) => row.rank === ordered[0].rank).map((row) => row.airport);
     const next = ordered.filter((row) => row.rank !== ordered[0].rank).slice(0, 2).map((row) => row.airport);
-    const where = metric === "screen_score" ? "in the current screen" : `on ${humanMetricLabel(metric).toLowerCase()}`;
+    const lead = figureText(metricFigure(valueOf(ordered[0], metric)));
+    const where = metric === "screen_score" ? `on the New England screening score (${lead})`
+      : metric === "passenger_growth" ? `on passenger growth (${lead} vs. ${previousYear(result.scope)})`
+        : `on ${metricLabel(metric, result.scope).toLowerCase()} (${lead} in ${result.scope.year})`;
     let text = top.length === 1 ? `${top[0]} ranks highest ${where}` : `${joinAnd(top)} share the top rank ${where}`;
     text += next.length ? `, followed by ${joinAnd(next)}.` : ".";
     if (ranked.length < airports.length) text += ` ${ranked.length} of ${airports.length} airports were assessable.`;
@@ -1064,15 +1163,16 @@ function compactReply(result) {
   const parts = airports.map((code) => {
     const item = valueOf(rowFor(code), metric);
     if (!item) return null;
-    return `${code} ${usable(item) ? formatMetric(item) : "unavailable"}`;
+    return `${code} ${usable(item) ? figureText(metricFigure(item)) : "unavailable"}`;
   }).filter(Boolean);
-  if (parts.length && parts.length <= 4) return `${humanScopeMetricLabel(metric)}: ${parts.join(" · ")}`;
+  if (parts.length && parts.length <= 4) return `${valueColumnTitle(result.scope)}: ${parts.join(" · ")}`;
   return fallback;
 }
 
 function describePeriod(scope) {
-  if (scope.bundle_id == null) return `Period · ${scope.year} historical data`;
-  return `Period · CY${scope.baseline_year} → CY${scope.comparison_year} · showing ${scope.year} · Bundle ${scope.bundle_id}`;
+  const compared = ["passenger_growth", "screen_score", "sfo_pressure", "sfo_enplaned_trend"].includes(scope.metric);
+  const period = compared ? `Calendar year ${scope.year} compared with ${previousYear(scope)}` : `Calendar year ${scope.year}`;
+  return scope.bundle_id == null ? `${period} · historical data` : `${period} · accepted data release`;
 }
 
 function updateContextStrip(result, previous) {
@@ -1093,56 +1193,77 @@ function renderMetricView(result, target) {
   if (typeof renderer === "function" && renderer(result, target) !== false) return;
   renderGenericMetricTable(result, target);
 }
-function renderSeriesChart(series) {
+function renderSeriesChart(series, labels = {}) {
   const usable = series.filter(point => point.status === "ok" && Number.isFinite(point.value));
   if (!usable.length || usable.some(point => point.unit !== "count")) return null;
   const points = series.map((point, index) => ({ point, index, month: Number(point.period.slice(4)), year: Number(point.period.slice(0, 4)) }))
     .filter(({ point }) => point.status === "ok" && Number.isFinite(point.value));
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
   // A viewBox close to the rendered width keeps axis text near its CSS size.
-  const width = 640, height = 280, left = 78, right = 14, top = 16, bottom = 36;
+  const width = 640, height = 280, left = 74, right = 16, top = 16, bottom = 36;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
   svg.setAttribute("role", "img");
   const titleId = `series-chart-title-${series[0].period}`;
   const descId = `series-chart-description-${series[0].period}`;
   svg.setAttribute("aria-labelledby", `${titleId} ${descId}`);
-  const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-  title.id = titleId; title.textContent = "Returned monthly values";
-  const description = document.createElementNS("http://www.w3.org/2000/svg", "desc");
-  description.id = descId; description.textContent = "Monthly passengers in counts. The vertical axis includes zero; unavailable months and gaps break the line.";
+  const noun = labels.noun || "";
+  const exact = (value) => `${formatNumber(value)}${noun ? ` ${noun}` : ""}`;
+  const low = points.reduce((best, item) => item.point.value < best.point.value ? item : best, points[0]);
+  const high = points.reduce((best, item) => item.point.value > best.point.value ? item : best, points[0]);
+  const title = document.createElementNS(ns, "title");
+  title.id = titleId; title.textContent = labels.title || "Returned monthly values";
+  const description = document.createElementNS(ns, "desc");
+  description.id = descId;
+  description.textContent = `${monthLabel(series[0].period)} to ${monthLabel(series.at(-1).period)}. Lowest month ${monthLabel(low.point.period)}: ${exact(low.point.value)}. Highest month ${monthLabel(high.point.period)}: ${exact(high.point.value)}. The vertical axis starts at zero; unavailable months and gaps break the line. Exact monthly values are listed under Methodology & limitations.`;
   svg.append(title, description);
   const values = points.map(({ point }) => point.value);
   const min = Math.min(0, ...values), max = Math.max(0, ...values), span = max - min || 1;
   const plotWidth = width - left - right, plotHeight = height - top - bottom;
   const x = index => left + (series.length <= 1 ? plotWidth / 2 : index * plotWidth / (series.length - 1));
   const y = value => top + (max - value) / span * plotHeight;
-  const axis = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  // Round gridlines (0, 1M, 2M …) plus the peak, labelled compactly; exact counts
+  // stay in the tooltip, the description and the methodology table.
+  const ticks = axisTicks(min, max);
+  for (const value of ticks) {
+    const position = y(value);
+    if (value !== 0) {
+      const grid = document.createElementNS(ns, "line");
+      grid.setAttribute("x1", String(left)); grid.setAttribute("x2", String(width - right));
+      grid.setAttribute("y1", String(position)); grid.setAttribute("y2", String(position)); grid.setAttribute("class", "series-grid"); svg.append(grid);
+    }
+    const tick = document.createElementNS(ns, "text");
+    tick.setAttribute("x", String(left - 8)); tick.setAttribute("y", String(position + 5)); tick.setAttribute("text-anchor", "end");
+    tick.setAttribute("class", "series-axis-label"); tick.textContent = formatCompact(value); svg.append(tick);
+  }
+  const axis = document.createElementNS(ns, "line");
   axis.setAttribute("x1", String(left)); axis.setAttribute("x2", String(width - right));
   axis.setAttribute("y1", String(y(0))); axis.setAttribute("y2", String(y(0))); axis.setAttribute("class", "series-zero-axis"); svg.append(axis);
-  for (const value of [...new Set([max, 0, min])]) {
-    const position = y(value);
-    const tick = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    tick.setAttribute("x", String(left - 8)); tick.setAttribute("y", String(position + 4)); tick.setAttribute("text-anchor", "end");
-    tick.setAttribute("class", "series-axis-label"); tick.textContent = formatNumber(value); svg.append(tick);
+  if (labels.axis) {
+    const axisTitle = document.createElementNS(ns, "text");
+    axisTitle.setAttribute("class", "series-axis-title");
+    axisTitle.setAttribute("x", String(-(top + plotHeight / 2))); axisTitle.setAttribute("y", "14");
+    axisTitle.setAttribute("transform", "rotate(-90)"); axisTitle.setAttribute("text-anchor", "middle");
+    axisTitle.textContent = labels.axis; svg.append(axisTitle);
   }
   const yearStarts = series.map((point, index) => point.period.endsWith("01") ? index : -1).filter(index => index >= 0);
   const tickIndices = new Set([0, ...yearStarts, series.length - 1]);
   for (const index of [...tickIndices]) {
     const point = series[index]; if (!point) continue;
-    const tick = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    const tick = document.createElementNS(ns, "text");
     tick.setAttribute("x", String(x(index))); tick.setAttribute("y", String(height - 8)); tick.setAttribute("text-anchor", index === 0 ? "start" : index === series.length - 1 ? "end" : "middle");
     tick.setAttribute("class", "series-axis-label");
-    tick.textContent = point.period.endsWith("01") ? `Jan ${point.period.slice(0, 4)}` : `${point.period.slice(0, 4)}-${point.period.slice(4)}`;
+    tick.textContent = monthLabel(point.period);
     svg.append(tick);
   }
   let segment = [];
   const flush = () => {
     if (segment.length > 1) {
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      const line = document.createElementNS(ns, "polyline");
       line.setAttribute("points", segment.map(item => `${x(item.index)},${y(item.point.value)}`).join(" "));
       line.setAttribute("fill", "none"); line.setAttribute("class", "series-line"); svg.append(line);
     } else if (segment.length === 1) {
-      const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      const dot = document.createElementNS(ns, "circle");
       dot.setAttribute("cx", String(x(segment[0].index))); dot.setAttribute("cy", String(y(segment[0].point.value)));
       dot.setAttribute("r", "3"); dot.setAttribute("class", "series-point"); svg.append(dot);
     }
@@ -1154,8 +1275,24 @@ function renderSeriesChart(series) {
     segment.push(current);
   }
   flush();
-  return attachSeriesTooltip(svg, points, { x, y, width, top, bottom: height - bottom });
+  return attachSeriesTooltip(svg, points, { x, y, width, top, bottom: height - bottom, exact });
 }
+// Round ticks from zero (about three steps) plus the extreme, unless it would
+// crowd the last round tick.
+function axisTicks(min, max) {
+  const ticks = [0];
+  if (max > 0) {
+    const raw = max / 3;
+    const power = 10 ** Math.floor(Math.log10(raw));
+    const step = [1, 2, 2.5, 5, 10].map((multiple) => multiple * power).find((candidate) => candidate >= raw);
+    for (let value = step; value <= max + step * 1e-9; value += step) ticks.push(Number(value.toPrecision(12)));
+    if ((max - ticks.at(-1)) / max > .12) ticks.push(max);
+  }
+  if (min < 0) ticks.push(min);
+  return ticks;
+}
+const compactFormatter = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+function formatCompact(value) { return compactFormatter.format(value); }
 // Pointer tooltip for the monthly chart: nearest returned month, exact value.
 // Keyboard and screen-reader users get the exact table in the methodology panel.
 function attachSeriesTooltip(svg, points, geometry) {
@@ -1181,7 +1318,7 @@ function attachSeriesTooltip(svg, points, geometry) {
     const cx = geometry.x(nearest.index), cy = geometry.y(nearest.point.value);
     guide.setAttribute("x1", String(cx)); guide.setAttribute("x2", String(cx));
     marker.setAttribute("cx", String(cx)); marker.setAttribute("cy", String(cy));
-    tooltip.textContent = `${months[nearest.month - 1]} ${nearest.year} · ${formatMetric(nearest.point)}`;
+    tooltip.textContent = `${months[nearest.month - 1]} ${nearest.year} · ${geometry.exact ? geometry.exact(nearest.point.value) : formatMetric(nearest.point)}`;
     tooltip.hidden = false;
     const scale = box.width / geometry.width;
     tooltip.style.transform = `translate(${Math.round(cx * scale)}px, ${Math.round(cy * scale)}px)`;
@@ -1202,38 +1339,9 @@ metricRenderers.screen_score = renderScreeningView;
 metricRenderers.long_haul_share = renderLongHaulView;
 metricRenderers.sfo_pressure = renderSfoPressureView;
 function renderSfoPressureView(result, target) {
-  // The returned growth and occupancy values already appear in the KPI row.
-  if (result.scope.metric === "sfo_pressure") return true;
-  const row = result.rows.find((item) => item.airport === "SFO");
-  if (!row) return false;
-  target.className += " priority-metric-grid";
-  heading(target, "h3", "Priority indicators");
-  const priority = [
-    ["passenger_growth", "Passenger growth"],
-    ["seat_occupancy", "Seat occupancy"],
-    ["sfo_pressure", "Passenger growth gap"],
-  ];
-  let displayed = 0;
-  for (const [key, title] of priority) {
-    const metric = row.metrics.find((item) => item.key === key);
-    if (!metric) continue;
-    const block = document.createElement("div");
-    block.className = "priority-metric";
-    block.setAttribute("data-metric-key", key);
-    const labelNode = paragraph(block, title);
-    labelNode.className = "metric-label";
-    const ppValue = metric.key === "sfo_pressure" && metric.status === "ok" ? `${formatNumber(metric.value)} pp` : null;
-    const valueNode = paragraph(block, metric.status === "unavailable" ? `Unavailable: ${metric.reason}` : ppValue || formatMetric(metric));
-    valueNode.className = "metric-value";
-    if (metric.key === "sfo_pressure") valueNode.setAttribute("aria-label", metric.status === "ok" ? `${formatNumber(metric.value)} percentage points` : `Unavailable: ${metric.reason}`);
-    if (metric.key === "sfo_pressure" && metric.status === "ok") {
-      const spokenUnit = document.createElement("span"); spokenUnit.className = "visually-hidden"; spokenUnit.textContent = " percentage points"; valueNode.append(spokenUnit);
-    }
-    target.append(block);
-    displayed += 1;
-  }
-  if (!displayed) paragraph(target, "No priority indicators were returned.");
-  return true;
+  // The KPI row, the takeaway and the monthly chart carry SFO pressure; the
+  // remaining returned indicators are listed under Methodology & limitations.
+  return result.scope.metric === "sfo_pressure";
 }
 function renderLongHaulView(result, target) {
   for (const airport of result.scope.airports) {
@@ -1252,6 +1360,9 @@ function renderLongHaulView(result, target) {
     } else {
       const share = heading(block, "h3", "Long-haul share");
       share.className = "long-haul-share-label";
+      const threshold = result.scope.threshold_miles == null ? null : formatNumber(result.scope.threshold_miles);
+      const answer = paragraph(block, `${formatMetric(metric)} of eligible ${airport} departures flew routes of ${threshold == null ? "the long-haul threshold" : `${threshold} miles`} or more.`);
+      answer.className = "long-haul-answer";
       const figure = document.createElement("div");
       figure.className = "long-haul-figure";
       const track = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1277,7 +1388,7 @@ function renderLongHaulView(result, target) {
       centerCaption.setAttribute("x", "84"); centerCaption.setAttribute("y", "104");
       centerCaption.setAttribute("text-anchor", "middle"); centerCaption.setAttribute("dominant-baseline", "middle");
       centerCaption.setAttribute("font-size", "13"); centerCaption.setAttribute("aria-hidden", "true");
-      centerCaption.textContent = "LONG-HAUL";
+      centerCaption.textContent = "of departures";
       track.append(ringTrack, fill, centerValue, centerCaption);
       const stats = document.createElement("dl");
       stats.className = "long-haul-stats";
@@ -1289,11 +1400,20 @@ function renderLongHaulView(result, target) {
 
         stats.append(item);
       };
-      stat(formatNumber(metric.numerator), "Long-haul departures");
-      stat(formatNumber(metric.denominator), "Eligible departures");
-      stat(result.scope.threshold_miles == null ? "Not supplied" : `≥ ${formatNumber(result.scope.threshold_miles)} mi`, "Threshold");
+      stat(formatNumber(metric.numerator), `Long-haul departures (${threshold == null ? "at or above the threshold" : `≥ ${threshold} mi`})`);
+      stat(formatNumber(metric.denominator), "Eligible departures (all distances)");
+      stat(threshold == null ? "Not supplied" : `≥ ${threshold} mi`, "Long-haul threshold (route distance)");
       figure.append(track, stats);
       block.append(figure);
+      // ANC-style hubs carry heavy freighter traffic; the measure does not, and says so here.
+      const scopeNote = document.createElement("p");
+      scopeNote.className = "scope-note";
+      const scopeLabel = document.createElement("strong");
+      scopeLabel.textContent = "Scope: ";
+      const scopeText = document.createElement("span");
+      scopeText.textContent = "scheduled passenger departures only — cargo-only and charter flights are not included.";
+      scopeNote.append(scopeLabel, scopeText);
+      block.append(scopeNote);
     }
     target.append(block);
   }
@@ -1302,7 +1422,13 @@ function renderLongHaulView(result, target) {
 function renderScreeningView(result, target) {
   const ranked = result.rows.filter(row => Number.isInteger(row.rank) && row.metrics.some(metric => metric.key === "screen_score" && metric.status === "ok"));
   const preview = document.createElement("div");
-  heading(target, "h3", `Top 5 of ${result.rows.length} returned · screening score / 100`);
+  heading(target, "h3", `Top 5 of ${ranked.length} ranked airports · screening score out of 100`);
+  paragraph(target, "Score = passenger growth (up to 40 points) + passenger volume (up to 30) + seat occupancy (up to 30), each scored against the other New England airports. A shortlist for closer review, not an investment verdict.").className = "ranking-explainer";
+  const columns = document.createElement("div");
+  columns.className = "ranking-columns";
+  columns.setAttribute("aria-hidden", "true");
+  for (const text of ["Rank", "Airport", "", "Score /100"]) { const node = document.createElement("span"); node.textContent = text; columns.append(node); }
+  target.append(columns);
   preview.className = "ranking-list ranking-preview";
   preview.setAttribute("role", "list");
   preview.setAttribute("aria-label", `Top five of ${result.rows.length} returned screening scores, in backend order`);
@@ -1317,16 +1443,16 @@ function renderScreeningView(result, target) {
     if (score?.status !== "ok") paragraph(item, `Screening score · ${score ? `Unavailable: ${score.reason}` : "Not returned"}`).className = "ranking-detail score-value";
     if (showScoreBar && Number.isInteger(row.rank) && score?.status === "ok") {
       const scoreBar = document.createElement("div"); scoreBar.className = "score-track";
-      scoreBar.setAttribute("role", "img"); scoreBar.setAttribute("aria-label", `${row.airport}, backend rank ${row.rank}, screening score ${formatMetric(score)}`);
+      scoreBar.setAttribute("role", "img"); scoreBar.setAttribute("aria-label", `${row.airport}, rank ${row.rank}, screening score ${formatMetric(score)}`);
       const fill = document.createElement("span"); fill.className = "score-fill";
       fill.setAttribute("style", `width:${Math.max(0, Math.min(100, score.value))}%`); scoreBar.append(fill); item.append(scoreBar);
-      paragraph(item, compact ? formatNumber(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
-    } else if (score?.status === "ok") paragraph(item, compact ? formatNumber(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
+      paragraph(item, compact ? fixed(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
+    } else if (score?.status === "ok") paragraph(item, compact ? fixed(score.value) : `Screening score · ${formatMetric(score)}`).className = "ranking-detail score-value";
     // Where the score comes from: growth (of 40), volume (of 30) and occupancy (of 30) points.
     const parts = ["growth_points", "volume_points", "occupancy_points"].map((key) => row.metrics.find((value) => value.key === key));
     if (score?.status === "ok" && parts.every((part) => part?.status === "ok")) {
       const [growth, volume, occupancy] = parts.map((part) => part.value.toFixed(1));
-      const breakdown = paragraph(item, `Growth ${growth} · Volume ${volume} · Occupancy ${occupancy}`);
+      const breakdown = paragraph(item, `Growth ${growth}/40 · Volume ${volume}/30 · Occupancy ${occupancy}/30`);
       breakdown.className = "ranking-detail score-parts";
       breakdown.setAttribute("aria-label", `${growth} of 40 growth points, ${volume} of 30 volume points, ${occupancy} of 30 occupancy points`);
     }
@@ -1351,15 +1477,28 @@ function renderScreeningView(result, target) {
   full.append(list); target.append(full);
   return true;
 }
+const congestionMeaning = {
+  cancellation_rate: "Share of scheduled departures that were cancelled",
+  diversion_rate: "Share of scheduled departures diverted to another airport",
+  departure_delay_minutes: "Average minutes of departure delay per departed flight",
+  taxi_out_minutes: "Average minutes from gate to take-off per departed flight",
+};
 function renderCongestionView(result, target) {
   if (result.scope.airports.length !== 2) return false;
-  heading(target, "h3", "Operational comparison");
+  const airports = result.scope.airports;
   const keys = ["cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"];
   const titles = keys.map(humanMetricLabel);
   const ns = "http://www.w3.org/2000/svg";
+  const metricFor = (airport, key) => result.rows.find(item => item.airport === airport)?.metrics.find(item => item.key === key);
+  heading(target, "h3", `Four operational indicators, ${result.scope.year}`);
+  // The denominator: how many scheduled departures each airport's rates describe.
+  const bases = airports.map(airport => metricFor(airport, "cancellation_rate")).map(metric => metric?.status === "ok" ? metric.denominator : null);
+  if (bases.every(Number.isFinite)) {
+    paragraph(target, `Based on ${airports.map((airport, index) => `${formatNumber(bases[index])} ${airport}`).join(" and ")} scheduled domestic departures by reporting airlines.`).className = "congestion-basis";
+  }
   const legend = document.createElement("p");
   legend.className = "congestion-legend";
-  result.scope.airports.forEach((airport, airportIndex) => {
+  airports.forEach((airport, airportIndex) => {
     const entry = document.createElement("span");
     entry.className = "legend-entry";
     const key = document.createElement("span");
@@ -1372,33 +1511,40 @@ function renderCongestionView(result, target) {
   });
   const legendNote = document.createElement("span");
   legendNote.className = "legend-note";
-  legendNote.textContent = "Zero-based scale per indicator · further right is higher";
+  legendNote.textContent = "Bars start at zero, so a small difference looks small; for all four, higher means more disruption.";
   legend.append(legendNote);
   target.append(legend);
   const bars = document.createElement("div");
   bars.className = "congestion-bars";
   bars.setAttribute("role", "list");
-  const table = makeTable("Exact operational values by airport", ["Measure", ...result.scope.airports]);
+  const table = makeTable("Exact operational values by airport", ["Measure", ...airports]);
   table.region.className += " congestion-table-region";
   table.region.setAttribute("aria-label", "Operational comparison; measures by airport");
   table.region.children[0].className = "congestion-table";
   keys.forEach((key, index) => {
-    const metrics = result.scope.airports.map(airport => result.rows.find(item => item.airport === airport)?.metrics.find(item => item.key === key));
+    const metrics = airports.map(airport => metricFor(airport, key));
     const valid = metrics.filter(metric => metric?.status === "ok" && Number.isFinite(metric.value));
     const minimum = Math.min(0, ...valid.map(metric => metric.value));
     const maximum = Math.max(0, ...valid.map(metric => metric.value));
     const span = maximum - minimum || 1;
-    const percent = value => maximum === minimum ? 50 : (value - minimum) / span * 100;
+    const percent = value => (value - minimum) / span * 100;
     const unit = valid[0]?.unit || "count";
     const measure = document.createElement("div"); measure.className = "congestion-measure"; measure.setAttribute("role", "listitem");
     const head = document.createElement("div"); head.className = "measure-head";
-    const labelNode = heading(head, "h3", titles[index]); labelNode.className = "congestion-measure-title";
-    const valuesNode = document.createElement("div"); valuesNode.className = "comparison-tracks";
+    heading(head, "h3", metricLabel(key, result.scope)).className = "congestion-measure-title";
+    const pair = metrics.map((metric, airportIndex) => ({ airport: airports[airportIndex], metric }));
+    if (pair.every(({ metric }) => metric?.status === "ok" && Number.isFinite(metric.value))) {
+      paragraph(head, comparisonDelta(pair, unit)).className = "measure-delta";
+    }
+    measure.append(head);
+    paragraph(measure, congestionMeaning[key]).className = "measure-context";
+    const group = document.createElement("div");
+    group.className = "comparison-bars";
+    group.setAttribute("role", "img");
+    const plotted = [];
     const row = document.createElement("tr");
     cell(row, titles[index]);
-    const plotted = [];
-    metrics.forEach((metric, airportIndex) => {
-      const airport = result.scope.airports[airportIndex];
+    pair.forEach(({ airport, metric }, airportIndex) => {
       let text = "Not returned", spoken = text;
       if (metric?.status === "unavailable") { text = "Unavailable"; spoken = `Unavailable: ${metric.reason}`; }
       else if (metric?.status === "ok") {
@@ -1408,53 +1554,57 @@ function renderCongestionView(result, target) {
       }
       cell(row, text);
       row.children[row.children.length - 1].setAttribute("aria-label", spoken);
-      const comparison = document.createElement("p"); comparison.className = "comparison-value";
-      const keyNode = document.createElement("span"); keyNode.className = `series-key series-key-${airportIndex + 1}`; keyNode.setAttribute("aria-hidden", "true");
-      const airportNode = document.createElement("span"); airportNode.className = "comparison-label"; airportNode.textContent = airport;
+      const barRow = document.createElement("div"); barRow.className = `bar-row bar-row-${airportIndex + 1}`;
+      const airportNode = document.createElement("span"); airportNode.className = "bar-airport"; airportNode.textContent = airport;
+      barRow.append(airportNode);
+      if (metric?.status === "ok" && Number.isFinite(metric.value)) {
+        plotted.push({ airport, metric });
+        // No viewBox: x and width are percentages of the track, heights are pixels.
+        const track = document.createElementNS(ns, "svg");
+        track.setAttribute("class", "comparison-bar-track");
+        track.setAttribute("aria-hidden", "true");
+        const rect = (className, x, w) => {
+          const node = document.createElementNS(ns, "rect");
+          node.setAttribute("x", `${x}%`); node.setAttribute("width", `${w}%`);
+          node.setAttribute("y", "3"); node.setAttribute("height", "12"); node.setAttribute("class", className);
+          track.append(node);
+        };
+        rect("bar-track", 0, 100);
+        const start = percent(Math.min(0, metric.value));
+        rect(`bar-fill bar-fill-${airportIndex + 1}`, start, percent(Math.max(0, metric.value)) - start);
+        const zero = document.createElementNS(ns, "line");
+        zero.setAttribute("x1", `${percent(0)}%`); zero.setAttribute("x2", `${percent(0)}%`);
+        zero.setAttribute("y1", "0"); zero.setAttribute("y2", "18"); zero.setAttribute("class", "bar-zero");
+        track.append(zero);
+        barRow.append(track);
+      } else {
+        const note = document.createElement("span"); note.className = "not-plotted"; note.textContent = "Not plotted"; barRow.append(note);
+      }
       const exact = document.createElement("strong"); exact.className = "comparison-exact";
       exact.textContent = metric?.status === "ok" ? formatMetric(metric) : metric?.status === "unavailable" ? `Unavailable: ${metric.reason}` : "Not returned";
-      comparison.append(keyNode, airportNode, exact);
-      if (metric?.status === "ok" && Number.isFinite(metric.value)) plotted.push({ airport, airportIndex, metric });
-      else { const note = document.createElement("span"); note.className = "not-plotted"; note.textContent = "Not plotted"; comparison.append(note); }
-      valuesNode.append(comparison);
+      barRow.append(exact);
+      group.append(barRow);
     });
-    head.append(valuesNode);
-    measure.append(head);
-    const track = document.createElement("div"); track.className = "measure-track";
-    const minLabel = document.createElement("span"); minLabel.className = "congestion-scale"; minLabel.textContent = formatMetric({ unit, value: minimum });
-    const maxLabel = document.createElement("span"); maxLabel.className = "congestion-scale"; maxLabel.textContent = formatMetric({ unit, value: maximum });
-    // No viewBox: x positions are percentages and radii are CSS pixels, so the
-    // dots stay round and full-size at any panel width.
-    const plot = document.createElementNS(ns, "svg");
-    plot.setAttribute("class", "comparison-dumbbell");
-    plot.setAttribute("role", "img");
-    plot.setAttribute("aria-label", `${titles[index]} comparison on a zero-inclusive ${formatMetric({ unit, value: minimum })} to ${formatMetric({ unit, value: maximum })} scale: ${plotted.map(({ airport, metric }) => `${airport} ${formatMetric(metric)}, ${humanDirection(metric.comparison_direction)}`).join("; ") || "no returned values plotted"}`);
-    const line = (className, x1, x2, y1 = "14", y2 = "14") => {
-      const node = document.createElementNS(ns, "line");
-      node.setAttribute("x1", x1); node.setAttribute("x2", x2); node.setAttribute("y1", y1); node.setAttribute("y2", y2); node.setAttribute("class", className);
-      plot.append(node);
-    };
-    line("dumbbell-axis", "0%", "100%");
-    if (minimum < 0) line("dumbbell-zero", `${percent(0)}%`, `${percent(0)}%`, "6", "22");
-    const tied = plotted.length === 2 && plotted[0].metric.value === plotted[1].metric.value;
-    if (plotted.length === 2) line("dumbbell-connector", `${percent(plotted[0].metric.value)}%`, `${percent(plotted[1].metric.value)}%`);
-    plotted.forEach(({ airport, airportIndex, metric }, pointIndex) => {
-      const point = document.createElementNS(ns, "circle");
-      point.setAttribute("cx", `${percent(metric.value)}%`);
-      point.setAttribute("cy", tied ? (pointIndex ? "19" : "9") : "14");
-      point.setAttribute("r", "5");
-      point.setAttribute("class", `dumbbell-point dumbbell-point-${airportIndex + 1}`);
-      point.setAttribute("aria-label", `${airport} ${formatMetric(metric)}`);
-      plot.append(point);
-    });
-    track.append(minLabel, plot, maxLabel);
-    measure.append(track);
+    group.setAttribute("aria-label", `${metricLabel(key, result.scope)}, bars on a zero-inclusive scale from ${formatMetric({ unit, value: minimum })} to ${formatMetric({ unit, value: maximum })}: ${pair.map(({ airport, metric }) => `${airport} ${metric?.status === "ok" ? formatMetric(metric) : metric?.status === "unavailable" ? `unavailable (${metric.reason})` : "not returned"}`).join(", ")}`);
+    measure.append(group);
     bars.append(measure);
     table.body.append(row);
   });
   target.append(bars);
   methodologyExtras.push(["Exact operational values", [table.region]]);
   return true;
+}
+// "SNA +1.37 min (10% higher)": the absolute difference in the measure's own unit,
+// with the relative size so a small gap reads as small.
+function comparisonDelta(pair, unit) {
+  const [first, second] = pair;
+  const difference = second.metric.value - first.metric.value;
+  const amount = Math.abs(difference);
+  if (Number(amount.toFixed(2)) === 0) return "No measurable difference";
+  const [lower, higher] = difference > 0 ? [first, second] : [second, first];
+  const shown = unit === "minutes" ? `${fixed(amount)} min` : unit === "percent" ? `${fixed(amount)} percentage points` : formatMetric({ unit, value: amount });
+  const relative = lower.metric.value > 0 ? Math.round(amount / lower.metric.value * 100) : null;
+  return `${higher.airport} +${shown}${relative ? ` (${relative}% higher)` : ""}`;
 }
 function renderGenericMetricTable(result, target) {
   if (!result.rows.length) {
@@ -1472,19 +1622,20 @@ function renderGenericMetricTable(result, target) {
   // Technical details only.
   const ranked = result.rows.some((row) => Number.isInteger(row.rank));
   if (ranked || result.rows.length > 4) {
-    const list = makeTable(`${humanScopeMetricLabel(result.scope.metric)} by airport`, [ranked ? "Rank" : "Airport", ranked ? "Airport" : "Value", ...(ranked ? ["Value"] : [])]);
+    const valueColumn = valueColumnTitle(result.scope);
+    const list = makeTable(`${humanScopeMetricLabel(result.scope.metric)} by airport`, [ranked ? "Rank" : "Airport", ranked ? "Airport" : valueColumn, ...(ranked ? [valueColumn] : [])]);
     list.region.classList.add("compact-values");
     for (const row of result.rows) {
       const metric = row.metrics.find((item) => item.key === result.scope.metric) || row.metrics[0];
       if (!metric) continue;
-      const value = metric.status === "unavailable" ? "Unavailable" : formatMetric(metric);
+      const value = metric.status === "unavailable" ? "Unavailable" : figureText(metricFigure(metric));
       const tr = document.createElement("tr");
       for (const text of ranked ? [row.rank == null ? "—" : String(row.rank), row.airport, value] : [row.airport, value]) cell(tr, text);
       list.body.append(tr);
     }
     target.append(list.region);
   }
-  const table = makeTable("Exact values by airport", ["Airport", "Measure", "Value", "Numerator / denominator", "Eligible observations", "Comparison"]);
+  const table = makeTable("Exact values by airport", ["Airport", "Measure", "Value", "Numerator / denominator", "Eligible observations", "Higher or lower"]);
   for (const row of result.rows) for (const metric of row.metrics) {
     const tr = document.createElement("tr");
     if (metric.key === result.scope.metric) tr.className = "selected-metric-row";
@@ -1501,7 +1652,7 @@ function renderGenericMetricTable(result, target) {
 function validateResult(result) {
   const fail = () => { throw new Error("Invalid analysis response"); };
   const scopeMetrics = new Set(["passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share", "screen_score", "congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "sfo_pressure"]);
-  const metricUnits = { passengers: "count", seats: "count", departures: "count", passenger_growth: "percent", seat_occupancy: "percent", long_haul_share: "percent", screen_score: "score", cancellation_rate: "percent", diversion_rate: "percent", departure_delay_minutes: "minutes", taxi_out_minutes: "minutes", sfo_enplaned_trend: "count", enplaned_growth: "percent", sfo_pressure: "percentage_points", growth_points: "score", volume_points: "score", occupancy_points: "score" };
+  const metricUnits = { passengers: "count", seats: "count", departures: "count", passenger_growth: "percent", seat_occupancy: "percent", long_haul_share: "percent", screen_score: "score", cancellation_rate: "percent", diversion_rate: "percent", departure_delay_minutes: "minutes", taxi_out_minutes: "minutes", sfo_enplaned_trend: "count", enplaned_growth: "percent", sfo_pressure: "percentage_points", seat_growth: "percent", growth_points: "score", volume_points: "score", occupancy_points: "score" };
   const ratioMetrics = new Set(["seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"]);
   if (!isRecord(result) || !["ok", "partial"].includes(result.status)
       || typeof result.result_id !== "string" || typeof result.request_id !== "string"
@@ -1565,7 +1716,7 @@ function isSafeHttpUrl(value) {
 function label(value) { return value.replaceAll("_", " "); }
 function humanDirection(value) { return ({ higher: "Higher", lower: "Lower", tied: "Tied", unavailable: "Unavailable" })[value] || "Direction unavailable"; }
 function humanMetricLabel(key) {
-  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi-out time", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap", growth_points: "Growth points", volume_points: "Volume points", occupancy_points: "Occupancy points" };
+  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi-out time", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap", seat_growth: "Seat supply growth", growth_points: "Growth points", volume_points: "Volume points", occupancy_points: "Occupancy points" };
   return names[key] || label(key);
 }
 function humanScopeMetricLabel(key) { return key === "sfo_pressure" ? "SFO demand pressure" : humanMetricLabel(key); }
@@ -1602,8 +1753,116 @@ const screenPointMax = { growth_points: 40, volume_points: 30, occupancy_points:
 function formatMetric(metric) {
   if (screenPointMax[metric.key]) return `${metric.value.toFixed(1)} of ${screenPointMax[metric.key]} points`;
   const value = metric.unit === "count" ? formatNumber(metric.value) : metric.value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  if (metric.unit === "percentage_points") return `${value} pp`;
+  if (metric.unit === "percentage_points") return `${value} percentage points`;
   return `${value}${({ percent: "%", percentage_points: " percentage points", minutes: " min", score: " / 100", count: "" })[metric.unit]}`;
+}
+// ── What each displayed number means ──────────────────────────────────────────
+// Every figure carries WHAT is measured, its UNIT and its comparison, denominator
+// or timeframe. The words come from the returned value and its resolved scope;
+// nothing is estimated in the browser.
+const MINUS = "−";
+const growthKeys = new Set(["passenger_growth", "enplaned_growth", "seat_growth"]);
+function previousYear(scope) {
+  return scope.baseline_year != null && scope.year === scope.comparison_year ? scope.baseline_year : scope.year - 1;
+}
+function fixed(value, digits = 2) { return Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits }); }
+function signedNumber(value, digits = 2) {
+  const rounded = Number(value.toFixed(digits));
+  return rounded > 0 ? `+${fixed(rounded, digits)}` : rounded < 0 ? `${MINUS}${fixed(rounded, digits)}` : fixed(0, digits);
+}
+function signedCount(value) { return value > 0 ? `+${formatNumber(value)}` : value < 0 ? `${MINUS}${formatNumber(Math.abs(value))}` : "0"; }
+function monthLabel(period) {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return `${months[Number(period.slice(4)) - 1]} ${period.slice(0, 4)}`;
+}
+function metricLabel(key, scope) {
+  const pressure = scope.metric === "sfo_pressure";
+  const names = {
+    passengers: scope.metric === "sfo_enplaned_trend" ? "Passengers boarding at SFO" : "Passengers",
+    sfo_enplaned_trend: "Passengers boarding at SFO",
+    passenger_growth: pressure ? "Passenger traffic growth" : "Passenger growth",
+    enplaned_growth: "Boarding passenger growth (DataSF)",
+    seat_growth: "Airline seat supply growth",
+    sfo_pressure: "Traffic vs. seat growth",
+    seats: "Seats supplied", departures: "Departures flown",
+    departure_delay_minutes: "Average departure delay", taxi_out_minutes: "Average taxi-out time",
+  };
+  return names[key] || humanMetricLabel(key);
+}
+// The figure split into number and unit, so the unit reads as a unit.
+function metricFigure(metric) {
+  const value = metric.value;
+  if (screenPointMax[metric.key]) return { number: value.toFixed(1), unit: `of ${screenPointMax[metric.key]} points` };
+  if (growthKeys.has(metric.key)) return { number: signedNumber(value), unit: "%" };
+  const plain = `${value < 0 && Number(value.toFixed(2)) !== 0 ? MINUS : ""}${fixed(value)}`;
+  return ({
+    count: { number: formatNumber(value), unit: "" },
+    percent: { number: plain, unit: "%" },
+    percentage_points: { number: signedNumber(value), unit: "percentage points" },
+    minutes: { number: plain, unit: "min" },
+    score: { number: plain, unit: "/ 100" },
+  })[metric.unit];
+}
+function figureText(figure) { return !figure.unit || figure.unit === "%" ? `${figure.number}${figure.unit}` : `${figure.number} ${figure.unit}`; }
+function appendFigure(parent, figure) {
+  const number = document.createElement("span");
+  number.className = "kpi-number";
+  number.textContent = figure.number;
+  parent.append(number);
+  if (!figure.unit) return;
+  const unit = document.createElement("span");
+  // "%" hugs the number; a worded unit ("percentage points") gets its own short line.
+  unit.className = figure.unit === "%" ? "kpi-unit is-tight" : figure.unit.length > 6 ? "kpi-unit is-words" : "kpi-unit";
+  unit.textContent = figure.unit;
+  parent.append(unit);
+}
+// The grey line under a figure: comparison, denominator or timeframe.
+function metricContext(metric, scope) {
+  const year = scope.year, previous = previousYear(scope);
+  const counted = metric.numerator != null && metric.denominator != null;
+  switch (metric.key) {
+    case "passengers": case "sfo_enplaned_trend":
+      return scope.metric === "sfo_enplaned_trend" || metric.key === "sfo_enplaned_trend" ? `in ${year} · DataSF enplanements` : `on departing flights in ${year}`;
+    case "seats": return `on departing flights in ${year}`;
+    case "departures": return `departing flights performed in ${year}`;
+    case "passenger_growth": case "enplaned_growth":
+      return scope.metric === "sfo_pressure" || !counted ? `vs. ${previous}` : `vs. ${previous} · ${signedCount(metric.numerator)} passengers`;
+    case "seat_growth": return `vs. ${previous}`;
+    case "sfo_pressure": {
+      const rounded = Number(metric.value.toFixed(2));
+      if (rounded < 0) return `Seat supply grew ${fixed(rounded)} percentage points faster (calculated before rounding)`;
+      if (rounded > 0) return `Passenger traffic grew ${fixed(rounded)} percentage points faster (calculated before rounding)`;
+      return "Passenger traffic and seat supply grew at the same pace";
+    }
+    case "seat_occupancy": return `of supplied seats filled in ${year}`;
+    case "long_haul_share": return `of eligible departures were ≥${formatNumber(scope.threshold_miles ?? 3000)} miles`;
+    case "screen_score": return "relative score: growth /40 + volume /30 + occupancy /30";
+    case "cancellation_rate": case "diversion_rate": {
+      const outcome = metric.key === "cancellation_rate" ? "cancelled" : "diverted";
+      return counted ? `${formatNumber(metric.numerator)} of ${formatNumber(metric.denominator)} scheduled departures ${outcome} in ${year}` : `of scheduled departures ${outcome} in ${year}`;
+    }
+    case "departure_delay_minutes": return `average per departed flight in ${year}`;
+    case "taxi_out_minutes": return `gate to take-off, average per departed flight in ${year}`;
+    default: return "";
+  }
+}
+// A per-airport detail line when one card lists several airports.
+function metricDetail(metric, scope) {
+  if (metric.numerator == null || metric.denominator == null) return "";
+  if (growthKeys.has(metric.key)) return `${signedCount(metric.numerator)} passengers vs. ${previousYear(scope)}`;
+  return `${formatNumber(metric.numerator)} of ${formatNumber(metric.denominator)}`;
+}
+function valueColumnTitle(scope) {
+  const name = metricLabel(scope.metric, scope);
+  return growthKeys.has(scope.metric) ? `${name}, ${scope.year} vs. ${previousYear(scope)}` : `${name} in ${scope.year}`;
+}
+function resultHeadline(result) {
+  const { metric, airports } = result.scope;
+  if (metric === "screen_score") return "New England screening";
+  const ranked = result.rows.some((row) => Number.isInteger(row.rank));
+  if (ranked && airports.length > 2 && airports.every((code) => newEnglandAirports.has(code))) return `New England ${metricLabel(metric, result.scope).toLowerCase()}`;
+  if (airports.length === 2) return `${airports[0]} vs ${airports[1]}`;
+  return airports.length > 2 ? "Airports in scope" : airports[0];
 }
 function paragraph(parent, text) { const node = document.createElement("p"); node.textContent = text; parent.append(node); return node; }
 function heading(parent, tag, text) { const node = document.createElement(tag); node.textContent = text; parent.append(node); return node; }
@@ -1658,6 +1917,7 @@ function startNewAnalysis() {
   latestSuccessfulResult = null;
   contextResultId = null;
   pendingComparison = null;
+  composerOwner = null;
   explanation = null;
   resultIsPrevious = false;
   $("#hero-layout").classList.remove("has-result");
@@ -1728,6 +1988,9 @@ $("#chat-form").addEventListener("submit", (event) => {
     $("#question").focus();
     return;
   }
+  // The question is going out (not refused as empty or busy): drop any dictation the
+  // browser has not delivered yet, so it cannot refill the field afterwards.
+  if (!busy) window.airportVoice?.discardListening?.();
   // Sending the text of the latest failed turn again is that turn's Retry, not a
   // second copy of the question in the transcript.
   const failed = [...conversation].reverse().find((message) => message.role === "user" && message.state === "failed");

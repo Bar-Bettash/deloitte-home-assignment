@@ -173,6 +173,11 @@ def load_settings(environ: Mapping[str, str] | None = None) -> Settings:
 
 
 MIN_SIGNING_KEY_BYTES = 32
+# The shared demo password is typed by people, but it is the only thing between
+# the internet and the paid model call, so it must be long enough to resist
+# online guessing.
+MIN_ACCESS_PASSWORD_CHARS = 12
+MAX_ACCESS_PASSWORD_CHARS = 256
 MAX_CONCURRENT_QUERIES_LIMIT = 16
 _HOSTNAME = re.compile(
     r"^(?=.{1,253}$)[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$"
@@ -192,8 +197,10 @@ class HostingConfig(BaseModel):
     """Host, signing-key and concurrency settings, validated separately from model settings.
 
     Hosted mode applies when running on Vercel or when ``ALLOWED_HOSTS`` is set;
-    it requires ``APP_SIGNING_KEY`` (which signs the follow-up context cookie).
-    A plain loopback run with neither uses a random per-process key. Model
+    it requires ``APP_SIGNING_KEY`` (which signs the follow-up context and access
+    cookies) and ``APP_ACCESS_PASSWORD`` (the shared demo password). A plain
+    loopback run with neither uses a random per-process key and no password
+    gate, unless ``APP_ACCESS_PASSWORD`` is set locally. Model
     misconfiguration never disables presets; hosting misconfiguration closes
     everything except ``/health``.
     """
@@ -203,6 +210,7 @@ class HostingConfig(BaseModel):
     hosted: bool
     on_vercel: bool
     signing_key: SecretStr | None
+    access_password: SecretStr | None
     allowed_hosts: frozenset[str]
     max_concurrent_queries: Annotated[int, Field(strict=True, ge=1, le=MAX_CONCURRENT_QUERIES_LIMIT)]
 
@@ -227,6 +235,7 @@ def load_hosting(environ: Mapping[str, str] | None = None) -> HostingConfig:
     on_vercel = bool(source.get("VERCEL", "").strip())
     raw_hosts = source.get("ALLOWED_HOSTS", "")
     signing_key = source.get("APP_SIGNING_KEY", "") or None
+    access_password = source.get("APP_ACCESS_PASSWORD", "") or None
     hosts = {_host_entry(item, "ALLOWED_HOSTS") for item in raw_hosts.split(",") if item.strip()}
     if on_vercel:
         hosts |= {
@@ -240,6 +249,14 @@ def load_hosting(environ: Mapping[str, str] | None = None) -> HostingConfig:
         raise HostingConfigError("APP_SIGNING_KEY must be 32-512 bytes")
     if hosted and signing_key is None:
         raise HostingConfigError("APP_SIGNING_KEY is required in hosted mode")
+    if access_password is not None and (
+        not MIN_ACCESS_PASSWORD_CHARS <= len(access_password) <= MAX_ACCESS_PASSWORD_CHARS
+        or access_password != access_password.strip()
+        or any(ord(char) < 32 or ord(char) == 127 for char in access_password)
+    ):
+        raise HostingConfigError("APP_ACCESS_PASSWORD must be 12-256 printable characters without surrounding spaces")
+    if hosted and access_password is None:
+        raise HostingConfigError("APP_ACCESS_PASSWORD is required in hosted mode")
 
     raw_limit = source.get("MAX_CONCURRENT_QUERIES", "").strip()
     try:
@@ -249,6 +266,6 @@ def load_hosting(environ: Mapping[str, str] | None = None) -> HostingConfig:
     if not 1 <= limit <= MAX_CONCURRENT_QUERIES_LIMIT:
         raise HostingConfigError("MAX_CONCURRENT_QUERIES must be between 1 and 16")
     return HostingConfig(
-        hosted=hosted, on_vercel=on_vercel, signing_key=signing_key,
+        hosted=hosted, on_vercel=on_vercel, signing_key=signing_key, access_password=access_password,
         allowed_hosts=frozenset(hosts), max_concurrent_queries=limit,
     )

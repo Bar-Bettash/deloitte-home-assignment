@@ -188,7 +188,7 @@ class MetricValue(StrictModel):
         "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
         "long_haul_share", "screen_score", "cancellation_rate", "diversion_rate",
         "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "enplaned_growth",
-        "sfo_pressure", "growth_points", "volume_points", "occupancy_points",
+        "sfo_pressure", "growth_points", "volume_points", "occupancy_points", "seat_growth",
     ]
     value: WireNumber | None
     unit: Literal["count", "percent", "percentage_points", "minutes", "score"]
@@ -226,7 +226,7 @@ class MetricValue(StrictModel):
             "cancellation_rate": "percent", "diversion_rate": "percent",
             "departure_delay_minutes": "minutes", "taxi_out_minutes": "minutes",
             "sfo_enplaned_trend": "count", "enplaned_growth": "percent",
-            "sfo_pressure": "percentage_points",
+            "sfo_pressure": "percentage_points", "seat_growth": "percent",
             # Weighted screen-score components: points out of 40, 30 and 30.
             "growth_points": "score", "volume_points": "score", "occupancy_points": "score",
         }[self.key]
@@ -403,7 +403,7 @@ ErrorCode = Literal[
     "invalid_json", "unsupported_media_type", "request_too_large", "invalid_request",
     "unsupported_scope", "clarification_required", "insufficient_data", "busy",
     "session_expired", "result_mismatch", "ai_unavailable",
-    "data_unavailable", "query_timeout", "internal_error",
+    "data_unavailable", "query_timeout", "internal_error", "access_required",
 ]
 
 

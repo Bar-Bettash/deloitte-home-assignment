@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Sign in · Airport Investment Screening Assistant</title>
+  <link rel="stylesheet" href="/static/login.css">
+</head>
+<body>
+<main class="login-page">
+  <section class="login-card" aria-labelledby="login-title">
+    <p class="login-eyebrow">Airport investment analyst</p>
+    <h1 id="login-title">Sign in to the demo</h1>
+    <p class="login-intro">This prototype is shared with reviewers using one access password.</p>
+    <form class="login-form" method="post" action="/auth/login">
+      <!--LOGIN_ERROR-->
+      <label for="password">Access password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required autofocus aria-describedby="login-help">
+      <p id="login-help" class="login-help">You'll stay signed in on this browser for up to 8 hours. A link from another website, such as webmail, asks for the password again.</p>
+      <button type="submit">Sign in</button>
+    </form>
+  </section>
+</main>
+</body>
+</html>

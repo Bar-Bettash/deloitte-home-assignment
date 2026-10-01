@@ -587,7 +587,10 @@
     listen(document, "visibilitychange", () => { if (!document.hidden) { cacheOcclusionRects(); draw(); syncMotion(); } else stopMotion(); });
     canvas.hidden = false;
     if (motionToggle) motionToggle.hidden = true;
-    if (poster) poster.hidden = false;
+    // The poster is only the fallback. Its Earth is not the rendered globe's size or
+    // position, so showing it while the textures load made the globe jump; the
+    // canvas stays empty until its first correctly sized frame.
+    if (poster) poster.hidden = true;
     canvas.dataset.state = state;
     tell("Loading interactive Earth…");
     timer = window.setTimeout(() => fallback("Interactive globe timed out. Showing the Earth image instead."), LIMIT_MS);

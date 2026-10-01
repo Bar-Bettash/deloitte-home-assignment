@@ -584,6 +584,27 @@ test('rear hemisphere markers cannot remain in the tab order', async () => {
   for (const marker of rear) assert.equal(marker.tabIndex, -1);
 });
 
+test('while the textures load, no poster stands in for the globe; the first frame drawn is the sized globe', async () => {
+  const h = harness({ autoLoad: false });
+  assert.equal(h.canvas.dataset.state, 'loading');
+  assert.equal(h.poster.hidden, true, 'the poster is not the rendered globe\'s size or position, so it would jump');
+  assert.equal(h.canvas.hidden, false);
+  assert.equal(h.calls.draws.length, 0, 'nothing is drawn before the textures arrive');
+  for (const image of h.imageInstances) image.onload();
+  await settle(h);
+  assert.equal(h.canvas.dataset.state, 'ready');
+  assert.equal(h.poster.hidden, true);
+  assert.equal(h.calls.draws.length, 1);
+  assert.deepEqual([h.canvas.width, h.canvas.height], [1800, 900], 'the backing store matches the laid-out canvas before the first draw');
+});
+
+test('if globe.js cannot load at all, the page falls back to the Earth image', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../index.html'), 'utf8');
+  assert.match(html, /<img id="earth-poster"[^>]*\shidden>/, 'the poster starts hidden, so it never flashes during a normal load');
+  assert.match(html, /<script type="module" src="\/static\/globe\.js" onerror="document\.getElementById\('earth-poster'\)\.hidden=false;document\.getElementById\('earth-canvas'\)\.hidden=true"><\/script>/,
+    'a failed module load (404, network) shows the poster instead of an empty canvas');
+});
+
 test('eight-second timeout permanently selects poster and ignores late image callbacks', async () => {
   const h = harness({ autoLoad: false });
   const [timer] = [...h.timers.values()];

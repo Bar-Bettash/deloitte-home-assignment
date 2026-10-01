@@ -174,6 +174,66 @@ def test_growth_gap_is_unavailable_for_incomplete_or_zero_baselines() -> None:
     assert sfo_module._growth_gap(zero_seat_baseline).status == "unavailable"
 
 
+def test_seat_growth_uses_the_gap_periods_and_reconciles_with_it() -> None:
+    import app.calculations.sfo as sfo_module
+
+    traffic = _traffic_fixture()
+    seats = sfo_module._seat_growth(traffic)
+    gap = sfo_module._growth_gap(traffic)
+    baseline, comparison = traffic.annual[0], traffic.annual[1]
+    passenger_growth = 100.0 * (comparison.passengers.value / baseline.passengers.value - 1.0)
+
+    assert seats.status == "ok" and seats.unit == "percent"
+    assert seats.value == pytest.approx(100.0 * (comparison.seats.value / baseline.seats.value - 1.0))
+    assert (seats.numerator, seats.denominator) == (
+        comparison.seats.value - baseline.seats.value, baseline.seats.value
+    )
+    # The gap definition is unchanged: passenger growth minus seat growth.
+    assert passenger_growth - seats.value == pytest.approx(gap.value)
+
+
+def test_seat_growth_is_unavailable_whenever_the_gap_is() -> None:
+    import app.calculations.sfo as sfo_module
+
+    for traffic in (
+        _traffic_fixture(complete_2024=False),
+        _traffic_fixture(passengers_2023=0),
+        _traffic_fixture(seats_2023=0),
+    ):
+        seats = sfo_module._seat_growth(traffic)
+        gap = sfo_module._growth_gap(traffic)
+        assert seats.status == gap.status == "unavailable"
+        assert seats.value is None and seats.reason == gap.reason
+        assert seats.numerator is None and seats.denominator is None
+
+
+def test_pressure_bundle_marks_seat_growth_unavailable_without_t100(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.calculations.sfo as sfo_module
+    from app.calculations.traffic import TrafficCalculationError
+
+    trend = SimpleNamespace(
+        source=SimpleNamespace(
+            snapshot_id="datasf-accepted-1", name="DataSF passengers", url="https://data.sf.gov/ds", period="2023-2024"
+        )
+    )
+
+    def unavailable_traffic(_airport: str, _root: Path):
+        raise TrafficCalculationError("test-only source failure")
+
+    monkeypatch.setattr(sfo_module, "calculate_sfo_enplaned_trend", lambda _root: trend)
+    monkeypatch.setattr(sfo_module, "calculate_traffic", unavailable_traffic)
+    monkeypatch.setattr(sfo_module, "calculate_operations", lambda _airport, _root: SimpleNamespace(
+        source=SimpleNamespace(snapshot_id="o", name="On-time", url="https://example.test/o", period="2024")))
+
+    result = sfo_module.calculate_sfo_pressure(Path("datasf"), Path("t100"), Path("ontime"))
+
+    assert result.seat_growth.status == "unavailable"
+    assert result.seat_growth.reason == "accepted T-100 SFO snapshot is unavailable"
+    assert result.growth_gap_pp.status == "unavailable"
+
+
 def test_bundle_uses_exact_recent_datasf_ref_without_legacy_pointer(tmp_path: Path) -> None:
     rows = _complete_rows(years=(2024, 2025))
     parquet = _publish_snapshot(tmp_path, rows, write_pointer=False)
@@ -269,6 +329,9 @@ def test_real_packaged_recent_pressure_controls_and_separate_populations() -> No
         (2025, 26_477_602, 32_169_113),
     ]
     assert result.growth_gap_pp.value == pytest.approx(-1.2246691594)
+    assert result.seat_growth.value == pytest.approx(100.0 * (32_169_113 / 30_369_317 - 1.0))
+    assert result.seat_growth.value == pytest.approx(5.9263631135, abs=1e-8)
+    assert (result.seat_growth.numerator, result.seat_growth.denominator) == (1_799_796, 30_369_317)
     assert result.enplaned_trend.result.source.dataset_id == "rkru-6vcg"
     assert traffic.source.table == "FMG"
     assert "reporting-carrier scheduled departures" in result.operations.result.population

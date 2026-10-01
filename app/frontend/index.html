@@ -6,12 +6,14 @@
   <title>Airport Investment Screening Assistant</title>
   <link rel="stylesheet" href="/static/styles.css">
   <script src="/static/app.js" defer></script>
-  <script type="module" src="/static/globe.js"></script>
+  <script src="/static/voice.js" defer></script>
+  <script type="module" src="/static/globe.js" onerror="document.getElementById('earth-poster').hidden=false;document.getElementById('earth-canvas').hidden=true"></script>
 </head>
 <body>
 <nav class="skip-links" aria-label="Skip navigation"><a id="analysis-skip" href="#analyst-rail">Skip to analysis</a><a id="result-skip" href="#result-title" hidden>Skip to result</a></nav>
 <header class="contact-header">
   <p class="contact"><span>Bar Bettash</span><a href="mailto:bar.bettash.jobs@gmail.com">bar.bettash.jobs@gmail.com</a></p>
+  <!--SIGN_OUT-->
 </header>
 <span id="health-status" class="visually-hidden" role="status">Backend checking</span>
 <main id="workspace" class="page app-main">
@@ -89,7 +91,7 @@
    </div>
    <section id="earth-stage" class="earth-stage" aria-label="Earth visualization" tabindex="-1">
     <div class="earth-frame">
-      <img id="earth-poster" src="/static/assets/earth-poster.webp" alt="" aria-hidden="true">
+      <img id="earth-poster" src="/static/assets/earth-poster.webp" alt="" aria-hidden="true" hidden>
       <canvas id="earth-canvas" width="1024" height="1024" tabindex="0" aria-label="Interactive Earth globe; drag to rotate"></canvas>
       <div id="globe-markers" class="globe-markers" aria-label="Airport markers"></div>
       <p id="globe-status" class="globe-status" role="status">Earth visualization is loading.</p>
@@ -112,8 +114,10 @@
   <form id="chat-form" novalidate>
     <label class="visually-hidden" for="question">Ask a question about airport analysis</label>
     <textarea id="question" maxlength="4000" required aria-describedby="question-help question-error" placeholder="Ask the airport analyst…" rows="1"></textarea>
+    <button type="button" id="voice-input" class="composer-mic" aria-pressed="false" aria-label="Voice input" aria-describedby="voice-help" hidden><svg class="mic-icon" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><rect x="7" y="2.5" width="6" height="10" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><svg class="stop-icon" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" focusable="false"><rect x="5.5" y="5.5" width="9" height="9" rx="1.5" fill="currentColor"/></svg></button>
     <button type="submit" class="composer-send" data-send aria-label="Send question">↑</button>
     <p id="question-help" class="visually-hidden">Your question is sent to the analysis service.</p>
+    <p id="voice-help" class="visually-hidden">Your browser turns speech into text in the question field. Review it, then send. This app does not record or store audio.</p>
     <p id="question-error" class="field-error chat-error" role="alert" aria-live="assertive" tabindex="-1" hidden></p>
   </form>
 </section>

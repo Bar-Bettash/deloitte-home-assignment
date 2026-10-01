@@ -217,6 +217,7 @@ def test_removed_spending_settings_are_not_read() -> None:
 
 
 FAKE_KEY = "fake-signing-key-for-tests-only-0123456789"
+FAKE_PASSWORD = "test-access-password-only"
 
 
 def test_plain_loopback_run_is_local_with_one_query_slot() -> None:
@@ -252,6 +253,7 @@ def test_hosted_config_collects_allowed_and_vercel_hosts_and_defaults_to_four_sl
     hosting = load_hosting({
         "VERCEL": "1",
         "APP_SIGNING_KEY": FAKE_KEY,
+        "APP_ACCESS_PASSWORD": FAKE_PASSWORD,
         "ALLOWED_HOSTS": " Demo.Example.com ,other.example.org",
         "VERCEL_URL": "app-abc123.vercel.app",
         "VERCEL_BRANCH_URL": "https://app-git-main.vercel.app/",
@@ -263,6 +265,7 @@ def test_hosted_config_collects_allowed_and_vercel_hosts_and_defaults_to_four_sl
     }
     assert hosting.max_concurrent_queries == 4
     assert FAKE_KEY not in repr(hosting)
+    assert FAKE_PASSWORD not in repr(hosting)
 
 
 def test_vercel_hosts_are_ignored_off_vercel() -> None:
@@ -285,3 +288,27 @@ def test_malformed_host_or_limit_is_rejected(environ) -> None:
 
 def test_explicit_concurrency_limit_is_used() -> None:
     assert load_hosting({"MAX_CONCURRENT_QUERIES": "3"}).max_concurrent_queries == 3
+
+
+@pytest.mark.parametrize("environ", [
+    {"ALLOWED_HOSTS": "demo.example.com", "APP_SIGNING_KEY": FAKE_KEY},
+    {"VERCEL": "1", "APP_SIGNING_KEY": FAKE_KEY},
+])
+def test_hosted_mode_without_access_password_fails_closed(environ) -> None:
+    with pytest.raises(HostingConfigError) as caught:
+        load_hosting(environ)
+    assert "APP_ACCESS_PASSWORD" in str(caught.value)
+
+
+@pytest.mark.parametrize("password", ["short-pass1", "p" * 257, " leading-space-pw", "trailing-space-pw ", "tab\tinside-password"])
+def test_weak_or_malformed_access_password_is_rejected_without_echo(password) -> None:
+    with pytest.raises(HostingConfigError) as caught:
+        load_hosting({"ALLOWED_HOSTS": "demo.example.com", "APP_SIGNING_KEY": FAKE_KEY, "APP_ACCESS_PASSWORD": password})
+    assert password not in str(caught.value)
+
+
+def test_local_run_has_no_password_gate_unless_one_is_set() -> None:
+    assert load_hosting({}).access_password is None
+    local = load_hosting({"APP_ACCESS_PASSWORD": FAKE_PASSWORD})
+    assert local.hosted is False
+    assert local.access_password.get_secret_value() == FAKE_PASSWORD

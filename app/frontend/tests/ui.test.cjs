@@ -322,16 +322,28 @@ test('congestion comparison aligns both backend airport columns and preserves pa
     ['Taxi-out time', '3.00 min ↑', '4.00 min ↓'],
   ]);
   assert.equal(body.children[0].children[1].getAttribute('aria-label'), '0.00%, higher');
-  const plot = findDescendant(view, node => node.className === 'comparison-dumbbell');
+  const plot = findDescendant(view, node => node.className === 'comparison-bars');
   assert.equal(plot.getAttribute('role'), 'img');
-  assert.match(plot.getAttribute('aria-label'), /zero-inclusive/);
-  const points = plot.children.filter(node => (node.getAttribute('class') || '').startsWith('dumbbell-point'));
-  assert.equal(points.length, 2);
-  assert.deepEqual(points.map(node => node.getAttribute('class')), ['dumbbell-point dumbbell-point-1', 'dumbbell-point dumbbell-point-2'], 'each airport keeps one consistent marker style');
-  assert.equal(plot.getAttribute('viewBox'), null, 'percent positions and pixel radii keep dots round at any width');
-  assert.deepEqual(points.map(node => node.getAttribute('cx')), ['0%', '100%']);
+  assert.match(plot.getAttribute('aria-label'), /zero-inclusive scale from 0\.00% to 1\.00%: LAX 0\.00%, SNA 1\.00%/);
+  const fills = [];
+  const collectFills = node => { if ((node.getAttribute?.('class') || '').startsWith('bar-fill')) fills.push(node); for (const child of node.children || []) collectFills(child); };
+  collectFills(plot);
+  assert.deepEqual(fills.map(node => node.getAttribute('class')), ['bar-fill bar-fill-1', 'bar-fill bar-fill-2'], 'each airport keeps one consistent bar style');
+  assert.deepEqual(fills.map(node => [node.getAttribute('x'), node.getAttribute('width')]), [['0%', '0%'], ['0%', '100%']], 'bars start at zero');
+  const track = findDescendant(plot, node => node.getAttribute?.('class') === 'comparison-bar-track');
+  assert.equal(track.getAttribute('viewBox'), null, 'percent geometry keeps bars proportional at any width');
+  assert.deepEqual(plot.children.map(row => row.children[0].textContent), ['LAX', 'SNA'], 'every bar is labelled with its airport, not colour alone');
+  assert.deepEqual(plot.children.map(row => row.children.at(-1).textContent), ['0.00%', '1.00%'], 'the exact value sits at the end of each bar');
+  const firstMeasure = findDescendant(view, node => node.className === 'congestion-measure');
+  assert.equal(findDescendant(firstMeasure, node => node.className === 'measure-delta').textContent, 'SNA +1.00 percentage points', 'the difference is explicit and in the unit of the measure');
+  assert.equal(findDescendant(firstMeasure, node => node.className === 'measure-context').textContent, 'Share of scheduled departures that were cancelled');
+  const delays = findDescendant(view, node => node.className === 'congestion-bars').children[2];
+  assert.equal(findDescendant(delays, node => node.className === 'measure-delta').textContent, 'SNA +1.00 min (50% higher)', 'a relative size keeps a small gap reading small');
   const legend = findDescendant(view, node => node.className === 'congestion-legend');
-  assert.match(content(legend), /LAX.*SNA.*further right is higher/);
+  assert.match(content(legend), /LAX.*SNA.*Bars start at zero/);
+  assert.match(content(view), /Based on 100 LAX and 100 SNA scheduled domestic departures/, 'the denominator is stated');
+  const order = findDescendant(complete.nodes.get('#result'), node => (node.className || '').startsWith('dashboard-grid')).children.map(node => node.className);
+  assert.deepEqual(order.slice(0, 2), ['key-insights', 'metric-view'], 'the conclusion is read before the indicator detail');
   assert.doesNotMatch(content(view), /green|red|winner/i);
   const methodology = exact.children.find(node => node.className === 'methodology-detail');
   assert.match(content(methodology), /Numerator \/ denominator: 0 \/ 100/);
@@ -380,13 +392,18 @@ test('dumbbell bounds include zero and keep negative, zero and equal values dist
   ui.run('renderResult(validateResult(payload), false)');
   const view = findDescendant(ui.nodes.get('#result'), node => node.id === 'metric-view');
   const plots = [];
-  const collect = node => { if (node.className === 'comparison-dumbbell') plots.push(node); for (const child of node.children || []) collect(child); };
+  const collect = node => { if (node.className === 'comparison-bars') plots.push(node); for (const child of node.children || []) collect(child); };
   collect(view);
   assert.match(plots[0].getAttribute('aria-label'), /-2\.00% to 3\.00%/);
-  const equalCircles = plots[1].children.filter(node => (node.getAttribute('class') || '').startsWith('dumbbell-point'));
-  assert.equal(equalCircles.length, 2);
-  assert.equal(equalCircles[0].getAttribute('cx'), equalCircles[1].getAttribute('cx'));
-  assert.notEqual(equalCircles[0].getAttribute('cy'), equalCircles[1].getAttribute('cy'));
+  const fillsOf = plot => plot.children.map(row => findDescendant(row, node => (node.getAttribute?.('class') || '').startsWith('bar-fill')));
+  // A negative value is drawn left of the zero line, a positive one right of it.
+  assert.deepEqual(fillsOf(plots[0]).map(node => [node.getAttribute('x'), node.getAttribute('width')]), [['0%', '40%'], ['40%', '60%']]);
+  const zeroLine = findDescendant(plots[0], node => node.getAttribute?.('class') === 'bar-zero');
+  assert.equal(zeroLine.getAttribute('x1'), '40%');
+  const equalBars = fillsOf(plots[1]);
+  assert.equal(equalBars.length, 2, 'equal values still get one row each');
+  assert.equal(equalBars[0].getAttribute('width'), equalBars[1].getAttribute('width'));
+  assert.equal(findDescendant(plots[1].parent, node => node.className === 'measure-delta').textContent, 'No measurable difference');
 });
 
 test('long-haul share shows supplied percent, threshold, and exact counts without deriving values', () => {
@@ -401,14 +418,17 @@ test('long-haul share shows supplied percent, threshold, and exact counts withou
   const complete = render(make('ok', 25, 5, 20));
   const text = content(findDescendant(complete.nodes.get('#result'), node => node.id === 'metric-view'));
   assert.match(text, /25\.00%/);
-  assert.match(text, /Threshold ≥ 3,000 mi/);
-  assert.match(text, /Long-haul departures 5/);
-  assert.match(text, /Eligible departures 20/);
+  assert.match(text, /Long-haul threshold \(route distance\) ≥ 3,000 mi/);
+  assert.match(text, /Long-haul departures \(≥ 3,000 mi\) 5/);
+  assert.match(text, /Eligible departures \(all distances\) 20/);
+  assert.match(text, /25\.00% of eligible ANC departures flew routes of 3,000 miles or more\./, 'the share is stated as a sentence with its denominator and threshold');
+  const scopeNote = findDescendant(complete.nodes.get('#result'), node => node.className === 'scope-note');
+  assert.equal(content(scopeNote).replace(/\s+/g, ' ').trim(), 'Scope: scheduled passenger departures only — cargo-only and charter flights are not included.');
   const stats = findDescendant(complete.nodes.get('#result'), node => node.className === 'long-haul-stats');
   assert.deepEqual(stats.children.map(item => item.children.map(child => [child.tagName, child.textContent])), [
-    [['dt', 'Long-haul departures'], ['dd', '5']],
-    [['dt', 'Eligible departures'], ['dd', '20']],
-    [['dt', 'Threshold'], ['dd', '≥ 3,000 mi']],
+    [['dt', 'Long-haul departures (≥ 3,000 mi)'], ['dd', '5']],
+    [['dt', 'Eligible departures (all distances)'], ['dd', '20']],
+    [['dt', 'Long-haul threshold (route distance)'], ['dd', '≥ 3,000 mi']],
   ], 'counts and threshold come straight from the returned metric and scope');
   assert.doesNotMatch(text, /25\/100|calculated|approx/i);
   const ring = findDescendant(complete.nodes.get('#result'), node => node.className === 'share-ring');
@@ -422,7 +442,7 @@ test('long-haul share shows supplied percent, threshold, and exact counts withou
   assert.equal(returnedRing.children.find(node => node.getAttribute('class') === 'share-ring-center').textContent, '2.37%', 'center label is formatted directly from the returned metric.value');
   const zero = render(make('ok', 0, 0, 0));
   assert.match(content(zero.nodes.get('#result')), /0\.00%/);
-  assert.match(content(zero.nodes.get('#result')), /Eligible departures 0/);
+  assert.match(content(zero.nodes.get('#result')), /Eligible departures \(all distances\) 0/);
   const missing = render(make('unavailable', null, null, null, 'Coverage incomplete'));
   assert.match(content(missing.nodes.get('#result')), /Unavailable: Coverage incomplete/);
   assert.doesNotMatch(content(missing.nodes.get('#result')), /0\.00%/);
@@ -448,14 +468,16 @@ test('SFO pressure rendering preserves returned values, unavailable reasons and 
   assert.match(text, /1,000/);
   assert.match(text, /Source IDs: source/);
   assert.match(text, /90/);
-  assert.doesNotMatch(text, /seat growth/i);
+  // Without a returned seat_growth metric the browser shows no seat growth figure.
+  assert.doesNotMatch(text, /seat supply growth/i);
+  assert.equal(findDescendant(ui.nodes.get('#result'), node => node.getAttribute?.('data-metric-key') === 'seat_growth'), null);
   const missingOptional = result(); missingOptional.status = 'partial'; missingOptional.scope.metric = 'sfo_pressure';
   missingOptional.rows = [{ airport: 'SFO', metrics: [metric('sfo_pressure', 0, 'percentage_points')] }];
   missingOptional.scope.airports = ['SFO'];
   ui.context.payload = missingOptional;
   ui.run('renderResult(validateResult(payload), false)');
   assert.match(resultContent(ui), /Passenger growth gap|-1\.2|0/);
-  assert.doesNotMatch(resultContent(ui), /seat growth/i);
+  assert.doesNotMatch(resultContent(ui), /seat supply growth/i);
 });
 
 test('monthly series rendering retains returned values and unavailable gaps', () => {
@@ -506,7 +528,8 @@ test('two-year monthly chart labels returned year boundaries and keeps exact ser
   const chart = findDescendant(ui.nodes.get('#result'), node => node.tagName === 'svg' && node.getAttribute('role') === 'img');
   const labels = chart.children.filter(node => node.getAttribute('class') === 'series-axis-label').map(node => node.textContent);
   assert.deepEqual(labels.filter(text => text.startsWith('Jan ')), ['Jan 2023', 'Jan 2024']);
-  assert.match(labels.at(-1), /2024-12/);
+  assert.equal(labels.at(-1), 'Dec 2024', 'every month tick uses the same plain format');
+  assert.ok(labels.every(text => !/^\d{4}-\d{2}$/.test(text)), 'no ISO month ticks');
   assert.match(resultContent(ui), /2023-01/);
   assert.match(resultContent(ui), /2024-12/);
 });
@@ -1080,7 +1103,7 @@ test('final UI markup keeps the local renderer, mapped airports and honest data 
   const css = fs.readFileSync(path.join(__dirname, '../styles.css'), 'utf8');
   assert.equal((html.match(/<h1\b/g) || []).length, 1);
   assert.equal((html.match(/id="feedback"/g) || []).length, 1);
-  assert.match(html, /<script type="module" src="\/static\/globe\.js"><\/script>/);
+  assert.match(html, /<script type="module" src="\/static\/globe\.js"[^>]*><\/script>/);
   assert.ok(fs.existsSync(path.join(__dirname, '../globe.js')));
   const coordinates = JSON.parse(fs.readFileSync(path.join(__dirname, '../assets/airport-coordinates.json'), 'utf8'));
   assert.deepEqual(Object.keys(coordinates).sort(), ['ANC', 'BOS', 'LAX', 'PVD', 'SFO', 'SNA']);
@@ -1235,7 +1258,9 @@ test('2025 bundle result with 23 New England rows including EWB is admitted and 
   ui.run('renderResult(validateResult(payload), false)');
   const scopeHeading = ui.nodes.get('#result').children[0];
   const period = scopeHeading.children.find(child => child.className === 'result-period');
-  assert.equal(period.textContent, 'Period · CY2024 → CY2025 · showing 2025 · Bundle annual-2025-r1');
+  assert.equal(period.textContent, 'Calendar year 2025 compared with 2024 · accepted data release');
+  assert.doesNotMatch(content(scopeHeading), /annual-2025-r1|Bundle/, 'the bundle identifier stays in Technical details');
+  assert.match(content(disclosureByTitle(ui.nodes.get('#result'), 'Technical details')), /Bundle: annual-2025-r1/);
   assert.ok(ui.run('supportedAirports.has("EWB") && newEnglandAirports.has("EWB")'));
   const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
   assert.match(html, /<option>EWB<\/option>/);
@@ -1248,7 +1273,7 @@ test('historical result without bundle fields shows a historical period and stay
   const ui = setup(); ui.context.payload = result();
   ui.run('renderResult(validateResult(payload), false)');
   const scopeHeading = ui.nodes.get('#result').children[0];
-  assert.equal(scopeHeading.children.find(child => child.className === 'result-period').textContent, 'Period · 2024 historical data');
+  assert.equal(scopeHeading.children.find(child => child.className === 'result-period').textContent, 'Calendar year 2024 · historical data');
   ui.context.nulls = result();
   Object.assign(ui.context.nulls.scope, { bundle_id: null, baseline_year: null, comparison_year: null });
   assert.doesNotThrow(() => ui.run('validateResult(nulls)'));
@@ -1466,16 +1491,16 @@ test('KPI cards render whichever metrics the rows return, with units, and are om
   const row = findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row');
   assert.ok(row);
   assert.equal(row.children.length, 2);
-  assert.match(content(row), /Passengers .*27,250,806/);
-  assert.match(content(row), /Passenger growth .*4\.59%/);
+  assert.match(content(row), /Passengers boarding at SFO .*27,250,806 .*in 2024 · DataSF enplanements/);
+  assert.match(content(row), /Passenger growth .*\+4\.59 % .*vs\. 2023 · \+1,196,220 passengers/);
   payload.rows[0].metrics.unshift({ key: 'sfo_enplaned_trend', value: 5, unit: 'count', status: 'ok', source_ids: ['source'] });
   ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
   const withTrend = findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row');
-  assert.equal(withTrend.children[0].children[0].textContent, 'SFO passenger trend', 'the requested key leads when returned');
+  assert.equal(withTrend.children[0].children[0].textContent, 'Passengers boarding at SFO', 'the requested key leads when returned');
   payload.rows[0].metrics.splice(1, 0, { key: 'enplaned_growth', value: 4.59, unit: 'percent', status: 'ok', numerator: 1196220, denominator: 26054586, source_ids: ['source'] });
   ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
   const withEnplaned = findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row');
-  assert.match(content(withEnplaned), /Enplaned passenger growth .*4\.59%/, 'a newly added backend metric is admitted and shown with its unit');
+  assert.match(content(withEnplaned), /Boarding passenger growth \(DataSF\) .*\+4\.59 %/, 'a newly added backend metric is admitted and shown with its unit');
   payload.rows = [{ airport: 'SFO', metrics: [] }];
   ui.run('latestSuccessfulResult = validateResult(payload); renderResult(latestSuccessfulResult, false)');
   assert.equal(findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row'), null, 'no empty KPI section');
@@ -1633,6 +1658,111 @@ function sfoPressure(gap) {
     chatMetric('seat_occupancy', 82.31, 'percent', { numerator: 26477602, denominator: 32169113 }), chatMetric('sfo_pressure', gap, 'percentage_points')] }],
   'No sign in 2025 that airline seat supply at SFO fell behind passenger traffic: supplied seats grew 1.22 percentage points faster than transported passengers.');
 }
+// ── Result comprehension: every figure states what it measures, its unit and its comparison ──
+function kpiCards(ui) { return findDescendant(ui.nodes.get('#result'), node => node.className === 'kpi-row')?.children || []; }
+function cardText(card) { return content(card).replace(/\s+/g, ' ').trim(); }
+function sfoWithSeats(gap, seats, scopeExtra = {}) {
+  const payload = sfoPressure(gap);
+  payload.rows[0].metrics.splice(1, 0, chatMetric('seat_growth', seats, 'percent', { numerator: 1799796, denominator: 30369317 }));
+  Object.assign(payload.scope, scopeExtra);
+  return payload;
+}
+
+test('SFO demand pressure shows passenger growth, seat growth, the gap and occupancy, each with its comparison', () => {
+  const ui = setup(); ui.context.payload = sfoWithSeats(-1.2247, 5.9264);
+  ui.run('renderResult(validateResult(payload), false)');
+  const cards = kpiCards(ui);
+  assert.deepEqual(cards.map(card => card.getAttribute('data-metric-key')), ['passenger_growth', 'seat_growth', 'sfo_pressure', 'seat_occupancy']);
+  assert.deepEqual(cards.map(cardText), [
+    'Passenger traffic growth +4.70 % vs. 2024',
+    'Airline seat supply growth +5.93 % vs. 2024',
+    'Traffic vs. seat growth −1.22 percentage points Seat supply grew 1.22 percentage points faster (calculated before rounding)',
+    'Seat occupancy 82.31 % of supplied seats filled in 2025',
+  ]);
+  const order = ui.nodes.get('#result').children.map(node => node.className);
+  assert.ok(order.indexOf('result-takeaway') === order.indexOf('kpi-row') + 1, 'the answer sits directly under the figures');
+  assert.ok(order.indexOf('result-takeaway') < order.findIndex(name => (name || '').includes('series-panel')), 'and before the chart');
+  const takeaway = ui.nodes.get('#result').children.find(node => node.className === 'result-takeaway');
+  assert.equal(takeaway.textContent, 'Seat supply grew faster than passenger traffic in 2025, so these data do not show a shortage of airline seat capacity. Latent demand cannot be measured from observed traffic alone.');
+});
+
+test('the SFO takeaway follows the sign of the returned gap, and its years follow the resolved period', () => {
+  const ui = setup();
+  ui.context.payload = sfoWithSeats(0.8, 3.9);
+  ui.run('renderResult(validateResult(payload), false)');
+  const positive = ui.nodes.get('#result').children.find(node => node.className === 'result-takeaway').textContent;
+  assert.equal(positive, 'Passenger traffic grew faster than seat supply in 2025: a sign of pressure on airline seat capacity, not a measure of unmet demand. Latent demand cannot be measured from observed traffic alone.');
+  assert.match(cardText(kpiCards(ui)[2]), /\+0\.80 percentage points Passenger traffic grew 0\.80 percentage points faster \(calculated before rounding\)$/);
+  ui.context.payload = sfoWithSeats(0.001, 4.7);
+  ui.run('renderResult(validateResult(payload), false)');
+  assert.match(ui.nodes.get('#result').children.find(node => node.className === 'result-takeaway').textContent, /^Passenger traffic and seat supply grew at the same pace in 2025/);
+  // Historical 2024 vs 2023 (no bundle): every comparison line names 2023.
+  const historical = sfoWithSeats(-0.0366, 3.99, { year: 2024, bundle_id: null, baseline_year: null, comparison_year: null });
+  ui.context.payload = historical;
+  ui.run('renderResult(validateResult(payload), false)');
+  assert.deepEqual(kpiCards(ui).slice(0, 2).map(card => findDescendant(card, node => node.className === 'kpi-context').textContent), ['vs. 2023', 'vs. 2023']);
+  assert.match(cardText(kpiCards(ui)[3]), /filled in 2024/);
+  assert.match(ui.nodes.get('#result').children.find(node => node.className === 'result-takeaway').textContent, /in 2024,/);
+  // An unavailable gap gives no takeaway rather than a guessed one.
+  const unavailable = sfoWithSeats(0, 4);
+  unavailable.rows[0].metrics = unavailable.rows[0].metrics.map(metric => metric.key === 'sfo_pressure' ? { ...metric, value: null, status: 'unavailable', reason: 'Incomplete T-100 periods' } : metric);
+  ui.context.payload = unavailable;
+  ui.run('renderResult(validateResult(payload), false)');
+  assert.equal(ui.nodes.get('#result').children.find(node => node.className === 'result-takeaway'), undefined);
+});
+
+test('a ranking leads with its highest and lowest value, and the list names what its value column is', () => {
+  const growth = chatResult('ne-growth', chatScope(NEW_ENGLAND, 'passenger_growth'),
+    [['BID', 1, 63.67], ['WST', 2, 60.73], ['AUG', 3, -17.65]].map(([airport, rank, value]) => ({ airport, rank, metrics: [chatMetric('passenger_growth', value, 'percent')] })),
+    'Top of 3 ranked airports on passenger growth.');
+  const ui = setup(); ui.context.payload = growth;
+  ui.run('renderResult(validateResult(payload), false)');
+  assert.equal(ui.nodes.get('#result').children[0].children[0].textContent, 'New England passenger growth');
+  assert.deepEqual(kpiCards(ui).map(cardText), [
+    'Highest passenger growth BID +63.67 % vs. 2024 · rank 1 of 3 ranked',
+    'Lowest passenger growth AUG −17.65 % vs. 2024 · rank 3 of 3 ranked',
+  ]);
+  const list = findDescendant(ui.nodes.get('#result'), node => node.tagName === 'table' && node.children[0].textContent === 'Passenger growth by airport');
+  const header = findDescendant(list, node => node.tagName === 'thead');
+  assert.deepEqual(header.children[0].children.map(cell => cell.textContent), ['Rank', 'Airport', 'Passenger growth, 2025 vs. 2024']);
+  ui.context.payload = growth;
+  assert.equal(ui.run('compactReply(validateResult(payload))'), 'BID ranks highest on passenger growth (+63.67% vs. 2024), followed by WST and AUG. 3 of 23 airports were assessable.');
+});
+
+test('the monthly chart uses round compact ticks, a labelled axis and exact counts in its tooltip and description', () => {
+  const payload = result(); payload.scope.metric = 'sfo_enplaned_trend'; payload.scope.airports = ['SFO'];
+  payload.rows = [{ airport: 'SFO', metrics: [{ key: 'sfo_enplaned_trend', value: 24, unit: 'count', status: 'ok', source_ids: ['source'] }] }];
+  payload.series = Array.from({ length: 24 }, (_, index) => ({ period: `${index < 12 ? '2023' : '2024'}${String((index % 12) + 1).padStart(2, '0')}`,
+    value: index === 18 ? 2633873 : 1800000 + index * 10000, unit: 'count', status: 'ok' }));
+  const ui = setup(); ui.context.payload = payload;
+  ui.run('renderResult(validateResult(payload), false)');
+  const panel = findDescendant(ui.nodes.get('#result'), node => node.className === 'series-panel' && node.children[0]?.textContent === 'Monthly passengers boarding at SFO');
+  assert.ok(panel.classList.contains('feature-chart'));
+  assert.equal(panel.children[1].textContent, 'DataSF enplanements, domestic and international combined · Jan 2023 – Dec 2024');
+  const chart = findDescendant(panel, node => node.tagName === 'svg' && node.getAttribute('role') === 'img');
+  const yTicks = chart.children.filter(node => node.getAttribute('class') === 'series-axis-label' && node.getAttribute('text-anchor') === 'end' && !/\d{4}/.test(node.textContent)).map(node => node.textContent);
+  assert.deepEqual(yTicks, ['0', '1M', '2M', '2.6M'], 'no isolated 2,633,873 on the axis');
+  assert.equal(chart.children.find(node => node.getAttribute('class') === 'series-axis-title').textContent, 'Passengers per month');
+  const description = chart.children.find(node => node.tagName === 'desc').textContent;
+  assert.match(description, /Highest month Jul 2024: 2,633,873 passengers/);
+  assert.match(description, /starts at zero/);
+  assert.match(content(disclosureByTitle(ui.nodes.get('#result'), 'Methodology & limitations')), /2,633,873/, 'exact counts stay in the methodology table');
+  assert.equal(ui.run('JSON.stringify(axisTicks(0, 24))'), '[0,10,20,24]');
+  assert.equal(ui.run('JSON.stringify(axisTicks(0, 0))'), '[0]');
+});
+
+test('single-airport operational and long-haul figures carry their denominator, unit and period', () => {
+  const delay = chatResult('lax-delay', chatScope(['LAX'], 'departure_delay_minutes'), [{ airport: 'LAX', metrics: [chatMetric('departure_delay_minutes', 13.8, 'minutes', { numerator: 2602393, denominator: 188578 })] }], 'Average departure delay in 2025: LAX 13.8 min.');
+  const ui = setup(); ui.context.payload = delay;
+  ui.run('renderResult(validateResult(payload), false)');
+  assert.equal(cardText(kpiCards(ui)[0]), 'Average departure delay 13.80 min average per departed flight in 2025');
+  assert.equal(ui.run('compactReply(validateResult(payload))'), 'Average departure delay in 2025: LAX 13.80 min');
+  const cancel = laxSnaCancellation();
+  ui.context.payload = cancel;
+  ui.run('renderResult(validateResult(payload), false)');
+  assert.equal(cardText(kpiCards(ui)[0]), 'Cancellation rate LAX 0.69 % 1,315 of 190,472 SNA 1.05 % 471 of 44,997 of scheduled departures cancelled in 2025');
+});
+
 const chatItems = (ui) => ui.nodes.get('#chat-transcript').children;
 const chatText = (item) => findDescendant(item, node => node.className === 'chat-text')?.textContent;
 const chatLink = (item) => findDescendant(item, node => node.className === 'chat-view-link');
@@ -1646,10 +1776,10 @@ function sendChat(ui, text) {
 test('compact chat replies are formatted from returned values for each analysis type', () => {
   const ui = setup();
   const reply = (payload) => { ui.context.payload = payload; return ui.run('compactReply(validateResult(payload))'); };
-  assert.equal(reply(newEnglandScreen()), 'HVN ranks highest in the current screen, followed by BGR and PWM. 22 of 23 airports were assessable.');
+  assert.equal(reply(newEnglandScreen()), 'HVN ranks highest on the New England screening score (74.76 / 100), followed by BGR and PWM. 22 of 23 airports were assessable.');
   assert.equal(reply(laxSnaCongestion()), 'No single airport is uniformly more congested. LAX has the higher diversion rate and average taxi-out time, while SNA has the higher cancellation rate and average departure delay.', 'the backend congestion headline is used verbatim');
-  assert.equal(reply(laxSnaCancellation()), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
-  assert.equal(reply(ancLongHaul()), '2.77% of eligible ANC departures were at least 3,000 miles: 999 of 36,040.');
+  assert.equal(reply(laxSnaCancellation()), 'Cancellation rate in 2025: LAX 0.69% · SNA 1.05%');
+  assert.equal(reply(ancLongHaul()), '2.77% of eligible ANC departures were at least 3,000 miles: 999 of 36,040 scheduled passenger departures. Cargo-only and charter flights are not included.');
   const sfoAnswer = sfoPressure(-1.2247);
   sfoAnswer.summary = 'No sign in 2025 that airline seat supply at SFO fell behind passenger traffic. Reported delays on SFO departures were mostly attributed to late-arriving aircraft (42.4%). These shares explain operational delays, not latent demand or terminal capacity.';
   assert.equal(reply(sfoAnswer), sfoAnswer.summary, 'the SFO reply is the backend direct answer, delay causes included');
@@ -1691,7 +1821,7 @@ test('a follow-up shows the question, then Analyzing…, then the compact reply 
   await flush(); await flush();
   assert.equal(chatItems(ui).length, 3, 'the reply replaces the Analyzing bubble instead of adding one');
   assert.equal(chatItems(ui)[2], pending);
-  assert.equal(chatText(pending), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
+  assert.equal(chatText(pending), 'Cancellation rate in 2025: LAX 0.69% · SNA 1.05%');
   assert.equal(pending.getAttribute('data-state'), 'done');
   assert.equal(chatLink(pending).hidden, false, 'the reply that produced the shown result links to it');
   assert.equal(chatLink(pending).getAttribute('aria-disabled'), 'false');
@@ -1855,7 +1985,8 @@ test('an unsupported or unclear question is answered; a model or service failure
     }
     assert.doesNotMatch(content(reply) + content(user), /123e4567|request|_scope|_required|_unavailable|_timeout|\b(422|503|504)\b|Gemini/i, `${code}: no codes or IDs in the transcript`);
     assert.equal(chatLink(reply).hidden, true);
-    assert.equal(ui.nodes.get('#question').value, 'What about the weather?', 'the question is kept for editing');
+    assert.equal(ui.nodes.get('#question').value, state === 'error' ? 'What about the weather?' : '',
+      `${code}: a failed send gives its text back for editing; an answered one leaves the composer clean`);
     assert.equal(ui.run('latestSuccessfulResult.result_id'), 'lax-sna', 'the previous result stays');
     const fieldError = ui.nodes.get('#question-error');
     assert.equal(fieldError.hidden, false);
@@ -1891,7 +2022,7 @@ test('Retry re-sends the same text on the same turn, and the in-flight composer 
   await preset;
   ui.nodes.get('#ask-trigger').click();
   const question = ui.nodes.get('#question');
-  const send = ui.nodes.get('#chat-form button');
+  const send = ui.nodes.get('#chat-form .composer-send');
   sendChat(ui, 'Just the cancellation rates, please.');
   const [, user, reply] = chatItems(ui);
   assert.equal(reply.getAttribute('aria-busy'), 'true', 'the working indicator is marked busy');
@@ -1921,10 +2052,10 @@ test('Retry re-sends the same text on the same turn, and the in-flight composer 
   assert.deepEqual(bodies[2], { message: 'Just the cancellation rates, please.', context_result_id: 'lax-sna' }, 'Retry re-sends the same text and context id only');
   pendingResponses.shift()(success(laxSnaCancellation()));
   await flush(); await flush();
-  assert.equal(chatText(reply), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
+  assert.equal(chatText(reply), 'Cancellation rate in 2025: LAX 0.69% · SNA 1.05%');
   assert.equal(reply.getAttribute('aria-busy'), 'false');
   assert.equal(question.value, 'What about Anchorage long-haul share?', 'a draft typed while waiting survives the reply');
-  assert.equal(ui.nodes.get('#chat-status').textContent, 'Analyst: Cancellation rate: LAX 0.69% · SNA 1.05%', 'the outcome is announced once');
+  assert.equal(ui.nodes.get('#chat-status').textContent, 'Analyst: Cancellation rate in 2025: LAX 0.69% · SNA 1.05%', 'the outcome is announced once');
 });
 
 test('a reply follows the reader only when they were at the end; the sender always sees their own message', async () => {
@@ -2007,7 +2138,7 @@ test('View analysis focuses the result title the reply produced', async () => {
   const ui = setup(async () => success(ancLongHaul()));
   await ui.run('runPreset(demos["anc-long-haul"])');
   const reply = chatItems(ui)[0];
-  assert.equal(chatText(reply), '2.77% of eligible ANC departures were at least 3,000 miles: 999 of 36,040.');
+  assert.equal(chatText(reply), '2.77% of eligible ANC departures were at least 3,000 miles: 999 of 36,040 scheduled passenger departures. Cargo-only and charter flights are not included.');
   const link = chatLink(reply);
   assert.equal(link.hidden, false);
   assert.equal(link.textContent, 'View analysis →');
@@ -2057,7 +2188,7 @@ test('sending a failed question again retries its turn instead of adding a copy'
   assert.equal(bodies.length, 3);
   pending.shift()(success(laxSnaCancellation()));
   await flush(); await flush();
-  assert.equal(chatText(reply), 'Cancellation rate: LAX 0.69% · SNA 1.05%');
+  assert.equal(chatText(reply), 'Cancellation rate in 2025: LAX 0.69% · SNA 1.05%');
   assert.equal(ui.nodes.get('#question').value, '', 'a successful retry clears the sent text');
 });
 
@@ -2067,8 +2198,222 @@ test('the screening list shows where each score comes from', async () => {
   const ui = setup(async () => success(payload));
   await ui.run('runPreset(demos["new-england"])');
   const parts = findDescendant(ui.nodes.get('#result'), node => node.className === 'ranking-detail score-parts');
-  assert.equal(parts.textContent, 'Growth 30.5 · Volume 24.3 · Occupancy 20.0');
+  assert.equal(parts.textContent, 'Growth 30.5/40 · Volume 24.3/30 · Occupancy 20.0/30', 'each part names its maximum');
   assert.equal(parts.getAttribute('aria-label'), '30.5 of 40 growth points, 24.3 of 30 volume points, 20.0 of 30 occupancy points');
   ui.context.metric = chatMetric('volume_points', 24.286, 'score');
   assert.equal(ui.run('formatMetric(metric)'), '24.3 of 30 points', 'points are never shown as a score out of 100');
+});
+
+test('an ended access session sends the analyst to sign in instead of showing an error', async () => {
+  const denied = { ok: false, status: 401, json: async () => errorEnvelope('access_required', 'Sign in to use this application.') };
+  for (const request of ['{analysis: demos["lax-sna"]}', '{message: "Compare LAX and SNA"}']) {
+    const ui = setup(async () => denied);
+    const assigned = [];
+    ui.window.location = { assign: (url) => assigned.push(url) };
+    await ui.run(`submitRequest(${request})`);
+    assert.deepEqual(assigned, ['/login'], request);
+    assert.ok(!ui.nodes.get('#feedback').textContent.includes('Sign in to use'), request);
+  }
+});
+
+test('an access_required code on any other status is treated as an ordinary error', async () => {
+  const ui = setup(async () => ({ ok: false, status: 403, json: async () => errorEnvelope('access_required', 'Sign in to use this application.') }));
+  const assigned = [];
+  ui.window.location = { assign: (url) => assigned.push(url) };
+  await ui.run('submitRequest({analysis: demos["lax-sna"]})');
+  assert.deepEqual(assigned, []);
+});
+
+test('the in-flight state marks Send, not the microphone that now comes first in the form', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const form = html.slice(html.indexOf('id="chat-form"'), html.indexOf('</form>', html.indexOf('id="chat-form"')));
+  const buttons = [...form.matchAll(/<button\b[^>]*>/g)].map(match => match[0]);
+  assert.ok(buttons.length >= 2 && !buttons[0].includes('composer-send'), 'a plain "#chat-form button" selector would hit the microphone');
+  assert.ok(buttons.some(tag => /type="submit"/.test(tag) && /class="composer-send"/.test(tag)));
+  const source = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  assert.ok(!source.includes('"#chat-form button"'), 'busy state must target .composer-send');
+  const ui = setup(async () => success(laxSnaCongestion()));
+  ui.run('setLoading(true)');
+  assert.equal(ui.nodes.get('#chat-form .composer-send').getAttribute('aria-disabled'), 'true');
+  ui.run('setLoading(false)');
+  assert.equal(ui.nodes.get('#chat-form .composer-send').getAttribute('aria-disabled'), 'false');
+});
+
+test('a sent question leaves the composer at once; success keeps it clean and a failure gives it back', async () => {
+  const pendingResponses = [];
+  const ui = setup(() => new Promise(resolve => pendingResponses.push(resolve)));
+  const preset = ui.run('runPreset(demos["lax-sna"])');
+  pendingResponses.shift()(success(laxSnaCongestion()));
+  await preset;
+  ui.nodes.get('#ask-trigger').click();
+  const question = ui.nodes.get('#question');
+  Object.assign(question, { style: { height: '132px' }, scrollHeight: 44 }); // a long dictated question had grown it
+  // Dictation puts plain text in the field, so a dictated question is this same send.
+  sendChat(ui, 'Just the cancellation rates, please.');
+  assert.equal(question.value, '', 'the field empties as soon as the question is sent');
+  assert.equal(question.style.height, '44px', 'the field shrinks back to one line');
+  const [, user] = chatItems(ui);
+  assert.equal(chatText(user), 'Just the cancellation rates, please.', 'the question appears once, in its bubble');
+  pendingResponses.shift()(success(laxSnaCancellation()));
+  await flush(); await flush();
+  assert.equal(question.value, '', 'still empty after the answer');
+  assert.equal(chatItems(ui).filter(item => chatText(item) === 'Just the cancellation rates, please.').length, 1);
+  sendChat(ui, 'And Anchorage?');
+  assert.equal(question.value, '');
+  pendingResponses.shift()({ ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') });
+  await flush(); await flush();
+  assert.equal(question.value, 'And Anchorage?', 'a failed send ("Not sent · Retry") gives its text back for editing');
+  sendChat(ui, 'And Anchorage?'); // sending the same text again is that turn's Retry
+  assert.equal(question.value, '', 'the retry leaves the composer too');
+  assert.equal(chatItems(ui).filter(item => chatText(item) === 'And Anchorage?').length, 1, 'Retry reuses the turn');
+  pendingResponses.shift()(new Error('offline'));
+  await flush(); await flush();
+  assert.equal(question.value, 'And Anchorage?', 'a connection failure gives it back as well');
+});
+
+test('a stopped or too-long question comes back for editing; Back and answered questions do not', async () => {
+  const tooLarge = { ok: false, status: 413, json: async () => errorEnvelope('request_too_large', 'Send a shorter question.') };
+  const clarify = { ok: false, status: 422, json: async () => errorEnvelope('clarification_required', 'Which airport should I compare with LAX?') };
+  const { query } = queuedFetch([success(laxSnaCongestion()), tooLarge, clarify]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["lax-sna"])');
+  ui.nodes.get('#ask-trigger').click();
+  const question = ui.nodes.get('#question');
+  sendChat(ui, 'A very long dictated question');
+  await flush(); await flush();
+  assert.equal(question.value, 'A very long dictated question', '"Send a shorter question" gives the text back to shorten');
+  sendChat(ui, 'Compare it');
+  await flush(); await flush();
+  assert.equal(question.value, '', 'a clarification is answered; the composer stays clean for the reply');
+
+  const pending = [];
+  const stopped = setup(() => new Promise(resolve => pending.push(resolve)));
+  const preset = stopped.run('runPreset(demos["lax-sna"])');
+  pending.shift()(success(laxSnaCongestion()));
+  await preset;
+  stopped.nodes.get('#ask-trigger').click();
+  sendChat(stopped, 'Just the cancellation rates, please.');
+  assert.equal(stopped.nodes.get('#question').value, '');
+  stopped.run('changedDraft()'); // a scope edit or globe pick while the answer is on its way
+  pending.shift()(success(laxSnaCancellation()));
+  await flush(); await flush();
+  const [, user] = chatItems(stopped);
+  assert.equal(user.getAttribute('data-state'), 'failed', 'the stopped turn offers Retry');
+  assert.equal(stopped.nodes.get('#question').value, 'Just the cancellation rates, please.', 'and its text is back for editing');
+
+  const backPending = [];
+  const back = setup(() => new Promise(resolve => backPending.push(resolve)));
+  const backPreset = back.run('runPreset(demos["lax-sna"])');
+  backPending.shift()(success(laxSnaCongestion()));
+  await backPreset;
+  back.nodes.get('#ask-trigger').click();
+  sendChat(back, 'Just the cancellation rates, please.');
+  back.run('startNewAnalysis()');
+  backPending.shift()(success(laxSnaCancellation()));
+  await flush(); await flush();
+  assert.equal(back.nodes.get('#question').value, '', 'Back starts over; the question is not put back');
+});
+
+test('a stale answer never puts an old question into a newer send or a fresh analysis', async () => {
+  const pending = [];
+  const ui = setup(() => new Promise(resolve => pending.push(resolve)));
+  const preset = ui.run('runPreset(demos["lax-sna"])');
+  pending.shift()(success(laxSnaCongestion()));
+  await preset;
+  ui.nodes.get('#ask-trigger').click();
+  const question = ui.nodes.get('#question');
+  sendChat(ui, 'Question A');
+  const answerA = pending.shift();
+  ui.run('changedDraft()'); // a scope edit supersedes A while it is in flight
+  sendChat(ui, 'Question B');
+  const answerB = pending.shift();
+  assert.equal(question.value, '');
+  answerA(success(laxSnaCancellation()));
+  await flush(); await flush();
+  assert.equal(question.value, '', 'A arriving late does not refill the field while B is on its way');
+  answerB({ ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') });
+  await flush(); await flush();
+  assert.equal(question.value, 'Question B', 'the failed send B, not the stale A, comes back for editing');
+
+  const later = [];
+  const fresh = setup(() => new Promise(resolve => later.push(resolve)));
+  const freshPreset = fresh.run('runPreset(demos["lax-sna"])');
+  later.shift()(success(laxSnaCongestion()));
+  await freshPreset;
+  fresh.nodes.get('#ask-trigger').click();
+  sendChat(fresh, 'Question A');
+  const staleA = later.shift();
+  fresh.run('startNewAnalysis()'); // Back...
+  fresh.nodes.get('#ask-trigger').click(); // ...and straight into a new question
+  assert.equal(fresh.run('$("#conversation-composer").hidden'), false);
+  staleA(success(laxSnaCancellation()));
+  await flush(); await flush();
+  assert.equal(fresh.nodes.get('#question').value, '', 'the previous analysis\'s question does not appear in the fresh one');
+});
+
+test('any newer send, not only a matching question, ends an older send\'s claim on the field', async () => {
+  for (const newer of ['retry', 'preset']) {
+    const pending = [];
+    const ui = setup(() => new Promise(resolve => pending.push(resolve)));
+    const preset = ui.run('runPreset(demos["lax-sna"])');
+    pending.shift()(success(laxSnaCongestion()));
+    await preset;
+    ui.nodes.get('#ask-trigger').click();
+    const question = ui.nodes.get('#question');
+    sendChat(ui, 'Question F');
+    pending.shift()({ ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') });
+    await flush(); await flush();
+    const failedF = chatItems(ui)[1];
+    sendChat(ui, 'Question A'); // the field held F; A replaces it and takes the field
+    const answerA = pending.shift();
+    ui.run('changedDraft()'); // A is superseded but still in flight
+    question.value = '';
+    if (newer === 'retry') findDescendant(failedF, node => node.className === 'chat-retry').click();
+    else void ui.run('runPreset(demos["anc-long-haul"])');
+    const answerNewer = pending.shift();
+    answerA(success(laxSnaCancellation()));
+    await flush(); await flush();
+    assert.equal(question.value, '', `${newer}: the stale A does not reappear while the newer send is on its way`);
+    answerNewer(newer === 'retry'
+      ? { ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') }
+      : success(laxSnaCongestion()));
+    await flush(); await flush();
+    assert.notEqual(question.value, 'Question A', `${newer}: A never comes back after a newer send`);
+  }
+});
+
+test('the Retry button drops dictation still arriving, like Send', async () => {
+  const { query } = queuedFetch([success(laxSnaCongestion()), { ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') }, success(laxSnaCancellation())]);
+  const ui = setup(query);
+  let discards = 0;
+  ui.window.airportVoice = { discardListening: () => { discards += 1; } };
+  await ui.run('runPreset(demos["lax-sna"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'Just the cancellation rates, please.');
+  await flush(); await flush();
+  assert.equal(discards, 1);
+  const [, user] = chatItems(ui);
+  findDescendant(user, node => node.className === 'chat-retry').click();
+  assert.equal(discards, 2, 'Retry sends the question again, so late dictation is dropped');
+  assert.equal(ui.nodes.get('#question').value, '');
+  await flush(); await flush();
+  assert.equal(ui.nodes.get('#question').value, '');
+});
+
+test('dictation is discarded only when a question is actually sent, not when it is refused', async () => {
+  const pendingResponses = [];
+  const ui = setup(() => new Promise(resolve => pendingResponses.push(resolve)));
+  let discards = 0;
+  ui.window.airportVoice = { discardListening: () => { discards += 1; } };
+  const preset = ui.run('runPreset(demos["lax-sna"])');
+  pendingResponses.shift()(success(laxSnaCongestion()));
+  await preset;
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, '');
+  assert.equal(discards, 0, 'an empty question is refused and keeps dictating');
+  sendChat(ui, 'Just the cancellation rates, please.');
+  assert.equal(discards, 1, 'an accepted question drops late dictation');
+  sendChat(ui, 'And Anchorage?');
+  assert.equal(discards, 1, 'a send refused while busy keeps the dictation');
+  pendingResponses.shift()(success(laxSnaCongestion()));
 });

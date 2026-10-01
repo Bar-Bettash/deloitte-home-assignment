@@ -66,6 +66,7 @@ METRIC_LABELS = {
     "sfo_pressure": "SFO demand pressure",
     "sfo_enplaned_trend": "SFO passenger trend",
     "enplaned_growth": "enplaned passenger growth",
+    "seat_growth": "airline seat supply growth",
 }
 T100_KEYS = {
     "passengers": "passengers",
@@ -720,6 +721,13 @@ def _sfo_pressure(
     metrics.append(MetricValue(key="sfo_pressure", value=pressure.growth_gap_pp.value, unit="percentage_points",
                               status=pressure.growth_gap_pp.status, source_ids=[gap_source] if gap_source else [],
                               reason=pressure.growth_gap_pp.reason or (None if gap_source else "Matched T-100 data is unavailable.")))
+    # Seat growth comes from the same T-100 periods as the gap (calculations/sfo.py), so
+    # passenger growth minus seat growth equals the gap; the browser never derives it.
+    seats = pressure.seat_growth
+    metrics.append(MetricValue(key="seat_growth", value=seats.value, unit="percent", status=seats.status,
+                               numerator=seats.numerator, denominator=seats.denominator,
+                               source_ids=[gap_source] if gap_source else [],
+                               reason=seats.reason or (None if gap_source else "Matched T-100 data is unavailable.")))
     available = sum(item.status == "ok" for item in metrics)
     if available == 0:
         raise DispatchFailure("insufficient_data", 422, "No requested SFO pressure indicator is available.")
@@ -888,8 +896,10 @@ def _explain_sfo_pressure(rows, scope) -> list[str]:
     gap, growth, occupancy = by_key.get("sfo_pressure"), by_key.get("passenger_growth"), by_key.get("seat_occupancy")
     sentences = []
     if gap is not None and gap.value is not None and growth is not None and growth.value is not None:
-        # The gap is defined as passenger growth minus seat growth (calculations/sfo.py).
-        seat_growth = growth.value - gap.value
+        # The gap is defined as passenger growth minus seat growth (calculations/sfo.py);
+        # the returned seat-growth metric is used when present.
+        returned = by_key.get("seat_growth")
+        seat_growth = returned.value if returned is not None and returned.value is not None else growth.value - gap.value
         sentences.append(f"The answer compares two {scope.year} growth rates from BTS T-100: transported passengers grew "
                          f"{_format_value(growth.value, 'percent')} and supplied seats grew {_format_value(seat_growth, 'percent')}, "
                          f"a gap of {_format_value(gap.value, 'percentage_points')}"

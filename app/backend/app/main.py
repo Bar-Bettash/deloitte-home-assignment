@@ -3,11 +3,13 @@ import json
 import logging
 import secrets
 import time
+from html import escape
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
 
+from app.access import ACCESS_COOKIE, ACCESS_TTL_SECONDS, AccessSigner, AccessTokenError, password_matches
 from app.context_token import (
     ContextClaims,
     ContextSigner,
@@ -29,7 +31,7 @@ from app.model_adapter import ADAPTER_SHA256, ModelAdapterError, comparison_ques
 from app.query_slots import QuerySlots
 from app.settings import HostingConfig, HostingConfigError, load_hosting, load_local_env, load_settings
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -52,6 +54,15 @@ STATIC_DIR = Path(__file__).resolve().parents[2] / "frontend"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "testserver"})
 _ALWAYS_OPEN = frozenset({("GET", "/health"), ("HEAD", "/health")})
 _SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# Reachable without the shared access password: the sign-in page, its stylesheet,
+# and the sign-in/sign-out actions. Everything else (the UI, its scripts and
+# /api/query) needs a valid access cookie when APP_ACCESS_PASSWORD is configured.
+_ACCESS_PUBLIC = frozenset({
+    ("GET", "/login"), ("HEAD", "/login"), ("POST", "/auth/login"), ("POST", "/auth/logout"),
+    ("GET", "/static/login.css"), ("HEAD", "/static/login.css"),
+})
+MAX_LOGIN_BODY_BYTES = 1024
+FAILED_SIGN_IN_DELAY_SECONDS = 0.5
 CONTEXT_COOKIE = "airport_context"
 CONTEXT_TTL_SECONDS = 3600
 QUERY_DEADLINE_SECONDS = 30
@@ -165,7 +176,30 @@ class HostGuard:
             await _guard_error(400, "invalid_request", "Use this application from its own origin.")(
                 scope, receive, send)
             return
+        if (hosting.access_password is not None and (scope["method"], scope["path"]) not in _ACCESS_PUBLIC
+                and not access_granted(request, hosting)):
+            if scope["method"] in {"GET", "HEAD"} and scope["path"] == "/":
+                redirect = RedirectResponse("/login", status_code=303, headers={"Cache-Control": "no-store"})
+                await redirect(scope, receive, send)
+            else:
+                await _guard_error(401, "access_required", "Sign in to use this application.")(scope, receive, send)
+            return
         await self.app(scope, receive, _no_store(send) if hosting.hosted else send)
+
+
+def _access_signer(hosting: HostingConfig) -> AccessSigner:
+    return AccessSigner(_signing_key(hosting), hosting.access_password.get_secret_value())
+
+
+def access_granted(request: Request, hosting: HostingConfig) -> bool:
+    """True when no password is configured, or the request carries a valid access cookie."""
+    if hosting.access_password is None:
+        return True
+    try:
+        _access_signer(hosting).verify(request.cookies.get(ACCESS_COOKIE))
+    except AccessTokenError:
+        return False
+    return True
 
 
 def _guard_error(status_code: int, code: ErrorCode, message: str) -> JSONResponse:
@@ -180,9 +214,88 @@ app.add_middleware(HostGuard)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+_SIGN_OUT_FORM = (
+    '<form class="sign-out" method="post" action="/auth/logout">'
+    '<button type="submit" class="sign-out-button">Sign out</button></form>'
+)
+
+
 @app.get("/", include_in_schema=False)
-def home() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", media_type="text/html")
+def home(request: Request) -> HTMLResponse:
+    """The analyst screen; the sign-out control appears only while the access gate is on."""
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    gated = _hosting(request).access_password is not None
+    return HTMLResponse(html.replace("<!--SIGN_OUT-->", _SIGN_OUT_FORM if gated else ""))
+
+
+_LOGIN_ERROR = "That password is not correct. Check it and try again."
+_LOGIN_MALFORMED = "The sign-in request was not understood. Reload the page and try again."
+
+
+def _login_page(status_code: int = 200, error: str | None = None) -> HTMLResponse:
+    """The sign-in page; an error is rendered server-side so it works without scripts."""
+    html = (STATIC_DIR / "login.html").read_text(encoding="utf-8")
+    if error is not None:
+        html = html.replace("<!--LOGIN_ERROR-->", f'<p id="login-error" class="login-error" role="alert">{escape(error)}</p>')
+        html = html.replace('aria-describedby="login-help"', 'aria-describedby="login-error login-help" aria-invalid="true"')
+    return HTMLResponse(html, status_code=status_code, headers={"Cache-Control": "no-store"})
+
+
+def _home_redirect() -> RedirectResponse:
+    return RedirectResponse("/", status_code=303, headers={"Cache-Control": "no-store"})
+
+
+@app.api_route("/login", methods=["GET", "HEAD"], include_in_schema=False, response_model=None)
+def login_page(request: Request) -> HTMLResponse | RedirectResponse:
+    hosting = _hosting(request)
+    if hosting.access_password is None or access_granted(request, hosting):
+        return _home_redirect()
+    return _login_page()
+
+
+@app.post("/auth/login", include_in_schema=False, response_model=None)
+async def sign_in(request: Request) -> HTMLResponse | RedirectResponse:
+    hosting = _hosting(request)
+    if hosting.access_password is None:
+        return _home_redirect()
+    content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > MAX_LOGIN_BODY_BYTES:
+            return _login_page(413, _LOGIN_MALFORMED)
+        body.extend(chunk)
+    try:
+        if content_type != "application/x-www-form-urlencoded":
+            raise ValueError("unsupported sign-in media type")
+        fields = parse_qs(bytes(body).decode("utf-8"), keep_blank_values=True, strict_parsing=bool(body),
+                          max_num_fields=4, errors="strict")
+        candidates = fields.get("password", [])
+        if len(candidates) != 1:
+            raise ValueError("expected exactly one password field")
+    except ValueError:  # UnicodeDecodeError is a ValueError
+        return _login_page(400, _LOGIN_MALFORMED)
+    if not password_matches(candidates[0], hosting.access_password.get_secret_value()):
+        # Never log the attempted value. The fixed delay slows naive guessing per connection.
+        logger.warning("access sign-in failed")
+        await asyncio.sleep(FAILED_SIGN_IN_DELAY_SECONDS)
+        return _login_page(401, _LOGIN_ERROR)
+    logger.info("access sign-in succeeded")
+    response = _home_redirect()
+    response.set_cookie(
+        ACCESS_COOKIE, _access_signer(hosting).issue(), httponly=True, samesite="strict", path="/",
+        max_age=ACCESS_TTL_SECONDS, secure=hosting.secure_cookies,
+    )
+    return response
+
+
+@app.post("/auth/logout", include_in_schema=False)
+def sign_out(request: Request) -> RedirectResponse:
+    hosting = _hosting(request)
+    response = RedirectResponse("/login" if hosting.access_password is not None else "/", status_code=303,
+                                headers={"Cache-Control": "no-store"})
+    for name in (ACCESS_COOKIE, CONTEXT_COOKIE):
+        response.delete_cookie(name, path="/", httponly=True, samesite="strict", secure=hosting.secure_cookies)
+    return response
 
 
 @app.api_route("/health", methods=["GET", "HEAD"], response_model=HealthResponse)
@@ -195,12 +308,15 @@ def _hosting(request: Request) -> HostingConfig:
     return request.state.hosting
 
 
-def _context_signer(hosting: HostingConfig) -> ContextSigner:
-    key = (
+def _signing_key(hosting: HostingConfig) -> bytes:
+    return (
         hosting.signing_key.get_secret_value().encode("utf-8")
         if hosting.signing_key is not None else _LOCAL_SIGNING_KEY
     )
-    return ContextSigner(key, ttl_seconds=CONTEXT_TTL_SECONDS)
+
+
+def _context_signer(hosting: HostingConfig) -> ContextSigner:
+    return ContextSigner(_signing_key(hosting), ttl_seconds=CONTEXT_TTL_SECONDS)
 
 
 def _set_context_cookie(response: JSONResponse, token: str, hosting: HostingConfig) -> None:

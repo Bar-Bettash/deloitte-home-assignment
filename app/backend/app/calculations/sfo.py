@@ -97,6 +97,18 @@ class PressureMetric:
 
 
 @dataclass(frozen=True, slots=True)
+class SeatGrowthMetric:
+    """Supplied-seat growth from the same T-100 periods as the growth gap."""
+
+    value: float | None
+    unit: Literal["percent"]
+    status: Literal["ok", "unavailable"]
+    reason: str | None
+    numerator: int | None = None
+    denominator: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SFOPressureLineage:
     source_id: Literal["datasf", "t100", "ontime"]
     snapshot_id: str
@@ -113,6 +125,9 @@ class SFOPressureBundle:
     operations: ComponentResult[OperationsResult]
     growth_gap_pp: PressureMetric
     lineage: tuple[SFOPressureLineage, ...]
+    seat_growth: SeatGrowthMetric = SeatGrowthMetric(
+        None, "percent", "unavailable", "accepted T-100 SFO snapshot is unavailable"
+    )
     limitation: str = (
         "These transported-passenger, supplied-seat and operational indicators do not identify "
         "unmet demand, terminal saturation, or the cause of any observed pressure."
@@ -281,8 +296,12 @@ def calculate_sfo_pressure(
         f"accepted CY{operations_year} SFO on-time snapshot is unavailable",
     )
 
-    gap = _growth_gap(traffic.result) if traffic.result is not None else _unavailable_gap(
-        traffic.reason or "accepted T-100 SFO snapshot is unavailable"
+    traffic_unavailable = traffic.reason or "accepted T-100 SFO snapshot is unavailable"
+    gap = _growth_gap(traffic.result) if traffic.result is not None else _unavailable_gap(traffic_unavailable)
+    seat_growth = (
+        _seat_growth(traffic.result)
+        if traffic.result is not None
+        else SeatGrowthMetric(None, "percent", "unavailable", traffic_unavailable)
     )
     lineage: list[SFOPressureLineage] = []
     if enplaned.result is not None:
@@ -305,7 +324,9 @@ def calculate_sfo_pressure(
         status = "ok"
     else:
         status = "partial"
-    return SFOPressureBundle(status, enplaned, traffic, operations, gap, tuple(lineage))
+    return SFOPressureBundle(
+        status, enplaned, traffic, operations, gap, tuple(lineage), seat_growth=seat_growth
+    )
 
 
 def _component(call, error_type, unavailable_reason):
@@ -316,33 +337,57 @@ def _component(call, error_type, unavailable_reason):
     return ComponentResult("ok", result, None)
 
 
-def _growth_gap(traffic: TrafficResult) -> PressureMetric:
-    """Compare passenger and seat growth from the same T-100 origin periods."""
+def _matched_t100_years(traffic: TrafficResult):
+    """Validated baseline and comparison passengers and seats, or the reason they are unusable."""
     by_year = {item.year: item for item in traffic.annual}
     years = tuple(sorted(by_year))
     if len(years) != 2:
-        return _unavailable_gap("T-100 growth gap requires exactly two annual periods")
+        return "T-100 growth gap requires exactly two annual periods"
     baseline_year, comparison_year = years
     baseline = by_year.get(baseline_year)
     comparison = by_year.get(comparison_year)
     if baseline is None or comparison is None:
-        return _unavailable_gap("T-100 selected annual periods are not both available")
+        return "T-100 selected annual periods are not both available"
     if not baseline.coverage.complete or not comparison.coverage.complete:
-        return _unavailable_gap(
-            f"T-100 growth gap requires complete {baseline_year} and {comparison_year} periods"
-        )
+        return f"T-100 growth gap requires complete {baseline_year} and {comparison_year} periods"
     measures = (baseline.passengers, comparison.passengers, baseline.seats, comparison.seats)
     if any(item.status != "ok" or item.value is None for item in measures):
-        return _unavailable_gap("T-100 passengers and seats must be valid for both years")
-    baseline_passengers, comparison_passengers = baseline.passengers.value, comparison.passengers.value
-    baseline_seats, comparison_seats = baseline.seats.value, comparison.seats.value
-    if baseline_passengers <= 0 or baseline_seats <= 0:
-        return _unavailable_gap(
-            f"T-100 {baseline_year} passenger and seat baselines must be positive"
-        )
+        return "T-100 passengers and seats must be valid for both years"
+    if baseline.passengers.value <= 0 or baseline.seats.value <= 0:
+        return f"T-100 {baseline_year} passenger and seat baselines must be positive"
+    return (
+        baseline.passengers.value,
+        comparison.passengers.value,
+        baseline.seats.value,
+        comparison.seats.value,
+    )
+
+
+def _growth_gap(traffic: TrafficResult) -> PressureMetric:
+    """Compare passenger and seat growth from the same T-100 origin periods."""
+    matched = _matched_t100_years(traffic)
+    if isinstance(matched, str):
+        return _unavailable_gap(matched)
+    baseline_passengers, comparison_passengers, baseline_seats, comparison_seats = matched
     passenger_growth = 100.0 * (comparison_passengers / baseline_passengers - 1.0)
     seat_growth = 100.0 * (comparison_seats / baseline_seats - 1.0)
     return PressureMetric(passenger_growth - seat_growth, "percentage_points", "ok", None)
+
+
+def _seat_growth(traffic: TrafficResult) -> SeatGrowthMetric:
+    """Supplied-seat growth on exactly the periods and checks the growth gap uses."""
+    matched = _matched_t100_years(traffic)
+    if isinstance(matched, str):
+        return SeatGrowthMetric(None, "percent", "unavailable", matched)
+    _baseline_passengers, _comparison_passengers, baseline_seats, comparison_seats = matched
+    return SeatGrowthMetric(
+        100.0 * (comparison_seats / baseline_seats - 1.0),
+        "percent",
+        "ok",
+        None,
+        numerator=int(comparison_seats) - int(baseline_seats),
+        denominator=int(baseline_seats),
+    )
 
 
 def _unavailable_gap(reason: str) -> PressureMetric:

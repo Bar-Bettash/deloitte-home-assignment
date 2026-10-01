@@ -251,7 +251,7 @@ def test_real_recent_bundle_dispatch_binds_scope_cohort_and_anc_counts(monkeypat
     [
         ("congestion", ["LAX"], 4),
         ("sfo_enplaned_trend", ["SFO"], 2),
-        ("sfo_pressure", ["SFO"], 12),
+        ("sfo_pressure", ["SFO"], 13),  # 12 indicators + returned seat growth
     ],
 )
 def test_real_recent_bundle_dispatches_operations_and_sfo_workflows(
@@ -1467,6 +1467,23 @@ def test_sfo_pressure_returns_datasf_enplaned_growth(year):
     assert (growth["numerator"], growth["denominator"]) == (comparison - baseline, baseline)
     assert growth["value"] == pytest.approx((comparison - baseline) / baseline * 100)
     assert metrics["sfo_enplaned_trend"]["value"] == comparison
+
+
+@pytest.mark.parametrize("year", [2024, 2025])
+def test_sfo_pressure_returns_seat_growth_that_reconciles_with_the_gap(year):
+    payload = client.post("/api/query", json={"analysis": {
+        "action": "metric", "airports": ["SFO"], "metric": "sfo_pressure", "year": year,
+    }}).json()
+    metrics = {metric["key"]: metric for metric in payload["rows"][0]["metrics"]}
+    seats, growth, gap = metrics["seat_growth"], metrics["passenger_growth"], metrics["sfo_pressure"]
+
+    assert seats["unit"] == "percent" and seats["status"] == "ok"
+    assert seats["source_ids"] == gap["source_ids"]
+    assert seats["denominator"] > 0
+    assert seats["value"] == pytest.approx(seats["numerator"] / seats["denominator"] * 100)
+    assert growth["value"] - seats["value"] == pytest.approx(gap["value"])
+    if year == 2025:
+        assert round(seats["value"], 2) == 5.93 and round(gap["value"], 2) == -1.22
 
 
 def _metric(key, value, unit):

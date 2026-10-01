@@ -1,4 +1,5 @@
 import logging
+import os
 
 import pytest
 from app import main
@@ -26,6 +27,7 @@ def test_health_rejects_unsupported_methods() -> None:
 # Hosted mode: Host allowlist, same-origin POSTs, fail-closed configuration.
 
 FAKE_KEY = "fake-signing-key-for-tests-only-0123456789"
+FAKE_PASSWORD = "test-access-password-only"
 HOST = "demo.example.com"
 ORIGIN = f"http://{HOST}"
 PRESET = {"analysis": {"action": "metric", "airports": ["ANC"], "metric": "long_haul_share"}}
@@ -41,11 +43,18 @@ def _reset_slots():
 @pytest.fixture
 def hosted(monkeypatch):
     monkeypatch.setenv("APP_SIGNING_KEY", FAKE_KEY)
+    monkeypatch.setenv("APP_ACCESS_PASSWORD", FAKE_PASSWORD)
     monkeypatch.setenv("ALLOWED_HOSTS", HOST)
 
 
-def _client(base_url: str = ORIGIN) -> TestClient:
-    return TestClient(main.app, base_url=base_url, follow_redirects=False)
+def _client(base_url: str = ORIGIN, *, sign_in: bool = True) -> TestClient:
+    """A client for base_url, signed in with the shared password when one is configured."""
+    http = TestClient(main.app, base_url=base_url, follow_redirects=False)
+    if sign_in and os.environ.get("APP_ACCESS_PASSWORD"):
+        response = http.post("/auth/login", data={"password": os.environ["APP_ACCESS_PASSWORD"]},
+                             headers={"Origin": base_url})
+        assert response.status_code == 303, response.text
+    return http
 
 
 def _post_query(http: TestClient, body: dict, origin: str = ORIGIN):
@@ -56,14 +65,16 @@ def _error_code(response) -> str:
     return response.json()["error"]["code"]
 
 
-def test_hosted_app_serves_ui_and_presets_without_sign_in(hosted):
+def test_signed_in_hosted_app_serves_ui_and_presets(hosted):
     http = _client()
     home = http.get("/", headers={"Accept": "text/html"})
     assert home.status_code == 200
     assert home.headers["content-type"].startswith("text/html")
     assert home.headers["cache-control"] == "no-store"
+    assert 'action="/auth/logout"' in home.text
     assert http.get("/static/app.js").status_code == 200
-    assert http.get("/login").status_code == 404
+    # Already signed in: the sign-in page sends the analyst back to the app.
+    assert http.get("/login").headers["location"] == "/"
 
     result = _post_query(http, PRESET)
     assert result.status_code == 200, result.text
@@ -174,8 +185,9 @@ def test_vercel_mode_uses_secure_cookies_and_https_origin(monkeypatch):
     monkeypatch.setenv("VERCEL", "1")
     monkeypatch.setenv("VERCEL_URL", "airport-demo-abc.vercel.app")
     monkeypatch.setenv("APP_SIGNING_KEY", FAKE_KEY)
+    monkeypatch.setenv("APP_ACCESS_PASSWORD", FAKE_PASSWORD)
     https_origin = "https://airport-demo-abc.vercel.app"
-    http = TestClient(main.app, base_url=https_origin, follow_redirects=False)
+    http = _client(https_origin)
     assert _post_query(http, PRESET, origin="http://airport-demo-abc.vercel.app").status_code == 400
     result = _post_query(http, PRESET, origin=https_origin)
     assert result.status_code == 200, result.text
@@ -184,7 +196,9 @@ def test_vercel_mode_uses_secure_cookies_and_https_origin(monkeypatch):
 
 def test_local_loopback_run_needs_no_configuration():
     http = TestClient(main.app)
-    assert http.get("/", headers={"Accept": "text/html"}).status_code == 200
+    home = http.get("/", headers={"Accept": "text/html"})
+    assert home.status_code == 200
+    assert "<!--SIGN_OUT-->" not in home.text and "/auth/logout" not in home.text
     assert http.get("/static/app.js").headers.get("cache-control") != "no-store"
     assert http.post("/api/query", json=PRESET).status_code == 200
     assert http.post("/api/query", json=PRESET, headers={"Origin": "http://evil.example.com"}).status_code == 400
