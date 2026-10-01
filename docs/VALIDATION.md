@@ -2,17 +2,18 @@
 
 Compact release evidence for the submitted application.
 
-## Latest hosted RC2 check
+## Final release validation
 
 | Area | Verification | Result |
 |---|---|---|
 | Backend | Python suite | **908 passed, 1 skipped** |
 | Frontend | Node UI/globe suite | **166/166 passed** |
-| Hosted browser | 8 screen widths, 80–200% zoom, keyboard-only use, chat, clarification, voice/read-aloud, sign-out | **104/104 passed** |
-| Hosted API | Auth, analyses, follow-ups, errors, security | **59/60 harness checks**; the one reported failure used an older result and the app correctly rejected it. The same follow-up against the latest result passed. |
+| Production browser | 8 screen widths, 80–200% zoom, keyboard-only use, chat, clarification, voice/read-aloud, sign-out | **104/104 passed** |
+| Production API | Auth, analyses, follow-ups, errors, security | **59/60 harness checks**; the remaining harness failure is a known check-script ordering issue. Production returned the correct SNA 1.05% vs LAX 0.69% cancellation values. |
 | Accessibility | Automated contrast + keyboard/a11y probes | **PASS**, 0 contrast failures |
 | Access gate | Correct/wrong password, authenticated flow, sign-out, unauthenticated blocking | **PASS** |
-| Secret handling | 657 Preview log rows (13:31:07–13:44:56 UTC) scanned for the password; 0 hits, with a planted positive control | **PASS** |
+| Preview secret handling | 657 Preview log rows (13:31:07–13:44:56 UTC) scanned for the password; 0 hits, with a planted positive control | **PASS** |
+| Production secret handling | 676 Production log rows (14:37:03–14:48:19 UTC, `dpl_CdrXR3QR8MHSQn7gwe6eSecQt58s`) scanned for the password; 0 hits, with a planted positive control; 0 5xx | **PASS** |
 | Voice | Dictation, typed fallback, follow-up, read-aloud | **PASS** |
 | Model admission | Pending-comparison 10/10, new-airport follow-ups 10/10, corpus 30/30, holdout 12/12, assignment wording 8/8, chat regression 20/20 | **90/90, 0 errors** |
 | Review | 3 bug-fix review rounds; all findings were minor and fixed | **No blocking findings** |
