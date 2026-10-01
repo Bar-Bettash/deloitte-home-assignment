@@ -120,7 +120,7 @@ A referenced result is recomputed and digest-checked before it can be explained 
 
 Voice is a browser-layer feature:
 
-- Speech recognition produces normal editable text.
+- Speech recognition produces normal editable text; Send clears the composer immediately, while retryable failures restore the draft.
 - Sending that text uses the same API and Gemini intent path as typing.
 - Read-aloud uses browser `speechSynthesis`.
 - Audio is not stored by the application.
