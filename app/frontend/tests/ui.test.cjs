@@ -2417,3 +2417,132 @@ test('dictation is discarded only when a question is actually sent, not when it 
   assert.equal(discards, 1, 'a send refused while busy keeps the dictation');
   pendingResponses.shift()(success(laxSnaCongestion()));
 });
+
+// ── Overall comparison, measure choices and a chat that grows with the conversation ──
+function overviewResult(airports = ['LAX', 'SFO']) {
+  const operational = airports.every((code) => ['LAX', 'SNA', 'SFO'].includes(code));
+  const values = {
+    LAX: { passengers: 36718978, passenger_growth: -3.86, seat_occupancy: 81.7, long_haul_share: 12.28, cancellation_rate: 0.69, diversion_rate: 0.3, departure_delay_minutes: 13.8, taxi_out_minutes: 17.7 },
+    SFO: { passengers: 26477602, passenger_growth: 4.7, seat_occupancy: 82.31, long_haul_share: 13.31, cancellation_rate: 0.75, diversion_rate: 0.31, departure_delay_minutes: 14.2, taxi_out_minutes: 21.2 },
+    BOS: { passengers: 21128285, passenger_growth: -0.78, seat_occupancy: 81.66, long_haul_share: 7.3 },
+  };
+  const units = { passengers: 'count', passenger_growth: 'percent', seat_occupancy: 'percent', long_haul_share: 'percent', cancellation_rate: 'percent', diversion_rate: 'percent', departure_delay_minutes: 'minutes', taxi_out_minutes: 'minutes' };
+  const keys = ['passengers', 'passenger_growth', 'seat_occupancy', 'long_haul_share', ...(operational ? ['cancellation_rate', 'diversion_rate', 'departure_delay_minutes', 'taxi_out_minutes'] : [])];
+  const ratio = new Set(['seat_occupancy', 'long_haul_share', 'cancellation_rate', 'diversion_rate']);
+  const rows = airports.map((airport) => ({ airport, metrics: keys.map((key) => chatMetric(key, values[airport][key], units[key], ratio.has(key) ? { numerator: 1, denominator: 100 } : {})) }));
+  if (rows.length === 2) {
+    rows[0].metrics.forEach((left, index) => {
+      const right = rows[1].metrics[index];
+      left.comparison_direction = left.value > right.value ? 'higher' : left.value < right.value ? 'lower' : 'tied';
+      right.comparison_direction = { higher: 'lower', lower: 'higher', tied: 'tied' }[left.comparison_direction];
+    });
+  }
+  return chatResult(`overview-${airports.join('-')}`, chatScope(airports, 'overview', { threshold_miles: 3000 }), rows,
+    `${airports.join(' vs ')} in 2025, on ${keys.length} comparable measures.`);
+}
+
+test('an overall comparison groups every measure into bars with exact values, and the chat names who is higher on what', async () => {
+  const ui = setup(async () => success(overviewResult()));
+  await ui.run('submitRequest({ analysis: { action: "compare", airports: ["LAX", "SFO"], metric: "overview" } })');
+  const text = resultContent(ui);
+  for (const part of ['Overall comparison, every measure · 2025', 'Every measure, side by side, 2025', 'Traffic', 'Network', 'Operations',
+    'Calendar year 2025 compared with 2024', 'for operations, higher means more disruption']) assert.ok(text.includes(part), part);
+  const measures = [];
+  (function walk(node) { if (node.className === 'congestion-measure') measures.push(node); (node.children || []).forEach(walk); })(ui.nodes.get('#result'));
+  assert.equal(measures.length, 8, 'one bar group per returned measure');
+  assert.equal(findDescendant(ui.nodes.get('#result'), (node) => node.className === 'kpi-row'), null, 'no headline cards above the grouped view');
+  assert.ok(text.includes('LAX +10,241,376 (39% higher)'), 'counts state their absolute and relative difference');
+  const deltas = [];
+  (function walk(node) { if (node.className === 'measure-delta') deltas.push(node.textContent); (node.children || []).forEach(walk); })(ui.nodes.get('#result'));
+  assert.ok(deltas.includes('SFO +8.56 percentage points'), 'a growth gap has no relative size');
+  assert.ok(deltas.includes('SFO +0.61 percentage points (1% higher)'), 'a share keeps its relative size');
+  assert.equal(ui.run('compactReply(latestSuccessfulResult)'),
+    'LAX vs SFO in 2025: LAX is higher on passengers; SFO is higher on 7 of 8 measures, including passenger growth and seat occupancy. '
+    + 'For the operational measures, higher means more disruption. The side-by-side view has every value.');
+});
+
+test('a one-airport overview shows a card per measure and a pair outside operations has no operations group', async () => {
+  const ui = setup(async () => success(overviewResult(['BOS'])));
+  await ui.run('submitRequest({ analysis: { action: "metric", airports: ["BOS"], metric: "overview" } })');
+  assert.ok(resultContent(ui).includes('Airport overview, every measure · 2025'));
+  const cards = findDescendant(ui.nodes.get('#result'), (node) => node.className === 'kpi-row overview-cards');
+  assert.equal(cards.children.length, 3, 'traffic group: passengers, growth and occupancy');
+  const pair = setup(async () => success(overviewResult(['BOS', 'SFO'])));
+  await pair.run('submitRequest({ analysis: { action: "compare", airports: ["BOS", "SFO"], metric: "overview" } })');
+  assert.ok(!resultContent(pair).includes('Operations'));
+  assert.ok(!pair.run('compactReply(latestSuccessfulResult)').includes('disruption'));
+});
+
+test('a which-measure reply offers its measures; a choice runs that comparison as a chat turn without a model call', async () => {
+  const { query, bodies } = queuedFetch([success(sfoPressure(-1.2247)), measureQuestion(['SFO', 'LAX']), success(overviewResult(['SFO', 'LAX'])), measureQuestion(['BOS', 'PVD'])]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["sfo-pressure"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'give me an analysis of SFO versus LAX');
+  await flush(); await flush();
+  const note = chatItems(ui).at(-1);
+  const choices = findDescendant(note, (node) => node.className === 'chat-choices');
+  assert.equal(choices.getAttribute('aria-label'), 'Measures to compare for SFO and LAX');
+  assert.deepEqual(choices.children.map((button) => button.textContent),
+    ['Overall comparison', 'Passenger growth', 'Seat occupancy', 'Passengers', 'Long-haul share', 'Congestion']);
+  choices.children[0].click();
+  await flush(); await flush();
+  assert.deepEqual(bodies[2], { analysis: { action: 'compare', airports: ['SFO', 'LAX'], metric: 'overview' } }, 'structured, so no model call');
+  assert.equal(choices.hidden, true, 'used choices are retired');
+  const items = chatItems(ui);
+  assert.equal(chatText(items.at(-2)), 'Overall comparison');
+  assert.match(chatText(items.at(-1)), /^SFO vs LAX in 2025: /);
+  assert.equal(ui.run('latestSuccessfulResult.scope.metric'), 'overview');
+  assert.equal(ui.run('pendingComparison'), null);
+  sendChat(ui, 'Compare BOS and PVD');
+  await flush(); await flush();
+  const offered = findDescendant(chatItems(ui).at(-1), (node) => node.className === 'chat-choices');
+  assert.ok(!offered.children.some((button) => button.textContent === 'Congestion'), 'congestion only where both airports report operations');
+});
+
+test('the chat grows once a conversation outgrows it, never on its own shrinks, and can be enlarged and restored', async () => {
+  const unsupported = () => ({ ok: false, status: 422, json: async () => errorEnvelope('unsupported_scope', "I can't answer that from this airport data.") });
+  const { query } = queuedFetch([unsupported(), unsupported(), unsupported()]);
+  const ui = setup(query);
+  ui.run('openQuestionComposer(false)');
+  const composer = ui.nodes.get('#conversation-composer');
+  const body = ui.run('$(".chat-body")');
+  Object.assign(body, { scrollHeight: 900, clientHeight: 400, scrollTop: 0 });
+  sendChat(ui, 'first question'); await flush(); await flush();
+  assert.equal(composer.getAttribute('data-size'), null, 'one question keeps the compact card');
+  sendChat(ui, 'second question'); await flush(); await flush();
+  assert.equal(composer.getAttribute('data-size'), 'comfortable');
+  const resize = ui.nodes.get('#chat-resize');
+  resize.click();
+  assert.equal(resize.getAttribute('aria-pressed'), 'true');
+  assert.equal(composer.getAttribute('data-size'), 'focus');
+  resize.click();
+  assert.equal(resize.getAttribute('aria-pressed'), 'false');
+  assert.equal(composer.getAttribute('data-size'), 'comfortable', 'restoring returns to the size the conversation reached');
+  const short = setup(queuedFetch([unsupported(), unsupported()]).query);
+  short.run('openQuestionComposer(false)');
+  Object.assign(short.run('$(".chat-body")'), { scrollHeight: 300, clientHeight: 400, scrollTop: 0 });
+  sendChat(short, 'one'); await flush(); await flush();
+  sendChat(short, 'two'); await flush(); await flush();
+  assert.equal(short.nodes.get('#conversation-composer').getAttribute('data-size'), null, 'a conversation that fits stays compact');
+});
+
+test('Back slides the analysis choices in, except under reduced motion', async () => {
+  for (const reduced of [false, true]) {
+    const ui = setup(async () => success(result()));
+    ui.window.matchMedia = () => ({ matches: reduced });
+    await ui.run('runPreset(demos["lax-sna"])');
+    ui.nodes.get('#back-to-analysis').listeners.click();
+    assert.equal(ui.nodes.get('#analysis-workspace').classList.contains('is-returning'), !reduced);
+    assert.equal(ui.nodes.get('#result-panel').hidden, true, 'the result leaves at once; only the choices animate');
+  }
+});
+
+test('the chat header offers an enlarge toggle beside collapse', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  assert.match(html, /<button type="button" id="chat-resize" class="chat-collapse chat-resize" aria-pressed="false" aria-label="Enlarge chat"/);
+  const css = fs.readFileSync(path.join(__dirname, '../styles.css'), 'utf8');
+  assert.match(css, /\.conversation-composer\.is-expanded \{ height: var\(--chat-h\);/);
+  assert.match(css, /body\[data-chat-size="comfortable"\] \{ --chat-h: min\(640px, 68dvh\); \}/);
+  assert.doesNotMatch(css, /transition:[^;]*\bheight\b/, 'size changes are revealed with clip-path, never an animated height');
+});

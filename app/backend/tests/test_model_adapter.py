@@ -148,10 +148,11 @@ def test_fixed_shape_output_with_nulls_is_accepted() -> None:
     "Ranking\n  is limited to New England airports",
     "compare: exactly two airports",
     "metric: exactly one airport",
-    "Set action to explain and every other\n  field to null",
+    "Set action to explain and every other field to null",
     "keeps the previous analysis's airports, action and year",
     "after a comparison stays a comparison",
-    "user must submit one analysis at a time",
+    "several separate questions in one message are\n  unsupported_scope",
+    "Several measures for the same one or two airports\n  are the overview",
     "return clarification_required. Never guess an airport",
 ])
 def test_prompt_states_general_contract_rules(rule: str) -> None:
@@ -253,7 +254,7 @@ async def test_unsupported_scope_and_omitted_analysis_key() -> None:
     async with _client(lambda request: httpx.Response(200, json=_response({"kind": "unsupported_scope"}))) as client:
         result = await interpret_message("what is BOS ROI?", settings=_settings(), client=client)
     assert result.kind == "unsupported_scope"
-    assert result.message == "That question is outside the supported airport analyses and periods."
+    assert result.message == "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025."
 
 
 @run_async
@@ -448,18 +449,21 @@ async def _clarify(outcome: dict[str, object], context: dict[str, object] | None
 @run_async
 @pytest.mark.parametrize(("context", "airports", "message"), [
     ({"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, ["SFO", "LAX"],
-     ("SFO demand pressure is measured only for SFO. Which measure should I compare for SFO and LAX: passenger growth, "
-     "seat occupancy, passengers, long-haul share or congestion? For example: “Compare SFO and LAX congestion.”")),
+     ("SFO demand pressure is measured only for SFO. Which measure should I compare for SFO and LAX: an overall "
+     "comparison of every measure, passenger growth, seat occupancy, passengers, long-haul share or congestion? "
+     "For example: “Compare everything” or “Compare SFO and LAX congestion.”")),
     ({"action": "rank", "region": "new_england", "metric": "screen_score"}, ["bos", "PVD"],
      ("The screening score ranks New England airports rather than comparing two. Which measure should I compare for BOS "
-     "and PVD: passenger growth, seat occupancy, passengers or long-haul share? For example: “Compare BOS and PVD "
-     "passenger growth.”")),
+     "and PVD: an overall comparison of every measure, passenger growth, seat occupancy, passengers or long-haul share? "
+     "For example: “Compare everything” or “Compare BOS and PVD passenger growth.”")),
     ({"action": "compare", "airports": ["LAX", "SNA"], "metric": "congestion"}, ["LAX", "BOS"],
-     ("Operational measures cover only LAX, SNA and SFO. Which measure should I compare for LAX and BOS: passenger growth, "
-     "seat occupancy, passengers or long-haul share? For example: “Compare LAX and BOS passenger growth.”")),
+     ("Operational measures cover only LAX, SNA and SFO. Which measure should I compare for LAX and BOS: an overall "
+     "comparison of every measure, passenger growth, seat occupancy, passengers or long-haul share? "
+     "For example: “Compare everything” or “Compare LAX and BOS passenger growth.”")),
     (None, ["ANC", "BOS"],
-     ("Which measure should I compare for ANC and BOS: passenger growth, seat occupancy, passengers or long-haul share? "
-     "For example: “Compare ANC and BOS passenger growth.”")),
+     ("Which measure should I compare for ANC and BOS: an overall comparison of every measure, passenger growth, seat "
+     "occupancy, passengers or long-haul share? For example: “Compare everything” or “Compare ANC and BOS "
+     "passenger growth.”")),
 ])
 async def test_comparison_clarification_names_only_comparable_measures(context, airports, message) -> None:
     result = await _clarify(_hint(airports), context)

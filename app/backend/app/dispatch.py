@@ -67,6 +67,7 @@ METRIC_LABELS = {
     "sfo_enplaned_trend": "SFO passenger trend",
     "enplaned_growth": "enplaned passenger growth",
     "seat_growth": "airline seat supply growth",
+    "overview": "overall comparison",
 }
 T100_KEYS = {
     "passengers": "passengers",
@@ -175,6 +176,7 @@ def _resolve_request(request: AnalysisRequest) -> tuple[AnalysisRequest, BundleC
         "taxi_out_minutes",
         "sfo_enplaned_trend",
         "sfo_pressure",
+        "overview",
     }
     if comparison_only and selected_year != bundle.comparison_year:
         raise DispatchFailure("unsupported_scope", 422, "This workflow requires the bundle comparison year.")
@@ -219,6 +221,8 @@ def dispatch_analysis(
     _validate_resolved_airports(request, bundle)
     if request.action == "rank":
         return _rank(request, request_id, bundle=bundle)
+    if request.metric == "overview":
+        return _overview(request, request_id, bundle=bundle)
     if request.metric == "sfo_enplaned_trend":
         return _sfo_trend(request, request_id, bundle=bundle)
     if request.metric == "sfo_pressure":
@@ -333,40 +337,8 @@ def _long_haul(
     if len({item.source.snapshot_id for item in results}) != 1:
         raise DispatchFailure("data_unavailable", 503, "The T-100 snapshot changed during this request. Retry once.")
     source = _t100_source(results[0].source)
-    rows = []
-    for item in results:
-        typed_counts = (
-            item.long_haul_departures is not None
-            and item.total_departures is not None
-            and item.unknown_distance_departures is not None
-        )
-        if typed_counts:
-            try:
-                metric = MetricValue(
-                    key="long_haul_share",
-                    value=item.share_percent,
-                    unit="percent",
-                    status="ok" if item.status == "ok" else "unavailable",
-                    numerator=item.long_haul_departures,
-                    denominator=item.total_departures,
-                    unknown_distance_departures=item.unknown_distance_departures,
-                    lower_percent=item.lower_percent,
-                    upper_percent=item.upper_percent,
-                    reason=item.reason if item.status != "ok" else None,
-                    source_ids=[source["id"]],
-                )
-            except ValueError as exc:
-                raise DispatchFailure(
-                    "data_unavailable", 503, "Long-haul calculation output is inconsistent."
-                ) from exc
-        else:
-            metric = _unavailable(
-                "long_haul_share",
-                "percent",
-                item.reason or "Long-haul share is unavailable.",
-                source["id"],
-            )
-        rows.append({"airport": item.airport, "metrics": [metric.model_dump()]})
+    rows = [{"airport": item.airport, "metrics": [_long_haul_metric(item, source["id"]).model_dump()]}
+            for item in results]
     if not any(
         item.status == "ok" or item.unknown_distance_departures is not None
         for item in results
@@ -380,9 +352,171 @@ def _long_haul(
                                 "The T-100 endpoint-distance share is descriptive and does not identify demand or profitability."])
 
 
+def _long_haul_metric(item: LongHaulResult, source_id: str) -> MetricValue:
+    typed_counts = (
+        item.long_haul_departures is not None
+        and item.total_departures is not None
+        and item.unknown_distance_departures is not None
+    )
+    if not typed_counts:
+        return _unavailable("long_haul_share", "percent", item.reason or "Long-haul share is unavailable.", source_id)
+    try:
+        return MetricValue(
+            key="long_haul_share",
+            value=item.share_percent,
+            unit="percent",
+            status="ok" if item.status == "ok" else "unavailable",
+            numerator=item.long_haul_departures,
+            denominator=item.total_departures,
+            unknown_distance_departures=item.unknown_distance_departures,
+            lower_percent=item.lower_percent,
+            upper_percent=item.upper_percent,
+            reason=item.reason if item.status != "ok" else None,
+            source_ids=[source_id],
+        )
+    except ValueError as exc:
+        raise DispatchFailure(
+            "data_unavailable", 503, "Long-haul calculation output is inconsistent."
+        ) from exc
+
+
 # Matches the T-100 filter: service class F (scheduled passenger/cargo) with seats > 0.
 _LONG_HAUL_SCOPE = ("Long-haul share is based on scheduled passenger-service departures with reported seats; "
                     "cargo-only and charter operations are outside this measure.")
+
+
+OVERVIEW_TRAFFIC_KEYS = ("passengers", "passenger_growth", "seat_occupancy")
+OVERVIEW_THRESHOLD_MILES = 3000.0
+_OPERATIONAL_AIRPORTS = frozenset({"LAX", "SNA", "SFO"})
+_OVERVIEW_OPERATIONS_NOTE = ("Operational measures (cancellations, diversions, departure delay and taxi-out time) "
+                             "cover only LAX, SNA and SFO, so they are not part of this comparison.")
+
+
+def _overview(
+    request: AnalysisRequest, request_id: UUID, *, bundle: BundleContext | None = None
+) -> AnalysisResult:
+    """Every measure valid for all requested airports, side by side; no combined score."""
+    assert request.airports and request.year
+    airports = list(request.airports)
+    try:
+        traffic = (calculate_traffic_batch(airports) if bundle is None
+                   else calculate_traffic_batch(airports, bundle=bundle))
+        long_haul = [
+            calculate_long_haul_share(airport, request.year, OVERVIEW_THRESHOLD_MILES) if bundle is None
+            else calculate_long_haul_share(airport, request.year, OVERVIEW_THRESHOLD_MILES, bundle=bundle)
+            for airport in airports
+        ]
+    except TrafficCalculationError as exc:
+        raise DispatchFailure("data_unavailable", 503, "Qualified T-100 traffic data is unavailable.") from exc
+    if len({item.source.snapshot_id for item in long_haul}) != 1:
+        raise DispatchFailure("data_unavailable", 503, "The T-100 snapshot changed during this request. Retry once.")
+    t100 = _t100_source(next(iter(traffic.values())).source)
+    distance = _t100_source(long_haul[0].source)
+    sources = [t100] + ([distance] if distance["id"] != t100["id"] else [])
+    operational = set(airports) <= _OPERATIONAL_AIRPORTS
+    operations: dict[str, OperationsResult] = {}
+    if operational:
+        try:
+            for airport in airports:
+                operations[airport] = (calculate_operations(airport) if bundle is None
+                                       else calculate_operations(airport, year=request.year, bundle=bundle))
+        except OperationsCalculationError as exc:
+            raise DispatchFailure(
+                "data_unavailable", 503, f"Qualified {request.year} on-time data is unavailable for this scope.",
+            ) from exc
+        if len({item.source.snapshot_id for item in operations.values()}) != 1:
+            raise DispatchFailure("data_unavailable", 503, "The on-time snapshot changed during this request. Retry once.")
+        sources.append(_operations_source(next(iter(operations.values()))))
+    rows = []
+    for airport, distance_result in zip(airports, long_haul):
+        metrics = [_traffic_metric_value(key, request.year, traffic[airport], t100["id"]) for key in OVERVIEW_TRAFFIC_KEYS]
+        metrics.append(_long_haul_metric(distance_result, distance["id"]))
+        if operational:
+            metrics += [_operation_metric(operations[airport], key, sources[-1]["id"]) for key in CONGESTION_KEYS]
+        rows.append({"airport": airport, "metrics": [metric.model_dump() for metric in metrics]})
+    if len(rows) == 2:
+        _annotate_comparison_direction(rows)
+    if not any(metric["status"] == "ok" for row in rows for metric in row["metrics"]):
+        raise DispatchFailure("insufficient_data", 422, "No overview measure is available for this scope.")
+    limitations = []
+    if not operational and len(airports) == 2:
+        limitations.append(_OVERVIEW_OPERATIONS_NOTE)
+    limitations += [
+        "Measures are shown side by side; no combined score is calculated, and a higher value is not better or worse on its own.",
+        _LONG_HAUL_SCOPE,
+        "T-100 measures reported transported traffic and supplied seats; it does not identify unmet demand, terminal capacity or profitability.",
+    ]
+    if operational:
+        limitations += [next(iter(operations.values())).population,
+                        "Delay and taxi means exclude cancelled/diverted flights; operational indicators do not prove terminal causation.",
+                        *[_operations_coverage(item) for item in operations.values()]]
+    return _result(request, request_id, rows, sources, _availability_status(rows),
+                   _overview_summary(rows, request.year, comparison_year=_overview_comparison_year(request, bundle)),
+                   threshold_miles=OVERVIEW_THRESHOLD_MILES, bundle=bundle, limitations=limitations)
+
+
+def _overview_comparison_year(request: AnalysisRequest, bundle: BundleContext | None) -> int:
+    """The year passenger growth is measured against."""
+    return bundle.baseline_year if bundle is not None else request.year - 1
+
+
+_OVERVIEW_ORDER = (*OVERVIEW_TRAFFIC_KEYS, "long_haul_share", *CONGESTION_KEYS)
+
+
+def _overview_label(key: str, *, defined: bool = False) -> str:
+    if key == "long_haul_share" and defined:
+        return "long-haul share (routes of 3,000+ miles)"
+    return _metric_label(key)
+
+
+def _overview_summary(rows: list[dict[str, Any]], year: int, *, comparison_year: int) -> str:
+    """Name what each airport is higher on, measure by measure; never a winner."""
+    if len(rows) == 1:
+        row = rows[0]
+        parts = []
+        for key in _OVERVIEW_ORDER:
+            metric = next((item for item in row["metrics"] if item["key"] == key), None)
+            if metric is None:
+                continue
+            shown = _format_value(metric["value"], metric["unit"]) if metric["value"] is not None else "unavailable"
+            suffix = f" vs {comparison_year}" if key == "passenger_growth" and metric["value"] is not None else ""
+            parts.append(f"{_overview_label(key)} {shown}{suffix}")
+        return f"{row['airport']} in {year}: {_join_and(parts)}."[:_SUMMARY_LIMIT]
+    a, b = rows
+    first_higher: list[str] = []
+    second_higher: list[str] = []
+    tied: list[str] = []
+    skipped = 0
+    by_key_b = {item["key"]: item for item in b["metrics"]}
+    for left in a["metrics"]:
+        right = by_key_b.get(left["key"])
+        if right is None or left["value"] is None or right["value"] is None:
+            skipped += 1
+            continue
+        if left["value"] == right["value"]:
+            tied.append(_overview_label(left["key"]))
+            continue
+        higher, lower, target = ((left, right, first_higher) if left["value"] > right["value"]
+                                 else (right, left, second_higher))
+        unit = left["unit"]
+        target.append(f"{_overview_label(left['key'])} "
+                      f"({_format_value(higher['value'], unit)} vs {_format_value(lower['value'], unit)})")
+    compared = len(first_higher) + len(second_higher) + len(tied)
+    if compared == 0:
+        return f"No overview measure is comparable for {a['airport']} and {b['airport']} in {year}."
+    sentences = [f"{a['airport']} vs {b['airport']} in {year}, on {compared} comparable measures"]
+    if first_higher:
+        sentences.append(f"{a['airport']} is higher on {_join_and(first_higher)}")
+    if second_higher:
+        sentences.append(f"{b['airport']} is higher on {_join_and(second_higher)}")
+    if tied:
+        sentences.append(f"They are tied on {_join_and(tied)}")
+    if skipped:
+        sentences.append(f"{skipped} measure{'s were' if skipped > 1 else ' was'} unavailable for at least one airport")
+    if any(item["key"] in CONGESTION_KEYS for item in a["metrics"]):
+        sentences.append("For the four operational measures, higher means more disruption")
+    summary = ". ".join(sentences[:1]) + ": " + ". ".join(sentences[1:]) + "."
+    return summary[:_SUMMARY_LIMIT]
 
 
 def _operations(
@@ -817,6 +951,8 @@ def _explain(request: AnalysisRequest, previous: AnalysisResult, request_id: UUI
         sentences = _explain_long_haul(rows, previous.scope.threshold_miles)
     elif metric == "sfo_pressure":
         sentences = _explain_sfo_pressure(rows, previous.scope)
+    elif metric == "overview":
+        sentences = _explain_overview(rows, previous.scope)
     else:
         sentences = _explain_values(metric, rows)
     summary = " ".join(_sentence(item) for item in sentences if item)
@@ -872,6 +1008,70 @@ def _explain_congestion(rows) -> list[str]:
         sentences.append(_comparison_summary("congestion", [row.model_dump() for row in rows]))
     sentences.append("These measures describe day-to-day operations, not terminal capacity or investment return")
     return sentences
+
+
+def _explain_overview(rows, scope) -> list[str]:
+    """What the overview measures, where the airports differ most, and what it cannot show."""
+    keys = [item.key for item in rows[0].metrics] if rows else []
+    sources = "BTS T-100 traffic" + (" and BTS on-time operations" if any(key in CONGESTION_KEYS for key in keys) else "")
+    sentences = [f"This overview puts {len(keys)} measures side by side from {sources}: "
+                 f"{_join_and([_overview_label(key, defined=True) for key in keys])}"]
+    if len(rows) == 2:
+        sentences.append(_overview_tally(rows))
+        widest = _widest_gap(rows)
+        if widest is not None:
+            key, higher, lower, ratio = widest
+            sentences.append(f"The widest relative gap is in {_overview_label(key)}: {higher[0]} "
+                             f"{_format_value(higher[1].value, higher[1].unit)} versus {lower[0]} "
+                             f"{_format_value(lower[1].value, lower[1].unit)}, about {ratio:.1f} times as high")
+        if any(key in CONGESTION_KEYS for key in keys):
+            sentences.append("For the four operational measures, higher means more disruption")
+    elif rows:
+        sentences.append(_overview_summary([rows[0].model_dump()], scope.year, comparison_year=_previous_year(scope)))
+    sentences.append("No combined score is calculated: the measures describe traffic, network and operations, "
+                     "not terminal capacity, unmet demand or profitability")
+    return sentences
+
+
+def _overview_tally(rows) -> str:
+    """How many comparable measures each airport is higher on, by name, without values."""
+    a, b = rows
+    higher = {a.airport: [], b.airport: []}
+    compared = 0
+    for left in a.metrics:
+        right = _find_metric(b, left.key)
+        if right is None or left.value is None or right.value is None:
+            continue
+        compared += 1
+        if left.value != right.value:
+            higher[a.airport if left.value > right.value else b.airport].append(_overview_label(left.key))
+    parts = [f"{airport} is higher on {len(labels)} of {compared} ({_join_and(labels)})"
+             for airport, labels in higher.items() if labels]
+    return "; ".join(parts) if parts else f"{a.airport} and {b.airport} are tied on every comparable measure"
+
+
+def _previous_year(scope) -> int:
+    return scope.baseline_year if scope.baseline_year is not None and scope.year == scope.comparison_year else scope.year - 1
+
+
+def _widest_gap(rows):
+    """The measure whose two positive values differ most in ratio; growth rates are skipped."""
+    a, b = rows
+    best = None
+    for left in a.metrics:
+        right = _find_metric(b, left.key)
+        if left.key == "passenger_growth" or right is None or left.value is None or right.value is None:
+            continue
+        if min(left.value, right.value) <= 0:
+            continue
+        if left.value >= right.value:
+            higher, lower = (a.airport, left), (b.airport, right)
+        else:
+            higher, lower = (b.airport, right), (a.airport, left)
+        ratio = higher[1].value / lower[1].value
+        if ratio > 1.05 and (best is None or ratio > best[3]):
+            best = (left.key, higher, lower, ratio)
+    return best
 
 
 def _explain_long_haul(rows, threshold_miles) -> list[str]:
@@ -1020,6 +1220,11 @@ def _population(
     comparison_year = bundle.comparison_year if bundle is not None else 2024
     if request.metric in OPERATIONAL_KEYS or request.metric == "congestion":
         return f"Domestic reporting-carrier scheduled departures at origin; {comparison_year} only"
+    if request.metric == "overview":
+        operations = (f"; on-time measures from domestic reporting-carrier scheduled departures, {comparison_year}"
+                      if request.airports and set(request.airports) <= _OPERATIONAL_AIRPORTS else "")
+        return (f"BTS T-100 scheduled passenger origin traffic, {comparison_year} "
+                f"(growth vs {baseline_year}){operations}")
     if request.metric in {"sfo_enplaned_trend", "sfo_pressure"}:
         return "SFO Enplaned passengers combined Domestic and International; T-100 and on-time populations separately identified"
     if request.action == "rank":

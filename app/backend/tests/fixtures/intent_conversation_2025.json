@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "cv-screenshot-overall-reply",
+      "category": "demonstration",
+      "input": {"text": "do an overall test and compare each thing", "context": null, "pending_comparison": ["LAX", "SFO"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "overview"}}
+    },
+    {
+      "id": "cv-compare-everything-reply",
+      "category": "demonstration",
+      "input": {"text": "Compare everything", "context": {"action": "metric", "airports": ["SFO"], "metric": "sfo_pressure"}, "pending_comparison": ["SFO", "LAX"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["SFO", "LAX"], "metric": "overview"}}
+    },
+    {
+      "id": "cv-screenshot-opening-question",
+      "category": "safety_clarification",
+      "input": {"text": "give me an analysis of LAX versus SFO", "context": null},
+      "expected": {"kind": "clarification_required", "message": "Which measure should I compare for LAX and SFO?"}
+    },
+    {
+      "id": "cv-two-separate-questions",
+      "category": "safety_clarification",
+      "input": {"text": "Compare LAX and SNA congestion and also rank New England by passenger growth", "context": null},
+      "expected": {"kind": "unsupported_scope", "message": "Submit one analysis at a time."}
+    },
+    {
+      "id": "cv-overall-unsupported-airport",
+      "category": "safety_clarification",
+      "input": {"text": "Give me an overall comparison of LAX and Tokyo Narita", "context": null},
+      "expected": {"kind": "unsupported_scope", "message": "Tokyo Narita is not a supported airport."}
+    },
+    {
+      "id": "cv-all-of-them-reply",
+      "category": "ordinary",
+      "input": {"text": "All of them, please.", "context": {"action": "rank", "region": "new_england", "metric": "screen_score"}, "pending_comparison": ["BOS", "PVD"]},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["BOS", "PVD"], "metric": "overview"}}
+    },
+    {
+      "id": "cv-full-picture-new-question",
+      "category": "ordinary",
+      "input": {"text": "Give me the full picture of LAX and SFO", "context": null},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "overview"}}
+    },
+    {
+      "id": "cv-full-comparison-new-england",
+      "category": "ordinary",
+      "input": {"text": "Can you do a full side-by-side of Boston and Providence?", "context": null},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["BOS", "PVD"], "metric": "overview"}}
+    },
+    {
+      "id": "cv-several-measures-same-pair",
+      "category": "ordinary",
+      "input": {"text": "Compare passengers, seat occupancy and delays at LAX and SNA", "context": null},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["LAX", "SNA"], "metric": "overview"}}
+    },
+    {
+      "id": "cv-everything-one-airport",
+      "category": "ordinary",
+      "input": {"text": "Tell me everything about Anchorage airport", "context": null},
+      "expected": {"kind": "analysis", "analysis": {"action": "metric", "airports": ["ANC"], "metric": "overview"}}
+    },
+    {
+      "id": "cv-what-stands-out",
+      "category": "ordinary",
+      "input": {"text": "What stands out?", "context": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "overview"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "explain"}}
+    },
+    {
+      "id": "cv-summarize-differences",
+      "category": "ordinary",
+      "input": {"text": "Summarize the differences for me", "context": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "overview"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "explain"}}
+    },
+    {
+      "id": "cv-now-just-congestion",
+      "category": "ordinary",
+      "input": {"text": "Now just congestion", "context": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "overview"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "congestion"}}
+    },
+    {
+      "id": "cv-and-passenger-growth",
+      "category": "ordinary",
+      "input": {"text": "and passenger growth?", "context": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "overview"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "passenger_growth"}}
+    },
+    {
+      "id": "cv-same-for-sna",
+      "category": "ordinary",
+      "input": {"text": "Do the same for SNA", "context": {"action": "metric", "airports": ["LAX"], "metric": "overview"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "metric", "airports": ["SNA"], "metric": "overview"}}
+    },
+    {
+      "id": "cv-overall-in-2024",
+      "category": "ordinary",
+      "input": {"text": "And in 2024?", "context": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "overview"}},
+      "expected": {"kind": "analysis", "analysis": {"action": "compare", "airports": ["LAX", "SFO"], "metric": "overview", "year": 2024}}
+    }
+  ]
+}

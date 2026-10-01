@@ -364,9 +364,12 @@ function requestKind(request) {
 }
 
 // `chat.presetLabel` only annotates the transcript; it never enters the request body.
+// `chat.chatText` makes a structured request a chat turn: the text is what the
+// transcript shows as the analyst's message (a chosen measure); it is never sent.
 async function submitRequest(request, chat = {}) {
   if (busy) return;
   const kind = requestKind(request);
+  const conversational = kind === "followup" || Boolean(chat.chatText);
   // A preset or scoped analysis is a new question: no clarification is pending.
   if (kind === "analysis") pendingComparison = null;
   const generation = ++requestGeneration;
@@ -376,7 +379,9 @@ async function submitRequest(request, chat = {}) {
   let timeout = null;
   // A follow-up shows the question at once, then an "Analyzing…" reply in the slot
   // the answer will land in. A retry reuses its failed turn instead of adding one.
-  const turn = kind === "followup" ? startChatTurn(request.message, chat.retryOf || null) : null;
+  const turn = conversational ? startChatTurn(chat.chatText || request.message, chat.retryOf || null) : null;
+  if (turn && chat.chatText) turn.request = request;
+  retireChatChoices();
   // The sent question leaves the composer at once, typed or dictated; a failure that
   // keeps the turn for Retry puts it back for editing.
   if (kind === "followup") clearSentQuestion(request.message, generation);
@@ -402,7 +407,7 @@ async function submitRequest(request, chat = {}) {
     }
     if (!response.ok) {
       const detail = parseErrorResponse(payload);
-      if (kind === "followup") {
+      if (conversational) {
         const message = chatErrorMessage(detail);
         // An unsupported or unclear question is an answer, not a failure; a model,
         // service or timeout failure stays on the question with an inline Retry.
@@ -410,6 +415,7 @@ async function submitRequest(request, chat = {}) {
         if (detail && chatReplyCodes.has(detail.code)) {
           pendingComparison = detail.pendingComparison;
           settleChatReply(turn, message, "note");
+          if (pendingComparison) offerChatChoices(turn.pending, pendingComparison);
           // "Send a shorter question" asks for an edit, so the text comes back for it.
           if (editToFixCodes.has(detail.code)) restoreFailedQuestion(generation);
         } else {
@@ -453,14 +459,14 @@ async function submitRequest(request, chat = {}) {
     fadeInResult(panelWasHidden);
     scrollResultIntoView();
     showResultReady(result.status === "partial" ? "Analysis received. Some airports or values were unavailable; see the coverage note." : "Analysis received.");
-    if (kind === "followup") settleChatReply(turn, compactReply(result), "done", result.result_id);
+    if (conversational) settleChatReply(turn, compactReply(result), "done", result.result_id);
     else if (chat.presetLabel) addChatMessage("assistant", compactReply(result), { resultId: result.result_id, context: `Preset · ${chat.presetLabel}` });
   } catch (error) {
     if (generation !== requestGeneration) return;
     const failure = error.name === "AbortError"
       ? "Request timed out. The previous result is retained. Retry explicitly; no retry was sent."
       : connectionFailureMessage;
-    if (kind === "followup") {
+    if (conversational) {
       failChatTurn(turn, failure);
       restoreFailedQuestion(generation);
       showChatError(failure, chatExpanded());
@@ -546,7 +552,9 @@ function renderResult(result, previous) {
   scopeHeading.className = "result-scope-heading";
   const airportTitle = heading(scopeHeading, "h2", resultHeadline(result));
   airportTitle.className = "result-airports";
-  const measureName = result.scope.metric === "congestion" ? "Airport operations, four indicators" : humanScopeMetricLabel(result.scope.metric);
+  const measureName = result.scope.metric === "congestion" ? "Airport operations, four indicators"
+    : result.scope.metric === "overview" ? (result.scope.airports.length === 2 ? "Overall comparison, every measure" : "Airport overview, every measure")
+      : humanScopeMetricLabel(result.scope.metric);
   const scopeDetails = paragraph(scopeHeading, `${measureName} · ${result.scope.year}`);
   scopeDetails.className = "result-measure";
   paragraph(scopeHeading, describePeriod(result.scope)).className = "result-period";
@@ -559,6 +567,7 @@ function renderResult(result, previous) {
   const dashboard = document.createElement("div");
   dashboard.className = "dashboard-grid";
   dashboard.classList.toggle("congestion-dashboard", result.scope.metric === "congestion");
+  dashboard.classList.toggle("overview-dashboard", result.scope.metric === "overview");
   dashboard.classList.toggle("screening-dashboard", result.scope.metric === "screen_score");
   dashboard.classList.toggle("long-haul-dashboard", result.scope.metric === "long_haul_share");
   resultPanel.append(dashboard);
@@ -578,8 +587,8 @@ function renderResult(result, previous) {
   const coverage = coverageNote(result);
   if (coverage) paragraph(insights, coverage).className = "insight-coverage";
   dashboard.classList.toggle("fullwidth-insights", ["sfo_pressure", "sfo_enplaned_trend"].includes(result.scope.metric));
-  // An operations comparison states its conclusion before the indicator detail.
-  if (result.scope.metric === "congestion") dashboard.insertBefore(insights, metricView);
+  // An operations comparison or overview states its conclusion before the detail.
+  if (["congestion", "overview"].includes(result.scope.metric)) dashboard.insertBefore(insights, metricView);
   else dashboard.append(insights);
   // Explain output gets its own short section; it never joins the Key insight card.
   if (explanation && explanation.resultId === result.result_id) {
@@ -746,7 +755,7 @@ function renderTechnicalPanel(result) {
 }
 
 function renderKpiRow(result) {
-  if (["congestion", "screen_score", "long_haul_share"].includes(result.scope.metric)) return null;
+  if (["congestion", "screen_score", "long_haul_share", "overview"].includes(result.scope.metric)) return null;
   const group = document.createElement("section");
   group.className = "kpi-row";
   group.setAttribute("aria-label", "Key figures");
@@ -926,6 +935,57 @@ function fitComposer() {
   question.style.height = `${Math.min(question.scrollHeight, 132)}px`;
   if (follow) scrollTranscriptToEnd();
 }
+// The card grows with the conversation: compact at first, comfortable once two or
+// more questions no longer fit, and focus when the analyst enlarges it. It never
+// shrinks on its own. A size change is revealed with clip-path, never animated height.
+let chatAutoSize = "compact";
+let chatEnlarged = false;
+function chatSize() { return chatEnlarged ? "focus" : chatAutoSize; }
+let chatResizeAnimation = null;
+function applyChatSize() {
+  const composer = $("#conversation-composer");
+  const size = chatSize();
+  const previous = composer.getAttribute("data-size") || "compact";
+  if (previous === size) return;
+  chatResizeAnimation?.cancel();
+  chatResizeAnimation = null;
+  const follow = transcriptNearBottom();
+  const resize = (value) => {
+    composer.setAttribute("data-size", value);
+    document.body?.setAttribute?.("data-chat-size", value);
+    if (follow) scrollTranscriptToEnd();
+  };
+  const before = composer.getBoundingClientRect?.().height;
+  resize(size);
+  if (!chatExpanded() || prefersReducedMotion() || typeof composer.animate !== "function" || !(before > 0)) return;
+  const after = composer.getBoundingClientRect().height;
+  const radius = window.matchMedia?.("(max-width: 600px)").matches ? "round 18px 18px 0 0" : "round 18px";
+  const clip = (top) => `inset(${top}px 0 0 0 ${radius})`;
+  const timing = { duration: CHAT_RESIZE_MS, easing: "cubic-bezier(.2,.8,.2,1)" };
+  if (after > before) {
+    chatResizeAnimation = composer.animate([{ clipPath: clip(after - before) }, { clipPath: clip(0) }], timing);
+  } else if (after < before) {
+    // Shrinking: hold the larger size while the top edge lowers, then take the smaller one.
+    resize(previous);
+    const animation = composer.animate([{ clipPath: clip(0) }, { clipPath: clip(before - after) }], { ...timing, fill: "forwards" });
+    chatResizeAnimation = animation;
+    animation.finished.then(() => { resize(size); animation.cancel(); }, () => {});
+  }
+}
+const CHAT_RESIZE_MS = 220;
+function maybeGrowChat() {
+  if (chatAutoSize !== "compact" || !chatExpanded()) return;
+  const body = $(".chat-body");
+  const asked = conversation.filter((message) => message.role === "user").length;
+  if (asked < 2 || !body || !Number.isFinite(body.scrollHeight) || body.scrollHeight <= body.clientHeight + 8) return;
+  chatAutoSize = "comfortable";
+  applyChatSize();
+}
+function toggleChatEnlarged() {
+  chatEnlarged = !chatEnlarged;
+  $("#chat-resize").setAttribute("aria-pressed", String(chatEnlarged));
+  applyChatSize();
+}
 function expandChat(takeFocus = true) {
   const composer = $("#conversation-composer");
   if (composer.hidden || composer.inert) return;
@@ -936,6 +996,7 @@ function expandChat(takeFocus = true) {
   $("#chat-collapse").setAttribute("aria-expanded", "true");
   updateChatPlaceholder();
   scrollTranscriptToEnd();
+  maybeGrowChat();
   if (takeFocus) $("#question").focus();
 }
 function collapseChat(returnFocus = true) {
@@ -1000,6 +1061,7 @@ function addChatMessage(role, text, options = {}) {
   updateChatPlaceholder();
   refreshChatViewLinks();
   if (follow) scrollTranscriptToEnd();
+  maybeGrowChat();
   return message;
 }
 function setChatState(message, state) {
@@ -1054,6 +1116,7 @@ function settleChatReply(turn, text, state, resultId = null) {
   setChatState(turn.pending, state);
   refreshChatViewLinks();
   if (follow) scrollTranscriptToEnd();
+  maybeGrowChat();
   // Notes are also the field's alert; announcing them here too would read them twice.
   if (state === "done") $("#chat-status").textContent = `Analyst: ${text}`;
 }
@@ -1067,6 +1130,45 @@ function failChatTurn(turn, reason) {
   setChatState(turn.user, "failed");
   refreshChatViewLinks();
   if (follow) scrollTranscriptToEnd();
+}
+// The measures the server offered for a pending pair, as buttons on its reply. A
+// choice runs that comparison directly (no model call); typing an answer still works.
+const operationalAirports = new Set(["LAX", "SNA", "SFO"]);
+let chatChoices = null;
+function comparisonChoices(pair) {
+  const choices = [["Overall comparison", "overview"], ["Passenger growth", "passenger_growth"], ["Seat occupancy", "seat_occupancy"],
+    ["Passengers", "passengers"], ["Long-haul share", "long_haul_share"]];
+  if (pair.every((code) => operationalAirports.has(code))) choices.push(["Congestion", "congestion"]);
+  return choices;
+}
+function offerChatChoices(message, pair) {
+  const group = document.createElement("div");
+  group.className = "chat-choices";
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", `Measures to compare for ${pair[0]} and ${pair[1]}`);
+  for (const [text, metric] of comparisonChoices(pair)) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "chat-choice";
+    button.textContent = text;
+    button.addEventListener("click", () => {
+      if (busy) return;
+      $("#question").focus({ preventScroll: true });
+      void submitRequest({ analysis: { action: "compare", airports: [...pair], metric } }, { chatText: text });
+    });
+    group.append(button);
+  }
+  const follow = transcriptNearBottom();
+  message.node.append(group);
+  chatChoices = group;
+  if (follow) scrollTranscriptToEnd();
+  maybeGrowChat();
+}
+// Once anything new is asked, an older set of choices no longer answers the question.
+function retireChatChoices() {
+  if (!chatChoices) return;
+  chatChoices.hidden = true;
+  chatChoices = null;
 }
 function followUpRequest(text) {
   const request = { message: text };
@@ -1083,7 +1185,7 @@ function retryChatTurn(turn) {
   // The Retry button hides once the turn is re-sent; keep focus in the composer
   // instead of letting it fall back to the page.
   $("#question").focus({ preventScroll: true });
-  void submitRequest(followUpRequest(turn.user.text), { retryOf: turn });
+  void submitRequest(turn.request || followUpRequest(turn.user.text), { retryOf: turn, chatText: turn.request ? turn.user.text : undefined });
 }
 // Every reply that produced a result keeps its link row, so a newer answer never
 // changes the height of the messages above it. Only the reply behind the result on
@@ -1141,6 +1243,7 @@ function compactReply(result) {
   }
   // The backend's congestion headline already names which airport is higher on what.
   if (metric === "sfo_enplaned_trend" || metric === "congestion") return fallback;
+  if (metric === "overview") return overviewReply(result) || fallback;
   if (metric === "long_haul_share" && airports.length === 1) {
     const share = valueOf(rowFor(airports[0]), "long_haul_share");
     if (!usable(share) || share.numerator == null || share.denominator == null || result.scope.threshold_miles == null) return fallback;
@@ -1169,8 +1272,30 @@ function compactReply(result) {
   return fallback;
 }
 
+function overviewReply(result) {
+  const { airports, year } = result.scope;
+  if (airports.length !== 2) return null;
+  const [first, second] = airports.map((code) => result.rows.find((row) => row.airport === code));
+  if (!first || !second) return null;
+  const higher = { [first.airport]: [], [second.airport]: [] };
+  let compared = 0;
+  for (const metric of first.metrics) {
+    if (!["higher", "lower", "tied"].includes(metric.comparison_direction)) continue;
+    compared += 1;
+    if (metric.comparison_direction === "higher") higher[first.airport].push(humanMetricLabel(metric.key).toLowerCase());
+    else if (metric.comparison_direction === "lower") higher[second.airport].push(humanMetricLabel(metric.key).toLowerCase());
+  }
+  if (!compared) return null;
+  const named = (labels) => labels.length <= 3 ? joinAnd(labels) : `${labels.length} of ${compared} measures, including ${joinAnd(labels.slice(0, 2))}`;
+  const parts = Object.entries(higher).filter(([, labels]) => labels.length).map(([code, labels]) => `${code} is higher on ${named(labels)}`);
+  const operations = first.metrics.some((metric) => operationalMetrics.has(metric.key));
+  return `${airports[0]} vs ${airports[1]} in ${year}: ${parts.join("; ") || "tied on every comparable measure"}.`
+    + (operations ? " For the operational measures, higher means more disruption." : "")
+    + " The side-by-side view has every value.";
+}
+
 function describePeriod(scope) {
-  const compared = ["passenger_growth", "screen_score", "sfo_pressure", "sfo_enplaned_trend"].includes(scope.metric);
+  const compared = ["passenger_growth", "screen_score", "sfo_pressure", "sfo_enplaned_trend", "overview"].includes(scope.metric);
   const period = compared ? `Calendar year ${scope.year} compared with ${previousYear(scope)}` : `Calendar year ${scope.year}`;
   return scope.bundle_id == null ? `${period} · historical data` : `${period} · accepted data release`;
 }
@@ -1338,6 +1463,76 @@ metricRenderers.congestion = renderCongestionView;
 metricRenderers.screen_score = renderScreeningView;
 metricRenderers.long_haul_share = renderLongHaulView;
 metricRenderers.sfo_pressure = renderSfoPressureView;
+metricRenderers.overview = renderOverviewView;
+const overviewGroups = [
+  ["Traffic", ["passengers", "passenger_growth", "seat_occupancy"]],
+  ["Network", ["long_haul_share"]],
+  ["Operations", ["cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"]],
+];
+const overviewMeaning = {
+  passengers: "Passengers on departing scheduled flights",
+  passenger_growth: "Change in passengers against the previous year",
+  seat_occupancy: "Share of supplied seats that were filled",
+  long_haul_share: "Share of departures on routes of 3,000 miles or more",
+};
+// Every returned measure, grouped; two airports get the same zero-based bars as the
+// operations view, one airport gets a card per measure. No combined score is shown.
+function renderOverviewView(result, target) {
+  const airports = result.scope.airports;
+  const returned = new Set(result.rows.flatMap((row) => row.metrics.map((metric) => metric.key)));
+  const groups = overviewGroups.map(([name, keys]) => [name, keys.filter((key) => returned.has(key))]).filter(([, keys]) => keys.length);
+  heading(target, "h3", `${airports.length === 2 ? "Every measure, side by side" : "Every measure"}, ${result.scope.year}`);
+  if (airports.length === 2) {
+    const legend = document.createElement("p");
+    legend.className = "congestion-legend";
+    airports.forEach((airport, airportIndex) => {
+      const entry = document.createElement("span");
+      entry.className = "legend-entry";
+      const swatch = document.createElement("span");
+      swatch.className = `series-key series-key-${airportIndex + 1}`;
+      swatch.setAttribute("aria-hidden", "true");
+      const name = document.createElement("span");
+      name.textContent = airport;
+      entry.append(swatch, name);
+      legend.append(entry);
+    });
+    const note = document.createElement("span");
+    note.className = "legend-note";
+    note.textContent = "Bars start at zero. Higher traffic is not better or worse on its own; for operations, higher means more disruption.";
+    legend.append(note);
+    target.append(legend);
+  }
+  const table = makeTable("Exact values by airport", ["Measure", ...airports]);
+  table.region.className += " congestion-table-region";
+  for (const [name, keys] of groups) {
+    const section = document.createElement("section");
+    section.className = "overview-group";
+    heading(section, "h3", name).className = "overview-group-title";
+    if (airports.length === 2) {
+      const bars = document.createElement("div");
+      bars.className = "congestion-bars";
+      bars.setAttribute("role", "list");
+      for (const key of keys) appendMeasureBars(bars, table, result, key, humanMetricLabel(key), overviewMeaning[key] || congestionMeaning[key], "h4");
+      section.append(bars);
+    } else {
+      const cards = document.createElement("div");
+      cards.className = "kpi-row overview-cards";
+      const row = result.rows[0];
+      for (const key of keys) {
+        const metric = row.metrics.find((item) => item.key === key);
+        cards.append(kpiCard(key, [{ airport: row.airport, metric }], result.scope));
+        const tr = document.createElement("tr");
+        cell(tr, humanMetricLabel(key));
+        cell(tr, metric.status === "ok" ? formatMetric(metric) : `Unavailable: ${metric.reason}`);
+        table.body.append(tr);
+      }
+      section.append(cards);
+    }
+    target.append(section);
+  }
+  methodologyExtras.push(["Exact values", [table.region]]);
+  return true;
+}
 function renderSfoPressureView(result, target) {
   // The KPI row, the takeaway and the monthly chart carry SFO pressure; the
   // remaining returned indicators are listed under Methodology & limitations.
@@ -1488,7 +1683,6 @@ function renderCongestionView(result, target) {
   const airports = result.scope.airports;
   const keys = ["cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"];
   const titles = keys.map(humanMetricLabel);
-  const ns = "http://www.w3.org/2000/svg";
   const metricFor = (airport, key) => result.rows.find(item => item.airport === airport)?.metrics.find(item => item.key === key);
   heading(target, "h3", `Four operational indicators, ${result.scope.year}`);
   // The denominator: how many scheduled departures each airport's rates describe.
@@ -1521,89 +1715,95 @@ function renderCongestionView(result, target) {
   table.region.className += " congestion-table-region";
   table.region.setAttribute("aria-label", "Operational comparison; measures by airport");
   table.region.children[0].className = "congestion-table";
-  keys.forEach((key, index) => {
-    const metrics = airports.map(airport => metricFor(airport, key));
-    const valid = metrics.filter(metric => metric?.status === "ok" && Number.isFinite(metric.value));
-    const minimum = Math.min(0, ...valid.map(metric => metric.value));
-    const maximum = Math.max(0, ...valid.map(metric => metric.value));
-    const span = maximum - minimum || 1;
-    const percent = value => (value - minimum) / span * 100;
-    const unit = valid[0]?.unit || "count";
-    const measure = document.createElement("div"); measure.className = "congestion-measure"; measure.setAttribute("role", "listitem");
-    const head = document.createElement("div"); head.className = "measure-head";
-    heading(head, "h3", metricLabel(key, result.scope)).className = "congestion-measure-title";
-    const pair = metrics.map((metric, airportIndex) => ({ airport: airports[airportIndex], metric }));
-    if (pair.every(({ metric }) => metric?.status === "ok" && Number.isFinite(metric.value))) {
-      paragraph(head, comparisonDelta(pair, unit)).className = "measure-delta";
-    }
-    measure.append(head);
-    paragraph(measure, congestionMeaning[key]).className = "measure-context";
-    const group = document.createElement("div");
-    group.className = "comparison-bars";
-    group.setAttribute("role", "img");
-    const plotted = [];
-    const row = document.createElement("tr");
-    cell(row, titles[index]);
-    pair.forEach(({ airport, metric }, airportIndex) => {
-      let text = "Not returned", spoken = text;
-      if (metric?.status === "unavailable") { text = "Unavailable"; spoken = `Unavailable: ${metric.reason}`; }
-      else if (metric?.status === "ok") {
-        text = formatMetric(metric); spoken = text;
-        const cue = { higher: "↑", lower: "↓", tied: "↔" }[metric.comparison_direction];
-        if (cue) { text += ` ${cue}`; spoken += `, ${label(metric.comparison_direction)}`; }
-      }
-      cell(row, text);
-      row.children[row.children.length - 1].setAttribute("aria-label", spoken);
-      const barRow = document.createElement("div"); barRow.className = `bar-row bar-row-${airportIndex + 1}`;
-      const airportNode = document.createElement("span"); airportNode.className = "bar-airport"; airportNode.textContent = airport;
-      barRow.append(airportNode);
-      if (metric?.status === "ok" && Number.isFinite(metric.value)) {
-        plotted.push({ airport, metric });
-        // No viewBox: x and width are percentages of the track, heights are pixels.
-        const track = document.createElementNS(ns, "svg");
-        track.setAttribute("class", "comparison-bar-track");
-        track.setAttribute("aria-hidden", "true");
-        const rect = (className, x, w) => {
-          const node = document.createElementNS(ns, "rect");
-          node.setAttribute("x", `${x}%`); node.setAttribute("width", `${w}%`);
-          node.setAttribute("y", "3"); node.setAttribute("height", "12"); node.setAttribute("class", className);
-          track.append(node);
-        };
-        rect("bar-track", 0, 100);
-        const start = percent(Math.min(0, metric.value));
-        rect(`bar-fill bar-fill-${airportIndex + 1}`, start, percent(Math.max(0, metric.value)) - start);
-        const zero = document.createElementNS(ns, "line");
-        zero.setAttribute("x1", `${percent(0)}%`); zero.setAttribute("x2", `${percent(0)}%`);
-        zero.setAttribute("y1", "0"); zero.setAttribute("y2", "18"); zero.setAttribute("class", "bar-zero");
-        track.append(zero);
-        barRow.append(track);
-      } else {
-        const note = document.createElement("span"); note.className = "not-plotted"; note.textContent = "Not plotted"; barRow.append(note);
-      }
-      const exact = document.createElement("strong"); exact.className = "comparison-exact";
-      exact.textContent = metric?.status === "ok" ? formatMetric(metric) : metric?.status === "unavailable" ? `Unavailable: ${metric.reason}` : "Not returned";
-      barRow.append(exact);
-      group.append(barRow);
-    });
-    group.setAttribute("aria-label", `${metricLabel(key, result.scope)}, bars on a zero-inclusive scale from ${formatMetric({ unit, value: minimum })} to ${formatMetric({ unit, value: maximum })}: ${pair.map(({ airport, metric }) => `${airport} ${metric?.status === "ok" ? formatMetric(metric) : metric?.status === "unavailable" ? `unavailable (${metric.reason})` : "not returned"}`).join(", ")}`);
-    measure.append(group);
-    bars.append(measure);
-    table.body.append(row);
-  });
+  keys.forEach((key, index) => appendMeasureBars(bars, table, result, key, titles[index], congestionMeaning[key]));
   target.append(bars);
   methodologyExtras.push(["Exact operational values", [table.region]]);
   return true;
 }
+// One measure as zero-based bars for each airport, plus its exact-values table row.
+function appendMeasureBars(bars, table, result, key, title, meaning, titleTag = "h3") {
+  const airports = result.scope.airports;
+  const ns = "http://www.w3.org/2000/svg";
+  const metricFor = (airport) => result.rows.find(item => item.airport === airport)?.metrics.find(item => item.key === key);
+  const metrics = airports.map(airport => metricFor(airport));
+  const valid = metrics.filter(metric => metric?.status === "ok" && Number.isFinite(metric.value));
+  const minimum = Math.min(0, ...valid.map(metric => metric.value));
+  const maximum = Math.max(0, ...valid.map(metric => metric.value));
+  const span = maximum - minimum || 1;
+  const percent = value => (value - minimum) / span * 100;
+  const unit = valid[0]?.unit || "count";
+  const measure = document.createElement("div"); measure.className = "congestion-measure"; measure.setAttribute("role", "listitem");
+  const head = document.createElement("div"); head.className = "measure-head";
+  heading(head, titleTag, metricLabel(key, result.scope)).className = "congestion-measure-title";
+  const pair = metrics.map((metric, airportIndex) => ({ airport: airports[airportIndex], metric }));
+  if (pair.every(({ metric }) => metric?.status === "ok" && Number.isFinite(metric.value))) {
+    paragraph(head, comparisonDelta(pair, unit, key)).className = "measure-delta";
+  }
+  measure.append(head);
+  paragraph(measure, meaning).className = "measure-context";
+  const group = document.createElement("div");
+  group.className = "comparison-bars";
+  group.setAttribute("role", "img");
+  const plotted = [];
+  const row = document.createElement("tr");
+  cell(row, title);
+  pair.forEach(({ airport, metric }, airportIndex) => {
+    let text = "Not returned", spoken = text;
+    if (metric?.status === "unavailable") { text = "Unavailable"; spoken = `Unavailable: ${metric.reason}`; }
+    else if (metric?.status === "ok") {
+      text = formatMetric(metric); spoken = text;
+      const cue = { higher: "↑", lower: "↓", tied: "↔" }[metric.comparison_direction];
+      if (cue) { text += ` ${cue}`; spoken += `, ${label(metric.comparison_direction)}`; }
+    }
+    cell(row, text);
+    row.children[row.children.length - 1].setAttribute("aria-label", spoken);
+    const barRow = document.createElement("div"); barRow.className = `bar-row bar-row-${airportIndex + 1}`;
+    const airportNode = document.createElement("span"); airportNode.className = "bar-airport"; airportNode.textContent = airport;
+    barRow.append(airportNode);
+    if (metric?.status === "ok" && Number.isFinite(metric.value)) {
+      plotted.push({ airport, metric });
+      // No viewBox: x and width are percentages of the track, heights are pixels.
+      const track = document.createElementNS(ns, "svg");
+      track.setAttribute("class", "comparison-bar-track");
+      track.setAttribute("aria-hidden", "true");
+      const rect = (className, x, w) => {
+        const node = document.createElementNS(ns, "rect");
+        node.setAttribute("x", `${x}%`); node.setAttribute("width", `${w}%`);
+        node.setAttribute("y", "3"); node.setAttribute("height", "12"); node.setAttribute("class", className);
+        track.append(node);
+      };
+      rect("bar-track", 0, 100);
+      const start = percent(Math.min(0, metric.value));
+      rect(`bar-fill bar-fill-${airportIndex + 1}`, start, percent(Math.max(0, metric.value)) - start);
+      const zero = document.createElementNS(ns, "line");
+      zero.setAttribute("x1", `${percent(0)}%`); zero.setAttribute("x2", `${percent(0)}%`);
+      zero.setAttribute("y1", "0"); zero.setAttribute("y2", "18"); zero.setAttribute("class", "bar-zero");
+      track.append(zero);
+      barRow.append(track);
+    } else {
+      const note = document.createElement("span"); note.className = "not-plotted"; note.textContent = "Not plotted"; barRow.append(note);
+    }
+    const exact = document.createElement("strong"); exact.className = "comparison-exact";
+    exact.textContent = metric?.status === "ok" ? formatMetric(metric) : metric?.status === "unavailable" ? `Unavailable: ${metric.reason}` : "Not returned";
+    barRow.append(exact);
+    group.append(barRow);
+  });
+  group.setAttribute("aria-label", `${metricLabel(key, result.scope)}, bars on a zero-inclusive scale from ${formatMetric({ unit, value: minimum })} to ${formatMetric({ unit, value: maximum })}: ${pair.map(({ airport, metric }) => `${airport} ${metric?.status === "ok" ? formatMetric(metric) : metric?.status === "unavailable" ? `unavailable (${metric.reason})` : "not returned"}`).join(", ")}`);
+  measure.append(group);
+  bars.append(measure);
+  table.body.append(row);
+}
 // "SNA +1.37 min (10% higher)": the absolute difference in the measure's own unit,
-// with the relative size so a small gap reads as small.
-function comparisonDelta(pair, unit) {
+// with the relative size so a small gap reads as small. A growth rate gets no
+// relative size: "50% higher" than a growth rate misreads as a growth figure.
+function comparisonDelta(pair, unit, key = null) {
   const [first, second] = pair;
   const difference = second.metric.value - first.metric.value;
   const amount = Math.abs(difference);
   if (Number(amount.toFixed(2)) === 0) return "No measurable difference";
   const [lower, higher] = difference > 0 ? [first, second] : [second, first];
   const shown = unit === "minutes" ? `${fixed(amount)} min` : unit === "percent" ? `${fixed(amount)} percentage points` : formatMetric({ unit, value: amount });
-  const relative = lower.metric.value > 0 ? Math.round(amount / lower.metric.value * 100) : null;
+  const relative = lower.metric.value > 0 && !growthKeys.has(key) ? Math.round(amount / lower.metric.value * 100) : null;
   return `${higher.airport} +${shown}${relative ? ` (${relative}% higher)` : ""}`;
 }
 function renderGenericMetricTable(result, target) {
@@ -1651,7 +1851,7 @@ function renderGenericMetricTable(result, target) {
 
 function validateResult(result) {
   const fail = () => { throw new Error("Invalid analysis response"); };
-  const scopeMetrics = new Set(["passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share", "screen_score", "congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "sfo_pressure"]);
+  const scopeMetrics = new Set(["passengers", "seats", "departures", "passenger_growth", "seat_occupancy", "long_haul_share", "screen_score", "congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes", "sfo_enplaned_trend", "sfo_pressure", "overview"]);
   const metricUnits = { passengers: "count", seats: "count", departures: "count", passenger_growth: "percent", seat_occupancy: "percent", long_haul_share: "percent", screen_score: "score", cancellation_rate: "percent", diversion_rate: "percent", departure_delay_minutes: "minutes", taxi_out_minutes: "minutes", sfo_enplaned_trend: "count", enplaned_growth: "percent", sfo_pressure: "percentage_points", seat_growth: "percent", growth_points: "score", volume_points: "score", occupancy_points: "score" };
   const ratioMetrics = new Set(["seat_occupancy", "long_haul_share", "cancellation_rate", "diversion_rate"]);
   if (!isRecord(result) || !["ok", "partial"].includes(result.status)
@@ -1716,7 +1916,7 @@ function isSafeHttpUrl(value) {
 function label(value) { return value.replaceAll("_", " "); }
 function humanDirection(value) { return ({ higher: "Higher", lower: "Lower", tied: "Tied", unavailable: "Unavailable" })[value] || "Direction unavailable"; }
 function humanMetricLabel(key) {
-  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi-out time", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap", seat_growth: "Seat supply growth", growth_points: "Growth points", volume_points: "Volume points", occupancy_points: "Occupancy points" };
+  const names = { screen_score: "Screening score", passenger_growth: "Passenger growth", passengers: "Passengers", seats: "Seats", departures: "Departures", seat_occupancy: "Seat occupancy", long_haul_share: "Long-haul share", cancellation_rate: "Cancellation rate", diversion_rate: "Diversion rate", departure_delay_minutes: "Departure delay", taxi_out_minutes: "Taxi-out time", sfo_enplaned_trend: "SFO passenger trend", enplaned_growth: "Enplaned passenger growth", sfo_pressure: "Passenger growth gap", seat_growth: "Seat supply growth", growth_points: "Growth points", volume_points: "Volume points", occupancy_points: "Occupancy points", overview: "Overall comparison" };
   return names[key] || label(key);
 }
 function humanScopeMetricLabel(key) { return key === "sfo_pressure" ? "SFO demand pressure" : humanMetricLabel(key); }
@@ -1902,6 +2102,18 @@ function runPreset(analysis) {
   const presetKey = Object.keys(demos).find((key) => demos[key] === analysis);
   return submitRequest({ analysis }, { presetLabel: presetLabels[presetKey] || null });
 }
+// Back: the analysis choices slide in rather than replacing the result in one frame.
+const VIEW_IN_MS = 240;
+let viewInTimer = null;
+function slideInAnalysisChoices() {
+  const workspace = $("#analysis-workspace");
+  clearTimeout(viewInTimer);
+  workspace.classList.remove("is-returning");
+  if (prefersReducedMotion()) return;
+  void workspace.offsetWidth; // restart the animation on a repeated Back
+  workspace.classList.add("is-returning");
+  viewInTimer = setTimeout(() => workspace.classList.remove("is-returning"), VIEW_IN_MS + 40);
+}
 function startNewAnalysis() {
   closeQuestionComposer(false);
   $("#conversation-composer").hidden = true;
@@ -1921,6 +2133,7 @@ function startNewAnalysis() {
   explanation = null;
   resultIsPrevious = false;
   $("#hero-layout").classList.remove("has-result");
+  slideInAnalysisChoices();
   $("#result-panel").hidden = true;
   $("#result").hidden = true;
   $("#result-title").hidden = true;
@@ -2021,6 +2234,7 @@ askTrigger.addEventListener("click", openQuestionComposer);
 // Clicking anywhere on the collapsed bar raises the card (focus alone does not).
 $("#chat-form").addEventListener("click", () => expandChat(false));
 $("#chat-collapse").addEventListener("click", () => collapseChat());
+$("#chat-resize").addEventListener("click", toggleChatEnlarged);
 $("#back-to-analysis").addEventListener("click", startNewAnalysis);
 // Escape first lowers an expanded card to its bar, then closes the bar.
 document.addEventListener?.("keydown", (event) => {

@@ -36,8 +36,8 @@ Choose the outcome in this order:
    profitability, return on investment, cost or how much to invest, valuation or
    what an airport is worth, forecasts of future years, rankings outside New
    England, a named airport that is not a supported airport code, arbitrary data
-   access such as running SQL or reading files, several analyses in one message,
-   or an unqualified period.
+   access such as running SQL or reading files, several separate analyses in one
+   message, or an unqualified period.
 2. clarification_required when one missing or ambiguous detail (which airport,
    which second airport, which metric, or prior context that was not supplied)
    would make the question supported.
@@ -64,9 +64,9 @@ it:
   whether it needs more capacity, at SFO: metric with sfo_pressure.
 - Passenger volume, passenger growth, seats, departures or seat occupancy: that
   metric; a passenger trend at SFO is sfo_enplaned_trend.
-Still unsupported: anything the data cannot identify, such as profitability,
-return on investment, construction cost, investment amounts, valuation, or
-demand forecasts for future years.
+- An overall or full comparison of two named airports, or everything, each
+  measure, the big picture or several measures for the same two airports:
+  compare with overview (for one airport: metric with overview).
 
 Analysis field rules. Every analysis field is always present; set each field the
 action does not use to null.
@@ -75,14 +75,14 @@ action does not use to null.
   unsupported_scope.
 - compare: exactly two airports and one metric; region null.
 - metric: exactly one airport and one metric; region null.
-- explain: explains the previous result. Set action to explain and every other
-  field to null.
+- explain: explains the previous result (why, what is notable, what it means).
+  Set action to explain and every other field to null.
 - threshold_miles is used only with long_haul_share; otherwise null.
 
 Scope rules.
-- One analysis per message. A message that asks for several analyses at once
-  (for example two metrics, or two separate questions) is unsupported_scope; the
-  user must submit one analysis at a time.
+- One analysis per message. Several measures for the same one or two airports
+  are the overview; several separate questions in one message are
+  unsupported_scope.
 - When a place could mean more than one supported airport, or the question names
   no specific airport, return clarification_required. Never guess an airport.
 
@@ -116,6 +116,7 @@ application just asked about: it asked which measure to compare for them.
   compare with those two airports, in that order, and that metric, keeping the
   year of previous_analysis unless the user names one. This takes precedence over
   continuing previous_analysis.
+- Everything, all of them or an overall comparison answers it with overview.
 - If that measure cannot be compared at those two airports, return the
   two-airport clarification above for the same two airports.
 - A message that names its own airports or asks for a different analysis is a new
@@ -125,15 +126,15 @@ Metric scope. sfo_pressure and sfo_enplaned_trend exist only for SFO and cannot 
 compared. congestion and the four operational metrics cover only LAX, SNA and
 SFO. screen_score ranks New England airports; it is not a two-airport comparison.
 passengers, seats, departures, passenger_growth, seat_occupancy and
-long_haul_share can be compared between any two supported airports.
+long_haul_share and overview can be compared between any two supported airports.
 
 Periods. Supported periods are calendar years 2023, 2024 and 2025. If the user
 names no year, set year to null: the server then uses the newest accepted period
-(2025, compared with 2024). Growth and screen scores need a comparison year (2024
-or 2025); operational and SFO metrics support 2024 and 2025. Any other year is
-unsupported. The server independently validates every analysis and supplies all
-user-visible wording. When kind is not analysis, set analysis to null, except for
-the two-airport clarification above."""
+(2025, compared with 2024). Growth, screen scores and the overview need a
+comparison year (2024 or 2025); operational and SFO metrics support 2024 and 2025.
+Any other year is unsupported. The server independently validates every analysis
+and supplies all user-visible wording. When kind is not analysis, set analysis to
+null, except for the two-airport clarification above."""
 # Recorded in evaluation reports so a result names the exact prompt and adapter.
 PROMPT_SHA256 = hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest()
 ADAPTER_SHA256 = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
@@ -142,7 +143,7 @@ _METRICS = [
     "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
     "long_haul_share", "screen_score", "congestion", "cancellation_rate",
     "diversion_rate", "departure_delay_minutes", "taxi_out_minutes",
-    "sfo_enplaned_trend", "sfo_pressure",
+    "sfo_enplaned_trend", "sfo_pressure", "overview",
 ]
 
 
@@ -181,7 +182,7 @@ _REFUSAL_FINISH = frozenset({"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CO
 
 _SAFE_MESSAGES = {
     "clarification_required": "Please name the airport, metric, and supported period you want to analyze.",
-    "unsupported_scope": "That question is outside the supported airport analyses and periods.",
+    "unsupported_scope": "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025.",
 }
 
 
@@ -348,7 +349,8 @@ def comparison_question(airports: list[str], context: Mapping[str, object] | Non
     """Server-worded clarification naming only measures the contract can compare."""
     first, second = airports
     operational = set(airports) <= _OPERATIONAL_AIRPORTS
-    measures = ["passenger growth", "seat occupancy", "passengers", "long-haul share"]
+    measures = ["an overall comparison of every measure", "passenger growth", "seat occupancy", "passengers",
+                "long-haul share"]
     if operational:
         measures.append("congestion")
     previous = context.get("metric") if isinstance(context, Mapping) else None
@@ -357,7 +359,7 @@ def comparison_question(airports: list[str], context: Mapping[str, object] | Non
         lead = "Operational measures cover only LAX, SNA and SFO."
     example = "congestion" if operational else "passenger growth"
     question = (f"Which measure should I compare for {first} and {second}: {', '.join(measures[:-1])} or {measures[-1]}? "
-                f"For example: “Compare {first} and {second} {example}.”")
+                f"For example: “Compare everything” or “Compare {first} and {second} {example}.”")
     return f"{lead} {question}" if lead else question
 
 

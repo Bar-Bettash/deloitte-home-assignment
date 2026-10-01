@@ -520,3 +520,26 @@ def test_pending_pair_reaches_the_candidate_only_for_cases_that_carry_one():
     evaluate_cases(cases[:1] + load_and_validate_cases(FOLLOWUP, eval_intents.FOLLOWUP_POLICY)[:1], parser,
                    mode="baseline", policy=eval_intents.PENDING_POLICY)
     assert seen == [{"pending_comparison": ["SFO", "LAX"]}, {}]
+
+
+CONVERSATION = Path(__file__).parent / "fixtures" / "intent_conversation_2025.json"
+
+
+def test_conversation_cases_load_under_their_policy_and_are_new():
+    cases = load_and_validate_cases(CONVERSATION, eval_intents.CONVERSATION_POLICY)
+    assert Counter(case["category"] for case in cases) == {"demonstration": 2, "safety_clarification": 3, "ordinary": 11}
+    # The reported conversation: "which measure?" for LAX/SFO, answered "compare each thing".
+    assert cases[0]["input"] == {"text": "do an overall test and compare each thing", "context": None,
+                                 "pending_comparison": ["LAX", "SFO"]}
+    assert cases[0]["expected"]["analysis"] == {"action": "compare", "airports": ["LAX", "SFO"], "metric": "overview"}
+    seen = {case["input"]["text"].lower() for path, policy in (
+        (CORPUS, eval_intents.CORPUS_POLICY), (HOLDOUT, eval_intents.HOLDOUT_POLICY),
+        (ASSIGNMENT, eval_intents.ASSIGNMENT_POLICY), (REGRESSION, eval_intents.REGRESSION_POLICY),
+        (FOLLOWUP, eval_intents.FOLLOWUP_POLICY), (PENDING, eval_intents.PENDING_POLICY))
+        for case in load_and_validate_cases(path, policy)}
+    assert not {case["input"]["text"].lower() for case in cases} & seen
+    prompt = eval_intents.model_adapter.SYSTEM_PROMPT.lower()
+    assert not any(case["input"]["text"].lower().rstrip("?.") in prompt
+                   for case in cases if len(case["input"]["text"].split()) > 2)
+    policy = eval_intents.CONVERSATION_POLICY
+    assert (policy.case_count, policy.overall_correct_min, policy.all_correct) == (16, 15, ("demonstration", "safety_clarification"))

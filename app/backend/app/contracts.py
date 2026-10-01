@@ -37,7 +37,7 @@ OPERATIONAL_AIRPORTS = frozenset({"LAX", "SNA", "SFO"})
 METRICS = frozenset(
     "passengers seats departures passenger_growth seat_occupancy long_haul_share "
     "screen_score congestion cancellation_rate diversion_rate departure_delay_minutes "
-    "taxi_out_minutes sfo_enplaned_trend sfo_pressure".split()
+    "taxi_out_minutes sfo_enplaned_trend sfo_pressure overview".split()
 )
 RANK_METRICS = frozenset({"screen_score", "passengers", "passenger_growth", "seat_occupancy"})
 T100_METRICS = frozenset(
@@ -60,7 +60,7 @@ class AnalysisRequest(StrictModel):
         "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
         "long_haul_share", "screen_score", "congestion", "cancellation_rate",
         "diversion_rate", "departure_delay_minutes", "taxi_out_minutes",
-        "sfo_enplaned_trend", "sfo_pressure",
+        "sfo_enplaned_trend", "sfo_pressure", "overview",
     ] | None = None
     year: StrictInt | None = None
     bundle_id: Annotated[
@@ -103,8 +103,8 @@ class AnalysisRequest(StrictModel):
             raise ValueError("metric is required")
         if self.year is not None and self.year not in (2023, 2024, 2025):
             raise ValueError("unsupported year")
-        if self.metric in {"passenger_growth", "screen_score"} and self.year == 2023:
-            raise ValueError("passenger growth and screen score require a comparison period")
+        if self.metric in {"passenger_growth", "screen_score", "overview"} and self.year == 2023:
+            raise ValueError("passenger growth, screen score and overview require a comparison period")
         if self.threshold_miles is not None and self.metric != "long_haul_share":
             raise ValueError("threshold is only valid for long_haul_share")
         if self.metric == "long_haul_share" and self.threshold_miles is None:
@@ -130,7 +130,7 @@ class AnalysisRequest(StrictModel):
             if self.metric in {"congestion", "cancellation_rate", "diversion_rate", "departure_delay_minutes", "taxi_out_minutes"}:
                 if self.year not in (None, 2024, 2025) or not set(self.airports) <= OPERATIONAL_AIRPORTS:
                     raise ValueError("operational comparison supports LAX/SNA/SFO")
-            elif self.metric not in T100_METRICS:
+            elif self.metric not in T100_METRICS | {"overview"}:
                 raise ValueError("unsupported comparison metric")
         elif self.action == "metric":
             if self.region is not None or self.airports is None or len(self.airports) != 1:
@@ -142,7 +142,7 @@ class AnalysisRequest(StrictModel):
             elif self.metric in {"sfo_enplaned_trend", "sfo_pressure"}:
                 if self.year not in (None, 2024, 2025) or airport != "SFO":
                     raise ValueError("SFO metrics support SFO")
-            elif self.metric not in T100_METRICS:
+            elif self.metric not in T100_METRICS | {"overview"}:
                 raise ValueError("unsupported metric")
         return self
 
@@ -310,7 +310,7 @@ class ResultScope(StrictModel):
         "passengers", "seats", "departures", "passenger_growth", "seat_occupancy",
         "long_haul_share", "screen_score", "congestion", "cancellation_rate",
         "diversion_rate", "departure_delay_minutes", "taxi_out_minutes",
-        "sfo_enplaned_trend", "sfo_pressure",
+        "sfo_enplaned_trend", "sfo_pressure", "overview",
     ]
     threshold_miles: WireNumber | None = None
     population: Annotated[StrictStr, Field(min_length=1, max_length=200)]

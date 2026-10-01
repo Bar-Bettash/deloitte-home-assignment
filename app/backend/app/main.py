@@ -456,7 +456,7 @@ async def _interpret_and_dispatch(
         raise _ModelOutcome(code, (
             "Please name the airport, metric, and supported period you want to analyze."
             if code == "clarification_required" else
-            "That question is outside the supported airport analyses and periods."
+            "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025."
             if code == "unsupported_scope" else
             "AI interpretation is unavailable. Try a preset."
         ))

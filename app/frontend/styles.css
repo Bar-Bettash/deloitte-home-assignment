@@ -460,16 +460,16 @@
     .dashboard-grid .key-insights { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface-soft); }
     .dashboard-grid .key-insights h3 { margin: 0 0 10px; font-size: .92rem; }
     .dashboard-grid .key-insights p { margin: 8px 0 0; color: var(--text-secondary); font-size: .78rem; line-height: 1.5; }
-    .dashboard-grid.congestion-dashboard { grid-template-columns: minmax(0,1fr); }
-    .dashboard-grid.congestion-dashboard .metric-view,
-    .dashboard-grid.congestion-dashboard .key-insights { grid-column: 1; }
+    .dashboard-grid:is(.congestion-dashboard, .overview-dashboard) { grid-template-columns: minmax(0,1fr); }
+    .dashboard-grid:is(.congestion-dashboard, .overview-dashboard) .metric-view,
+    .dashboard-grid:is(.congestion-dashboard, .overview-dashboard) .key-insights { grid-column: 1; }
     .dashboard-grid.screening-dashboard { grid-template-columns: minmax(0,1fr); }
     .dashboard-grid.screening-dashboard .metric-view,
     .dashboard-grid.screening-dashboard .key-insights { grid-column: 1; }
-    #result .congestion-dashboard .congestion-bars { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+    #result :is(.congestion-dashboard, .overview-dashboard) .congestion-bars { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
     #result .evidence-source-group { margin: 14px 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: rgba(13,28,66,.72); }
     #result .evidence-source-group > summary { min-height: 44px; color: var(--text-secondary); }
-    @media (max-width: 600px) { #result .congestion-dashboard .congestion-bars { grid-template-columns: 1fr; } }
+    @media (max-width: 600px) { #result :is(.congestion-dashboard, .overview-dashboard) .congestion-bars { grid-template-columns: 1fr; } }
     .result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
     .result-actions button { min-height: 44px; padding: 8px 12px; color: var(--text-secondary); background: transparent; border-color: var(--border); font-size: .78rem; }
     .conversation-composer:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -637,7 +637,7 @@
     #result .series-key { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; }
     #result .series-key-1 { background: var(--text); }
     #result .series-key-2 { border: 2px solid var(--text); background: transparent; }
-    #result .congestion-dashboard .congestion-bars { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 2px 18px; }
+    #result :is(.congestion-dashboard, .overview-dashboard) .congestion-bars { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; padding: 2px 18px; }
     #result .congestion-measure { display: grid; align-content: center; gap: 6px; min-height: 68px; padding: 9px 0; border-bottom: 1px solid var(--border); }
     #result .congestion-measure:last-child { border-bottom: 0; }
     #result .measure-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
@@ -756,9 +756,9 @@
     #result .series-panel.feature-chart .series-caption { margin: 2px 0 0; }
     /* Operations comparison: answer first, then four indicators with exact values, the
        explicit difference and short zero-based bars, so a small gap reads as small. */
-    #result .congestion-dashboard .key-insights { margin: 2px 0 4px; }
+    #result :is(.congestion-dashboard, .overview-dashboard) .key-insights { margin: 2px 0 4px; }
     #result .congestion-basis { margin: 0 0 4px; color: var(--text-secondary); font-size: .9375rem; line-height: 1.45; }
-    #result .congestion-dashboard .congestion-bars { grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr)); gap: 0 32px; padding: 0 18px; overflow: hidden; }
+    #result :is(.congestion-dashboard, .overview-dashboard) .congestion-bars { grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr)); gap: 0 32px; padding: 0 18px; overflow: hidden; }
     #result .congestion-measure { display: grid; align-content: start; gap: 6px; min-height: 0; margin-top: -1px; padding: 14px 0 16px; border-top: 1px solid var(--border); border-bottom: 0; }
     #result .measure-head { display: grid; gap: 2px; }
     #result .dashboard-grid > .result-explanation { margin-top: 0; }
@@ -786,7 +786,7 @@
     #result .ranking-columns { display: grid; grid-template-columns: 2rem 3.25rem minmax(3rem, 1fr) 4.25rem; gap: 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); color: var(--text-secondary); font-size: .8125rem; font-weight: 600; letter-spacing: .02em; }
     #result .ranking-columns span:last-child { text-align: end; white-space: nowrap; }
     @media (max-width: 600px) {
-      #result .congestion-dashboard .congestion-bars { padding: 0 14px; }
+      #result :is(.congestion-dashboard, .overview-dashboard) .congestion-bars { padding: 0 14px; }
       #result .bar-row { grid-template-columns: 2.5rem minmax(0, 1fr) auto; }
     }
 
@@ -845,10 +845,30 @@
       .conversation-composer, .conversation-composer.is-open { transition: none; transform: translate(-50%, 0); }
     }
 
+    /* ── Chat height: compact at first, comfortable once the conversation outgrows it, focus when enlarged. ── */
+    body { --chat-h: min(440px, 50vh); }
+    body[data-chat-size="comfortable"] { --chat-h: min(640px, 68vh); }
+    body[data-chat-size="focus"] { --chat-h: calc(100vh - var(--header-h) - 88px); }
+    @supports (height: 1dvh) {
+      body { --chat-h: min(440px, 50dvh); }
+      body[data-chat-size="comfortable"] { --chat-h: min(640px, 68dvh); }
+      body[data-chat-size="focus"] { --chat-h: calc(100dvh - var(--header-h) - 88px); }
+    }
+    @media (max-width: 600px) {
+      body { --chat-h: 70vh; }
+      body[data-chat-size="comfortable"] { --chat-h: 82vh; }
+      body[data-chat-size="focus"] { --chat-h: calc(100vh - var(--header-h) - 66px); }
+      @supports (height: 1dvh) {
+        body { --chat-h: 70dvh; }
+        body[data-chat-size="comfortable"] { --chat-h: 82dvh; }
+        body[data-chat-size="focus"] { --chat-h: calc(100dvh - var(--header-h) - 66px); }
+      }
+    }
+
     /* ── Rising chat card: the composer bar is its collapsed state; clicking it or typing raises the card. ── */
     .conversation-composer { display: flex; flex-direction: column; margin-bottom: var(--keyboard-inset, 0px); }
     .conversation-composer:not(.is-expanded) > :is(.chat-card-head, .chat-body) { display: none; }
-    .conversation-composer.is-expanded { height: min(440px, 50vh); height: min(440px, 50dvh); padding: 8px 12px 12px; background: var(--surface); }
+    .conversation-composer.is-expanded { height: var(--chat-h); padding: 8px 12px 12px; background: var(--surface); }
     .conversation-composer.is-expanded:focus-within { outline: 0; }
     .conversation-composer.is-expanded form { position: relative; flex: none; margin-top: 10px; padding: 4px 4px 4px 14px; border: 1px solid var(--border-strong); border-radius: 14px; background: var(--bg); }
     .conversation-composer.is-expanded form:focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -894,15 +914,15 @@
     }
     /* Narrower layouts stack the result above the card: reserve room so every line can scroll clear of it. */
     @media (max-width: 999px) {
-      body.chat-expanded #result-panel { padding-bottom: calc(min(440px, 50dvh) + 48px); }
+      body.chat-expanded #result-panel { padding-bottom: calc(var(--chat-h) + 48px); }
     }
     /* Phones: the expanded card becomes a bottom sheet. */
     @keyframes chat-sheet-rise { from { clip-path: inset(calc(100% - 62px) 0 0 0 round 18px 18px 0 0); } to { clip-path: inset(0 0 0 0 round 18px 18px 0 0); } }
     @keyframes chat-sheet-lower { from { clip-path: inset(0 0 0 0 round 18px 18px 0 0); } to { clip-path: inset(calc(100% - 62px) 0 0 0 round 18px 18px 0 0); } }
     @media (max-width: 600px) {
-      .conversation-composer.is-expanded { bottom: 0; width: 100vw; height: 70vh; height: 70dvh; max-height: calc(100dvh - var(--keyboard-inset, 0px) - 16px); padding-bottom: max(12px, env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 18px 18px 0 0; animation-name: chat-sheet-rise; }
+      .conversation-composer.is-expanded { bottom: 0; width: 100vw; max-height: calc(100dvh - var(--keyboard-inset, 0px) - 16px); padding-bottom: max(12px, env(safe-area-inset-bottom)); border-width: 1px 0 0; border-radius: 18px 18px 0 0; animation-name: chat-sheet-rise; }
       .conversation-composer.is-expanded.is-collapsing { animation-name: chat-sheet-lower; }
-      body.chat-expanded #result-panel { padding-bottom: calc(70dvh + 24px); }
+      body.chat-expanded #result-panel { padding-bottom: calc(var(--chat-h) + 24px); }
       .chat-message { max-width: 92%; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -923,3 +943,50 @@
     .chat-speak { min-height: 44px; margin: 2px 16px -8px 0; padding: 8px 0; border: 0; border-radius: 0; background: transparent; color: var(--text-secondary); font-size: .875rem; font-weight: 600; text-decoration: underline; text-decoration-color: rgba(252, 241, 208, .3); text-underline-offset: 4px; }
     .chat-speak:hover:not(:disabled) { background: transparent; color: var(--text); text-decoration-color: currentColor; }
     .chat-speak[data-speaking="true"] { color: var(--text); text-decoration-color: currentColor; }
+
+    /* ── Chat header: enlarge and collapse sit together. ── */
+    .chat-head-actions { display: flex; flex: none; gap: 4px; }
+    .chat-resize .restore-icon, .chat-resize[aria-pressed="true"] .enlarge-icon { display: none; }
+    .chat-resize[aria-pressed="true"] .restore-icon { display: block; }
+    .chat-resize[aria-pressed="true"] { color: var(--text); }
+
+    /* ── Measures offered on a "which measure?" reply. ── */
+    .chat-choices { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; animation: chat-message-in var(--motion-normal) var(--ease-standard) both; }
+    .chat-choices[hidden] { display: none; }
+    .chat-choice { min-height: 44px; padding: 8px 14px; border: 1px solid var(--border-strong); border-radius: 999px; background: transparent; color: var(--text); font-size: .875rem; font-weight: 600; }
+    .chat-choice:hover:not(:disabled) { background: var(--surface-blue); border-color: var(--text-secondary); }
+
+    /* ── Overview: grouped measures, the operations comparison layout, no combined score. ── */
+    #result .overview-group { margin: 0 0 6px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+    #result .overview-group-title { margin: 18px 0 8px; color: var(--text-secondary); font-size: .8125rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+    #result .overview-group h4.congestion-measure-title { margin: 0; font-size: 1rem; font-weight: 600; }
+    #result .overview-cards { margin: 0; }
+
+    /* ── Motion system: one set of durations and curves for every state change. ── */
+    :root {
+      --motion-fast: 120ms;
+      --motion-normal: 180ms;
+      --motion-emphasized: 240ms;
+      --ease-standard: cubic-bezier(.2,.8,.2,1);
+      --ease-emphasized: cubic-bezier(.16,1,.3,1);
+    }
+    :is(.prompt, #ask-trigger, .chat-choice, .composer-send, .composer-mic, .chat-collapse, .back-to-analysis, #result-actions button, #add-airport, #scope-form .primary, .sign-out-button, .chat-retry, .chat-view-link, .chat-speak) {
+      transition: background-color var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard), color var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
+    }
+    :is(.prompt, #ask-trigger, .chat-choice, .composer-send, .composer-mic, .chat-collapse, .back-to-analysis, #result-actions button, #add-airport, #scope-form .primary, .sign-out-button):active:not(:disabled):not([aria-disabled="true"]) { transform: scale(.98); }
+    .prompt:hover:not(:disabled) { transform: translateY(-1px); }
+    .prompt:active:not(:disabled) { transform: translateY(0) scale(.98); }
+    /* Back: the analysis choices slide in from the side the result left from. */
+    @keyframes view-in { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+    #analysis-workspace.is-returning { animation: view-in var(--motion-emphasized) var(--ease-emphasized) both; }
+    #result-panel.is-entering-fresh :is(#result, #result-title, #result-actions) { transform: translateY(8px); }
+    #result-panel :is(#result, #result-title, #result-actions) { transition: opacity var(--motion-normal) var(--ease-standard), transform var(--motion-emphasized) var(--ease-emphasized); }
+    /* Opened disclosures settle in instead of appearing at once. */
+    @keyframes disclosure-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+    :is(.scope-disclosure, .more-examples, #result details)[open] > :not(summary) { animation: disclosure-in var(--motion-normal) var(--ease-standard) both; }
+    @media (prefers-reduced-motion: reduce) {
+      :is(.prompt, #ask-trigger, .chat-choice, .composer-send, .composer-mic, .chat-collapse, .back-to-analysis, #result-actions button, #add-airport, #scope-form .primary, .sign-out-button, .chat-retry, .chat-view-link, .chat-speak) { transition: none; }
+      :is(.prompt, #ask-trigger, .chat-choice, .composer-send, .composer-mic, .chat-collapse, .back-to-analysis, #result-actions button, #add-airport, #scope-form .primary, .sign-out-button):active, .prompt:hover { transform: none; }
+      #analysis-workspace.is-returning, .chat-choices, :is(.scope-disclosure, .more-examples, #result details)[open] > :not(summary) { animation: none; }
+      #result-panel :is(#result, #result-title, #result-actions) { transition: none !important; }
+    }

@@ -1,7 +1,7 @@
 {
   "bundle_id": "annual-2025-r1",
   "bundle_manifest_sha256": "84b35d0deee52004071b958f4d32b64625a29f5fdffed374b9eece73a67d2548",
-  "checked_at_utc": "2026-10-01T09:31:23.053362Z",
+  "checked_at_utc": "2026-10-01T16:49:09.810121Z",
   "code_sha256": {
     "app/calculations/comparison.py": "d102981a31c82b9e6d0a5841b5f94cb7f8487bf5123fd74c2f0acb10d8a2c541",
     "app/calculations/long_haul.py": "b6e8df0415f799b7998191b98b6a5139f45fa672cb6342c321af4bca44d0c2e1",
@@ -9,8 +9,8 @@
     "app/calculations/screen.py": "05c60c4da1d5f427ef2312d4a61d8fbc78e4affae545b5d764a1ca1007af068c",
     "app/calculations/sfo.py": "16fcd82e07c2cff5c1ecea1477bdabdfabc24b4c06106916c9814c36d061d736",
     "app/calculations/traffic.py": "f64b8566bfc77e44e7bda3759033ac89e0f00bba879cc14a183850da08df3b10",
-    "app/contracts.py": "c93391c019695349b988badf716ea3906b41819068a292d83b1acd5563d42c08",
-    "app/dispatch.py": "3aaa95bdc472ab8df86515fc6edc2eafdc6cab4e73eb07b22654dcff5b894a5d",
+    "app/contracts.py": "fc8531c24ae838a34e7889a8096a46be5f8cb43e6cca86c5901a849c856445b1",
+    "app/dispatch.py": "971f26806524038b6aa5a79c999612c8b3c90d719d96d1f1510136b7120ff25d",
     "app/evidence.py": "6680ed12af45c83387f7daff51603b451b26fa1d53943f6d4b401f5094be1971",
     "scripts/reconcile_recent.py": "abbeb6358c5490db0c380c69db037a8ebaa50fc6fd3b924b1d2cf32cc3a4e315"
   },
