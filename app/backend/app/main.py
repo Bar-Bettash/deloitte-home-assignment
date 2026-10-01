@@ -5,6 +5,7 @@ import secrets
 import time
 from html import escape
 from pathlib import Path
+from types import MappingProxyType
 from typing import Literal
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4
@@ -344,7 +345,8 @@ def _error_response(
     response = JSONResponse(
         status_code=status_code,
         content=body.model_dump(mode="json", exclude_none=True),
-        headers={"X-Request-ID": str(request_id)},
+        headers={"X-Request-ID": str(request_id),
+                 **({"Retry-After": str(RETRY_AFTER_SECONDS)} if code == "rate_limited" else {})},
     )
     if clear_context:
         response.delete_cookie(
@@ -371,7 +373,19 @@ class _ModelOutcome(Exception):
         self.pending_comparison = pending_comparison
 
 
+# The provider answering "too many requests" (429) or "overloaded" (503) is temporary:
+# the analyst is told to wait and retry, not that AI is unavailable.
+RATE_LIMITED_PROVIDER_STATUSES = frozenset({429, 503})
+RETRY_AFTER_SECONDS = 10
+RATE_LIMITED_MESSAGE = (f"Too many questions are reaching the AI service right now. Wait about {RETRY_AFTER_SECONDS} "
+                        "seconds, then try again. Presets and Adjust scope still work.")
+_ERROR_STATUS = MappingProxyType({"query_timeout": 504, "invalid_request": 422, "clarification_required": 422,
+                                  "unsupported_scope": 422, "rate_limited": 429})
+
+
 def _model_error(exc: ModelAdapterError) -> _ModelOutcome:
+    if exc.code == "ai_unavailable" and exc.provider_status in RATE_LIMITED_PROVIDER_STATUSES:
+        return _ModelOutcome("rate_limited", RATE_LIMITED_MESSAGE)
     if exc.code == "model_timeout":
         return _ModelOutcome("query_timeout", "The analysis took too long. Your previous result is unchanged.")
     if exc.code == "model_prompt_too_large":
@@ -550,11 +564,10 @@ async def query(request: Request) -> AnalysisResult | JSONResponse:
         return _error_response(request_id, exc.status_code, exc.code, exc.message)
     except ModelAdapterError as exc:
         safe = _model_error(exc)
-        status = 504 if safe.code == "query_timeout" else 422 if safe.code == "invalid_request" else 503
-        return _error_response(request_id, status, safe.code, safe.message)
+        return _error_response(request_id, _ERROR_STATUS.get(safe.code, 503), safe.code, safe.message)
     except _ModelOutcome as exc:
-        status = 422 if exc.code in {"clarification_required", "unsupported_scope", "invalid_request"} else 503
-        return _error_response(request_id, status, exc.code, exc.message, pending_comparison=exc.pending_comparison)
+        return _error_response(request_id, _ERROR_STATUS.get(exc.code, 503), exc.code, exc.message,
+                               pending_comparison=exc.pending_comparison)
     except Exception as exc:  # noqa: BLE001 - sanitize unexpected dispatcher failures at the HTTP boundary.
         logger.warning("query failed request_id=%s code=internal_error exception=%s", request_id, type(exc).__name__)
         return _error_response(request_id, 500, "internal_error", "The analysis failed. Try again or choose another request.")

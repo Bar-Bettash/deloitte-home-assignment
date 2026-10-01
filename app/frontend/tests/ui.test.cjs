@@ -1963,6 +1963,8 @@ test('an unsupported or unclear question is answered; a model or service failure
     ['clarification_required', 422, 'Which airport should I compare with LAX?', 'Which airport should I compare with LAX?', 'note'],
     ['ai_unavailable', 503, 'AI interpretation is unavailable.', 'Natural-language analysis is temporarily unavailable. Preset analyses still work.', 'error'],
     ['query_timeout', 504, 'The analysis took too long.', 'The analysis took too long.', 'error'],
+    ['rate_limited', 429, 'Too many questions are reaching the AI service right now. Wait about 10 seconds, then try again. Presets and Adjust scope still work.',
+      'Too many questions are reaching the AI service right now. Wait about 10 seconds, then try again. Presets and Adjust scope still work.', 'error'],
   ];
   for (const [code, status, message, expected, state] of cases) {
     const { query } = queuedFetch([success(laxSnaCongestion()), { ok: false, status, json: async () => errorEnvelope(code, message) }]);
@@ -1983,7 +1985,7 @@ test('an unsupported or unclear question is answered; a model or service failure
       assert.equal(content(failure).trim(), 'Not sent ·  Retry');
       assert.equal(findDescendant(failure, node => node.className === 'chat-retry').tagName, 'button', 'Retry is a real button');
     }
-    assert.doesNotMatch(content(reply) + content(user), /123e4567|request|_scope|_required|_unavailable|_timeout|\b(422|503|504)\b|Gemini/i, `${code}: no codes or IDs in the transcript`);
+    assert.doesNotMatch(content(reply) + content(user), /123e4567|request|_scope|_required|_unavailable|_timeout|_limited|\b(422|429|503|504)\b|Gemini/i, `${code}: no codes or IDs in the transcript`);
     assert.equal(chatLink(reply).hidden, true);
     assert.equal(ui.nodes.get('#question').value, state === 'error' ? 'What about the weather?' : '',
       `${code}: a failed send gives its text back for editing; an answered one leaves the composer clean`);

@@ -739,6 +739,37 @@ def test_provider_http_status_is_logged_but_not_returned(monkeypatch, caplog):
     assert any("outcome=ai_unavailable:http_404" in record.getMessage() for record in caplog.records)
 
 
+@pytest.mark.parametrize("provider_status", [429, 503])
+def test_provider_rate_limit_or_overload_tells_the_analyst_to_wait_and_retry(monkeypatch, caplog, provider_status):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def too_many(*_args, **_kwargs):
+        raise ModelAdapterError("ai_unavailable", provider_status=provider_status)
+
+    caplog.set_level("INFO", logger="app.main")
+    monkeypatch.setattr(main, "interpret_message", too_many)
+    response = client.post("/api/query", json={"message": "How many PVD passengers in 2024?"})
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "10"
+    error = response.json()["error"]
+    assert error["code"] == "rate_limited"
+    assert error["message"].startswith("Too many questions are reaching the AI service right now. Wait about 10 seconds")
+    assert str(provider_status) not in error["message"]
+    assert any(f"outcome=ai_unavailable:http_{provider_status}" in record.getMessage() for record in caplog.records)
+
+
+def test_other_provider_failures_stay_unavailable_without_retry_after(monkeypatch):
+    monkeypatch.setattr(main, "load_settings", admitted_settings)
+
+    async def server_error(*_args, **_kwargs):
+        raise ModelAdapterError("ai_unavailable", provider_status=500)
+
+    monkeypatch.setattr(main, "interpret_message", server_error)
+    response = client.post("/api/query", json={"message": "How many PVD passengers in 2024?"})
+    assert response.status_code == 503 and "Retry-After" not in response.headers
+    assert response.json()["error"]["code"] == "ai_unavailable"
+
+
 def test_followup_passes_only_signed_request_and_stale_id_keeps_cookie(monkeypatch):
     first = client.post("/api/query", json={"analysis": {
         "action": "rank", "region": "new_england", "metric": "passengers", "year": 2024,

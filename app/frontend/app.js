@@ -209,7 +209,7 @@ const rankMetrics = new Set(["screen_score", "passengers", "passenger_growth", "
 // (model, service, timeout, connection) is a failed turn with an inline Retry.
 const chatReplyCodes = new Set(["unsupported_scope", "clarification_required", "insufficient_data", "invalid_request", "request_too_large", "session_expired", "result_mismatch"]);
 const editToFixCodes = new Set(["invalid_request", "request_too_large"]);
-const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_too_large", "invalid_request", "unsupported_scope", "clarification_required", "insufficient_data", "busy", "session_expired", "result_mismatch", "ai_unavailable", "data_unavailable", "query_timeout", "internal_error", "access_required"]);
+const errorCodes = new Set(["invalid_json", "unsupported_media_type", "request_too_large", "invalid_request", "unsupported_scope", "clarification_required", "insufficient_data", "busy", "session_expired", "result_mismatch", "ai_unavailable", "rate_limited", "data_unavailable", "query_timeout", "internal_error", "access_required"]);
 
 function parseErrorResponse(payload) {
   if (!isRecord(payload) || payload.success !== false || !isRecord(payload.error)) return null;
@@ -224,6 +224,7 @@ function parseErrorResponse(payload) {
 function errorRecovery(detail, status) {
   if (detail.code === "busy") return "Wait for the current analysis to finish, then retry explicitly.";
   if (["session_expired", "result_mismatch"].includes(detail.code)) return "Use Start a new analysis, then choose a complete request.";
+  if (detail.code === "rate_limited") return "Wait about 10 seconds, then retry. Presets and Adjust scope still work.";
   if (detail.code === "ai_unavailable") return "Presets and Adjust scope still work without AI interpretation.";
   return "Review the scope or try again explicitly.";
 }
