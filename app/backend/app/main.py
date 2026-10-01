@@ -28,7 +28,9 @@ from app.contracts import (
     validate_request_body_size,
 )
 from app.dispatch import DispatchFailure, dispatch_analysis
-from app.model_adapter import ADAPTER_SHA256, ModelAdapterError, comparison_question, interpret_message
+from app.model_adapter import (
+    ADAPTER_SHA256, ModelAdapterError, ModelInterpretation, comparison_question, interpret_message,
+)
 from app.query_slots import QuerySlots
 from app.settings import HostingConfig, HostingConfigError, load_hosting, load_local_env, load_settings
 from fastapi import FastAPI, Request
@@ -403,13 +405,20 @@ def _resolved_request(analysis: AnalysisRequest, result: AnalysisResult) -> Anal
     })
 
 
-def _pending_answer_period(analysis: AnalysisRequest, previous: AnalysisRequest,
-                           pending_comparison: list[str]) -> AnalysisRequest:
-    """A typed answer to "which measure?" takes the period on screen when the contract allows it
-    for that measure, and otherwise the default period: the same rule as a clicked measure
-    (app.js choiceAnalysis). A year the analyst names is kept as named."""
-    if (analysis.action != "compare" or analysis.year is not None or previous.year is None
-            or sorted(analysis.airports or []) != sorted(pending_comparison)):
+def _without_period(context: dict) -> dict:
+    return {key: value for key, value in context.items() if key not in {"year", "bundle_id"}}
+
+
+def _period_on_screen(analysis: AnalysisRequest, previous: AnalysisRequest,
+                      pending_comparison: list[str] | None = None) -> AnalysisRequest:
+    """Give an answer that names no year the period on screen when the contract allows it for that
+    measure; otherwise it keeps the default period, which the result shows. For an answer to
+    "which measure?" this is the measure button's rule (app.js choiceAnalysis). A year the analyst
+    names is kept as named."""
+    if analysis.action == "explain" or analysis.year is not None or previous.year is None:
+        return analysis
+    if pending_comparison is not None and (
+            analysis.action != "compare" or sorted(analysis.airports or []) != sorted(pending_comparison)):
         return analysis
     try:
         return AnalysisRequest.model_validate({**analysis.model_dump(mode="python", exclude_none=True),
@@ -456,28 +465,44 @@ async def _interpret_and_dispatch(
     message: str, request_id: UUID, claims: ContextClaims | None, settings,
     pending_comparison: list[str] | None = None,
 ) -> tuple[AnalysisResult, AnalysisRequest]:
-    started = time.perf_counter()
     context = claims.request.model_dump(mode="json", exclude_none=True) if claims is not None else None
-    if context is not None and pending_comparison is not None:
-        # The period of an answer to "which measure?" is resolved here, after the model,
-        # exactly as a clicked measure resolves it (_pending_answer_period).
-        context = {key: value for key, value in context.items() if key not in {"year", "bundle_id"}}
+    # The period of an answer to "which measure?" is resolved by the server after the
+    # model, exactly as a clicked measure resolves it (_period_on_screen).
+    period_by_server = context is not None and pending_comparison is not None
+    if period_by_server:
+        context = _without_period(context)
+
+    async def ask(sent_context: dict | None) -> ModelInterpretation:
+        started = time.perf_counter()
+        try:
+            interpreted = await interpret_message(
+                message, settings=settings,
+                context=sent_context,
+                # Passed only while a comparison clarification awaits its answer.
+                **({"pending_comparison": pending_comparison} if pending_comparison is not None else {}),
+            )
+        except ModelAdapterError as exc:
+            outcome = exc.code if exc.provider_status is None else f"{exc.code}:http_{exc.provider_status}"
+            _log_model_call(request_id, settings, started, outcome=outcome, follow_up=claims is not None)
+            raise
+        except asyncio.CancelledError:
+            _log_model_call(request_id, settings, started, outcome="cancelled", follow_up=claims is not None)
+            raise
+        _log_model_call(request_id, settings, started, outcome=interpreted.kind, follow_up=claims is not None,
+                        input_tokens=interpreted.usage.input_tokens, output_tokens=interpreted.usage.output_tokens)
+        return interpreted
+
     try:
-        interpreted = await interpret_message(
-            message, settings=settings,
-            context=context,
-            # Passed only while a comparison clarification awaits its answer.
-            **({"pending_comparison": pending_comparison} if pending_comparison is not None else {}),
-        )
+        interpreted = await ask(context)
     except ModelAdapterError as exc:
-        outcome = exc.code if exc.provider_status is None else f"{exc.code}:http_{exc.provider_status}"
-        _log_model_call(request_id, settings, started, outcome=outcome, follow_up=claims is not None)
-        raise
-    except asyncio.CancelledError:
-        _log_model_call(request_id, settings, started, outcome="cancelled", follow_up=claims is not None)
-        raise
-    _log_model_call(request_id, settings, started, outcome=interpreted.kind, follow_up=claims is not None,
-                    input_tokens=interpreted.usage.input_tokens, output_tokens=interpreted.usage.output_tokens)
+        # A follow-up can carry over a period its new measure does not have (a 2023 result,
+        # then "and passenger growth?"), which the contract rejects. Ask once more without
+        # the period; it is then resolved like an answer to "which measure?".
+        if exc.code != "model_invalid_response" or period_by_server or not context or "year" not in context:
+            raise
+        period_by_server = True
+        context = _without_period(context)
+        interpreted = await ask(context)
     if interpreted.analysis is None:
         code = interpreted.kind if interpreted.kind in {"clarification_required", "unsupported_scope"} else "ai_unavailable"
         # Wording is fixed here; the adapter's message is never forwarded. A comparison
@@ -495,8 +520,8 @@ async def _interpret_and_dispatch(
             "AI interpretation is unavailable. Try a preset."
         ))
     analysis = AnalysisRequest.model_validate(interpreted.analysis)
-    if pending_comparison is not None and claims is not None:
-        analysis = _pending_answer_period(analysis, claims.request, pending_comparison)
+    if period_by_server and claims is not None:
+        analysis = _period_on_screen(analysis, claims.request, pending_comparison)
     if analysis.action == "explain" and claims is None:
         raise _ModelOutcome("clarification_required", "Choose a previous result to explain.")
     return await asyncio.to_thread(_run_structured, analysis, request_id, claims)
