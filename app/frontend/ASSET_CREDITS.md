@@ -1,16 +1,20 @@
-# Earth and airport coordinate assets
+# Asset credits
 
-Checked 2026-09-27. NASA imagery is used as factual geographic texture, with no NASA logo or endorsement claim. NASA states its content generally is not subject to US copyright and permits factual web use; commercial use must not imply NASA endorsement: [NASA image and media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/).
+The globe uses NASA imagery as geographic texture. No NASA logo is used and no endorsement is implied.
 
-| Local file | Source and attribution | Transformation | Dimensions | Bytes | SHA-256 |
-|---|---|---|---:|---:|---|
-| `earth-day-2048.webp` | [NASA SVS 3615](https://svs.gsfc.nasa.gov/3615), [source JPEG](https://svs.gsfc.nasa.gov/vis/a000000/a003600/a003615/earth_noClouds.0330.jpg); NASA/GSFC SVS; Blue Marble Next Generation courtesy Reto Stockli (NASA/GSFC) and NASA Earth Observatory. | Source equirectangular JPEG (356467 bytes, SHA-256 `1ed70af0494a92b69a40e12feffd7b47ad4c92b3d70ad0987fee77212b51635c`) encoded as WebP quality 86. | 2048×1024 | 160508 | `4c525367bbfaec607eeba3c644cd8b9476fa43a61b792d740f6e640ac3594d73` |
-| `earth-night-2048.webp` | [NASA Earth at Night / Black Marble](https://science.nasa.gov/earth/earth-observatory/earth-at-night/maps/), 2016 global color map; [source JPEG](https://assets.science.nasa.gov/content/dam/science/esd/eo/images/imagerecords/144000/144898/BlackMarble_2016_01deg.jpg). | Source JPEG (779638 bytes, SHA-256 `d87de751a264e4f8ff69c68de5dab9606daee87a6f15ae743c93200743bd7ec1`) resized from 3600×1800 to 2048×1024; encoded as WebP quality 84. Historical visual texture only; not current or real-time lighting. | 2048×1024 | 87172 | `f4bd96b94f5a1768a640d41c7c05239a4119deb2bef5ac1dc6838ebdd55070db` |
-| `earth-clouds-2048.webp` | [NASA Visible Earth, Blue Marble: Clouds](https://visibleearth.nasa.gov/images/57747/blue-marble-clouds); NASA Goddard Space Flight Center, image by Reto Stöckli; [source JPEG](https://eoimages.gsfc.nasa.gov/images/imagerecords/57000/57747/cloud_combined_2048.jpg). | Source JPEG (829367 bytes, SHA-256 `daddaad84d7a33bbbc86cdda3f591099f57cee8607b7bcf3b67eb7e4f7a1c793`), NASA's 2048×1024 cloud-only grayscale composite encoded as WebP quality 82; sampled as visual cloud opacity. | 2048×1024 | 486166 | `d2fde2bea18c3f9763e303092e338afbadb558bdd7208e49730856467d05483f` |
-| `earth-poster.webp` | Derived from the NASA/GSFC SVS 3615 no-cloud Blue Marble image above. | Locally projected to a 900×900 orthographic still centered on longitude −100°, latitude 25°; dark navy background and subtle blue limb; WebP quality 84. Used only while loading or after renderer failure. | 900×900 | 52528 | `7269ba35a7246473fcc3e01382798c8055ead0a5de5d8ba2db571977bdb4bc07` |
+| Asset | Source |
+|---|---|
+| `earth-day-2048.webp` | [NASA/GSFC Blue Marble Next Generation](https://svs.gsfc.nasa.gov/3615), imagery by NASA/GSFC and NASA Earth Observatory |
+| `earth-night-2048.webp` | [NASA Earth at Night / Black Marble](https://science.nasa.gov/earth/earth-observatory/earth-at-night/maps/) |
+| `earth-clouds-2048.webp` | [NASA Visible Earth — Blue Marble Clouds](https://visibleearth.nasa.gov/images/57747/blue-marble-clouds), image by Reto Stöckli / NASA GSFC |
+| `earth-poster.webp` | Derived locally from the Blue Marble source above |
 
-The source pages identify the Blue Marble projection and Black Marble 2016 observation period. None of these textures represents current weather, current illumination, airport traffic, or live conditions.
+NASA’s [image and media usage guidelines](https://www.nasa.gov/nasa-brand-center/images-and-media/) state that NASA content is generally not subject to U.S. copyright; use must not imply NASA endorsement.
 
-## Geographic shortcuts
+These textures are visual only. They do **not** represent current weather, live illumination, airport traffic, or operational conditions.
 
-`airport-coordinates.json` contains only the six supported globe shortcuts. Coordinates are copied from the FAA's [28-Day NASR APT_BASE.csv](https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/), effective 2026-09-03, using FAA airport record IDs `ANC`, `LAX`, `SNA`, `SFO`, `BOS`, and `PVD`. The CSV fields `LAT_DECIMAL` and `LONG_DECIMAL` are used without rounding. Retrieved 2026-09-27 from [03_Sep_2026_APT_CSV.zip](https://nfdc.faa.gov/webContent/28DaySub/extra/03_Sep_2026_APT_CSV.zip), archive SHA-256 `d5e4c999d4c96ab4d66d8ce9a387de8ea59b5226a6144ea1ba58758ff29bbbd9`. Final JSON: 318 bytes, SHA-256 `36b2a6dc6e619acf172242babe35eb438f8eb5697d324fa41af2524f72e80371`.
+## Airport coordinates
+
+`airport-coordinates.json` contains the supported globe shortcuts. Coordinates come from the FAA 28-Day NASR `APT_BASE.csv`, effective 2026-09-03, using `LAT_DECIMAL` and `LONG_DECIMAL` for ANC, LAX, SNA, SFO, BOS, and PVD.
+
+Source: [FAA NASR Subscription](https://www.faa.gov/air_traffic/flight_info/aeronav/aero_data/NASR_Subscription/).
