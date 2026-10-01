@@ -15,7 +15,7 @@ Compact release evidence for the submitted application.
 | Secret handling | 657 Preview log rows (13:31:07–13:44:56 UTC) scanned for the password; 0 hits, with a planted positive control | **PASS** |
 | Voice | Dictation, typed fallback, follow-up, read-aloud | **PASS** |
 | Model admission | Pending-comparison 10/10, new-airport follow-ups 10/10, corpus 30/30, holdout 12/12, assignment wording 8/8, chat regression 20/20 | **90/90, 0 errors** |
-| Fresh review | Fresh-context review of the RC2 candidate | **0 findings** |
+| Review | 3 bug-fix review rounds; all findings were minor and fixed | **No blocking findings** |
 
 The hosted Preview was re-protected after QA: the automation bypass was removed and unauthenticated access again redirected to Vercel protection.
 
@@ -24,7 +24,8 @@ The hosted Preview was re-protected after QA: the automation bypass was removed 
 | Item | Value |
 |---|---|
 | Production URL | https://deloitte-airport-analyst.vercel.app |
-| Hosted RC2 candidate | `20304e920286407dbc2f132501972b79652d22e0` |
+| Vercel deployment | `dpl_CdrXR3QR8MHSQn7gwe6eSecQt58s` |
+| Production release | `20304e920286407dbc2f132501972b79652d22e0` |
 | Model | `gemini-3.8-flash` |
 | Admitted adapter SHA-256 | `1873f9e4304110be438fa69d79f0e09948f863a138a3cdd9fa1be6f327f9451d` |
 | Default data bundle | `annual-2025-r1` |
