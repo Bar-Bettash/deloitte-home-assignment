@@ -1,0 +1,278 @@
+{
+  "mode": "candidate",
+  "case_count": 8,
+  "correct_count": 8,
+  "accuracy": 1.0,
+  "category_accuracy": {
+    "ordinary": 1.0,
+    "safety_clarification": 1.0
+  },
+  "error_count": 0,
+  "candidate_acceptance": true,
+  "acceptance_policy": {
+    "name": "assignment",
+    "case_count_required": 8,
+    "category_counts_required": {
+      "safety_clarification": 2,
+      "ordinary": 6
+    },
+    "overall_correct_min": 8,
+    "safety_correct_required": 2,
+    "ordinary_correct_required": 6,
+    "errors_max": 0
+  },
+  "results": [
+    {
+      "id": "assignment-01",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      },
+      "correct": true,
+      "latency_ms": 4534.237,
+      "usage": {
+        "input_tokens": 1732,
+        "output_tokens": 72,
+        "cost_usd": 0.001569
+      },
+      "error": null,
+      "cost_usd": 0.001569
+    },
+    {
+      "id": "assignment-02",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "rank",
+          "region": "new_england",
+          "metric": "screen_score"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1169.128,
+      "usage": {
+        "input_tokens": 1731,
+        "output_tokens": 72,
+        "cost_usd": 0.00156825
+      },
+      "error": null,
+      "cost_usd": 0.00156825
+    },
+    {
+      "id": "assignment-03",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "SFO"
+          ],
+          "metric": "sfo_pressure"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "SFO"
+          ],
+          "metric": "sfo_pressure"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1134.164,
+      "usage": {
+        "input_tokens": 1730,
+        "output_tokens": 71,
+        "cost_usd": 0.00156375
+      },
+      "error": null,
+      "cost_usd": 0.00156375
+    },
+    {
+      "id": "assignment-04",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "correct": true,
+      "latency_ms": 2127.064,
+      "usage": {
+        "input_tokens": 1731,
+        "output_tokens": 72,
+        "cost_usd": 0.00156825
+      },
+      "error": null,
+      "cost_usd": 0.00156825
+    },
+    {
+      "id": "assignment-05",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "ANC"
+          ],
+          "metric": "long_haul_share"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1780.984,
+      "usage": {
+        "input_tokens": 1728,
+        "output_tokens": 71,
+        "cost_usd": 0.00156225
+      },
+      "error": null,
+      "cost_usd": 0.00156225
+    },
+    {
+      "id": "assignment-06",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "departure_delay_minutes",
+          "year": 2025
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SNA"
+          ],
+          "metric": "departure_delay_minutes",
+          "year": 2025
+        }
+      },
+      "correct": true,
+      "latency_ms": 1550.322,
+      "usage": {
+        "input_tokens": 1760,
+        "output_tokens": 80,
+        "cost_usd": 0.00162
+      },
+      "error": null,
+      "cost_usd": 0.00162
+    },
+    {
+      "id": "assignment-07",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Return on investment is not identifiable from this demo's data."
+      },
+      "actual": {
+        "kind": "unsupported_scope",
+        "message": "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025."
+      },
+      "correct": true,
+      "latency_ms": 2074.178,
+      "usage": {
+        "input_tokens": 1728,
+        "output_tokens": 20,
+        "cost_usd": 0.001371
+      },
+      "error": null,
+      "cost_usd": 0.001371
+    },
+    {
+      "id": "assignment-08",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "unsupported_scope",
+        "message": "Only 2023, 2024 and 2025 are supported."
+      },
+      "actual": {
+        "kind": "unsupported_scope",
+        "message": "I can't answer that from this airport data. I can rank New England airports, compare two airports on one measure or overall, or show one airport's figures for 2023 to 2025."
+      },
+      "correct": true,
+      "latency_ms": 1257.489,
+      "usage": {
+        "input_tokens": 1731,
+        "output_tokens": 119,
+        "cost_usd": 0.0017445
+      },
+      "error": null,
+      "cost_usd": 0.0017445
+    }
+  ],
+  "candidate_status": "evaluated",
+  "model": "gemini-3.8-flash",
+  "prompt_sha256": "d7d90c94e0e446d8e75271e510e64cc7627ef4a2654c7f360f3150bebc763970",
+  "adapter_sha256": "e58ea32e77ee946de036ba89d6444e664becfab6638b0d4ff7e0546dfbc2234e",
+  "corpus_sha256": "290933f8d7ad17beeb59c8fa4ff99ed6a2bd3a3db6e73cf398ee9b9fa1e18a9b",
+  "rate_card_usd_per_million_tokens": {
+    "input": 0.75,
+    "output": 3.75
+  },
+  "aggregate_cost_usd": 0.012567,
+  "rejected_output_costed_calls": 0,
+  "unknown_cost_calls": 0,
+  "latency_ms_p50": 1550.322,
+  "latency_ms_p95": 4534.237
+}

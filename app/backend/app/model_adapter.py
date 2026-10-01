@@ -64,9 +64,9 @@ it:
   whether it needs more capacity, at SFO: metric with sfo_pressure.
 - Passenger volume, passenger growth, seats, departures or seat occupancy: that
   metric; a passenger trend at SFO is sfo_enplaned_trend.
-- An overall or full comparison of two named airports, everything, each measure
-  or the big picture: compare with overview (for one airport: metric with
-  overview). Several of passengers, passenger growth, seat occupancy, long-haul
+- An overall or full comparison of two named airports, an analysis of both,
+  everything, each measure or the big picture: compare with overview (for one
+  airport: metric with overview). Several of passengers, passenger growth, seat occupancy, long-haul
   share and operational measures for the same airports is also the overview;
   seats or departures with other measures is unsupported_scope.
 
@@ -90,13 +90,14 @@ Scope rules.
 Previous analysis. previous_analysis, when supplied, is the result on screen.
 - A new question names its own airport or airports and its own metric or topic.
   It replaces the previous analysis: take nothing from it, and leave year null
-  unless the user names one.
+  unless the user names one. A message naming only two airports, as in "compare
+  LAX and SFO" or "LAX vs SFO", with neither in previous_analysis (a region
+  ranking names none) or none supplied, lacks only the metric: return the
+  two-airport clarification below. If one is in it, it is a follow-up.
 - A follow-up leaves something implicit (only a metric, only a year, or "that",
   "those", "same"). It fills only the implicit fields from the previous
   analysis; a follow-up about "these" airports of a ranking stays that ranking
-  with the metric the wording names. A follow-up may use only the validated
-  previous analysis supplied in context; if it needs prior context and none is
-  supplied, ask for clarification.
+  with the metric the wording names.
   A follow-up keeps the previous analysis's airports, action and year unless the
   user changes them. A follow-up that only narrows or switches the metric (for
   example to one operational measure) after a comparison stays a comparison of the

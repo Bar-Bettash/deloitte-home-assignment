@@ -155,6 +155,12 @@ def test_fixed_shape_output_with_nulls_is_accepted() -> None:
     "several measures for the same airports follow the overview rule",
     "seats or departures with other measures is unsupported_scope",
     "return clarification_required. Never guess an airport",
+    "A message naming only two airports",
+    "or none supplied, lacks only the metric: return the\n  two-airport clarification below",
+    "If one is in it, it is a follow-up.",
+    # Load-bearing: without it the model refuses an out-of-period follow-up itself
+    # instead of returning it for the server's period rule.
+    "The server independently validates every analysis",
 ])
 def test_prompt_states_general_contract_rules(rule: str) -> None:
     assert rule in model_adapter.SYSTEM_PROMPT
@@ -390,6 +396,13 @@ async def test_no_call_for_missing_key_or_oversized_prompt() -> None:
                 await interpret_message(message, settings=settings, client=client)
             assert exc.value.code == expected_code
     assert calls == 0
+
+
+def test_prompt_leaves_room_for_a_long_follow_up() -> None:
+    # Every byte the prompt grows is a byte less for the analyst's question under the
+    # default budget; a long follow-up over a comparison with a pending pair must fit.
+    context = {"action": "compare", "airports": ["LAX", "SFO"], "metric": "passenger_growth", "year": 2024}
+    model_adapter._make_input("x" * 400, context, Settings(), ["LAX", "SFO"])
 
 
 @run_async

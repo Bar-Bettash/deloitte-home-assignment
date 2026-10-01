@@ -1,0 +1,333 @@
+{
+  "mode": "candidate",
+  "case_count": 10,
+  "correct_count": 10,
+  "accuracy": 1.0,
+  "category_accuracy": {
+    "ordinary": 1.0,
+    "safety_clarification": 1.0
+  },
+  "error_count": 0,
+  "candidate_acceptance": true,
+  "acceptance_policy": {
+    "name": "followup",
+    "case_count_required": 10,
+    "category_counts_required": {
+      "safety_clarification": 4,
+      "ordinary": 6
+    },
+    "overall_correct_min": 9,
+    "safety_correct_required": 4,
+    "errors_max": 0
+  },
+  "results": [
+    {
+      "id": "fu-bos-growth-vs-pvd",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "BOS",
+            "PVD"
+          ],
+          "metric": "passenger_growth"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "BOS",
+            "PVD"
+          ],
+          "metric": "passenger_growth"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1576.407,
+      "usage": {
+        "input_tokens": 1738,
+        "output_tokens": 74,
+        "cost_usd": 0.001581
+      },
+      "error": null,
+      "cost_usd": 0.001581
+    },
+    {
+      "id": "fu-pvd-occupancy-beside-bdl",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "PVD",
+            "BDL"
+          ],
+          "metric": "seat_occupancy"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "PVD",
+            "BDL"
+          ],
+          "metric": "seat_occupancy"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1367.308,
+      "usage": {
+        "input_tokens": 1739,
+        "output_tokens": 75,
+        "cost_usd": 0.0015855
+      },
+      "error": null,
+      "cost_usd": 0.0015855
+    },
+    {
+      "id": "fu-lax-cancellations-vs-sfo",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "cancellation_rate"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "LAX",
+            "SFO"
+          ],
+          "metric": "cancellation_rate"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1060.605,
+      "usage": {
+        "input_tokens": 1738,
+        "output_tokens": 75,
+        "cost_usd": 0.00158475
+      },
+      "error": null,
+      "cost_usd": 0.00158475
+    },
+    {
+      "id": "fu-anc-long-haul-vs-lax",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "ANC",
+            "LAX"
+          ],
+          "metric": "long_haul_share",
+          "threshold_miles": 3000
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "ANC",
+            "LAX"
+          ],
+          "metric": "long_haul_share",
+          "threshold_miles": 3000.0
+        }
+      },
+      "correct": true,
+      "latency_ms": 2026.097,
+      "usage": {
+        "input_tokens": 1746,
+        "output_tokens": 371,
+        "cost_usd": 0.00270075
+      },
+      "error": null,
+      "cost_usd": 0.00270075
+    },
+    {
+      "id": "fu-sna-congestion-vs-lax",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SNA",
+            "LAX"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "compare",
+          "airports": [
+            "SNA",
+            "LAX"
+          ],
+          "metric": "congestion"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1693.174,
+      "usage": {
+        "input_tokens": 1734,
+        "output_tokens": 248,
+        "cost_usd": 0.0022305
+      },
+      "error": null,
+      "cost_usd": 0.0022305
+    },
+    {
+      "id": "fu-mht-passengers-swap-pwm",
+      "category": "ordinary",
+      "expected": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "PWM"
+          ],
+          "metric": "passengers"
+        }
+      },
+      "actual": {
+        "kind": "analysis",
+        "analysis": {
+          "action": "metric",
+          "airports": [
+            "PWM"
+          ],
+          "metric": "passengers"
+        }
+      },
+      "correct": true,
+      "latency_ms": 1094.95,
+      "usage": {
+        "input_tokens": 1733,
+        "output_tokens": 74,
+        "cost_usd": 0.00157725
+      },
+      "error": null,
+      "cost_usd": 0.00157725
+    },
+    {
+      "id": "fu-sfo-pressure-vs-lax-clarifies",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "Ask which comparable measure to use for SFO and LAX."
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "SFO demand pressure is measured only for SFO. Which measure should I compare for SFO and LAX: an overall comparison of the key measures, passenger growth, seat occupancy, passengers, long-haul share or congestion? For example: “Compare everything” or “Compare SFO and LAX congestion.”"
+      },
+      "correct": true,
+      "latency_ms": 1549.25,
+      "usage": {
+        "input_tokens": 1739,
+        "output_tokens": 82,
+        "cost_usd": 0.00161175
+      },
+      "error": null,
+      "cost_usd": 0.00161175
+    },
+    {
+      "id": "fu-screen-bos-pvd-clarifies",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "Ask which comparable measure to use for BOS and PVD."
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "The screening score ranks New England airports rather than comparing two. Which measure should I compare for BOS and PVD: an overall comparison of the key measures, passenger growth, seat occupancy, passengers or long-haul share? For example: “Compare everything” or “Compare BOS and PVD passenger growth.”"
+      },
+      "correct": true,
+      "latency_ms": 2197.814,
+      "usage": {
+        "input_tokens": 1737,
+        "output_tokens": 420,
+        "cost_usd": 0.00287775
+      },
+      "error": null,
+      "cost_usd": 0.00287775
+    },
+    {
+      "id": "fu-lax-sna-congestion-vs-bos-clarifies",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "Ask which airport and a measure available at BOS."
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "Please name the airport, metric, and supported period you want to analyze."
+      },
+      "correct": true,
+      "latency_ms": 1489.708,
+      "usage": {
+        "input_tokens": 1735,
+        "output_tokens": 20,
+        "cost_usd": 0.00137625
+      },
+      "error": null,
+      "cost_usd": 0.00137625
+    },
+    {
+      "id": "fu-lax-cancellations-vs-bos-clarifies",
+      "category": "safety_clarification",
+      "expected": {
+        "kind": "clarification_required",
+        "message": "Cancellation rates cover LAX, SNA and SFO only; ask for a measure available at BOS."
+      },
+      "actual": {
+        "kind": "clarification_required",
+        "message": "Operational measures cover only LAX, SNA and SFO. Which measure should I compare for LAX and BOS: an overall comparison of the key measures, passenger growth, seat occupancy, passengers or long-haul share? For example: “Compare everything” or “Compare LAX and BOS passenger growth.”"
+      },
+      "correct": true,
+      "latency_ms": 1500.779,
+      "usage": {
+        "input_tokens": 1736,
+        "output_tokens": 82,
+        "cost_usd": 0.0016095
+      },
+      "error": null,
+      "cost_usd": 0.0016095
+    }
+  ],
+  "candidate_status": "evaluated",
+  "model": "gemini-3.8-flash",
+  "prompt_sha256": "d7d90c94e0e446d8e75271e510e64cc7627ef4a2654c7f360f3150bebc763970",
+  "adapter_sha256": "e58ea32e77ee946de036ba89d6444e664becfab6638b0d4ff7e0546dfbc2234e",
+  "corpus_sha256": "be6f39635197bd98e9021faeec99a4f8858e23557a44ea027cadef965ea7d8e2",
+  "rate_card_usd_per_million_tokens": {
+    "input": 0.75,
+    "output": 3.75
+  },
+  "aggregate_cost_usd": 0.018735,
+  "rejected_output_costed_calls": 0,
+  "unknown_cost_calls": 0,
+  "latency_ms_p50": 1500.779,
+  "latency_ms_p95": 2197.814
+}
