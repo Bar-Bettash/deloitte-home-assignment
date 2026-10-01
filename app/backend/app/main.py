@@ -403,6 +403,21 @@ def _resolved_request(analysis: AnalysisRequest, result: AnalysisResult) -> Anal
     })
 
 
+def _pending_answer_period(analysis: AnalysisRequest, previous: AnalysisRequest,
+                           pending_comparison: list[str]) -> AnalysisRequest:
+    """A typed answer to "which measure?" takes the period on screen when the contract allows it
+    for that measure, and otherwise the default period: the same rule as a clicked measure
+    (app.js choiceAnalysis). A year the analyst names is kept as named."""
+    if (analysis.action != "compare" or analysis.year is not None or previous.year is None
+            or sorted(analysis.airports or []) != sorted(pending_comparison)):
+        return analysis
+    try:
+        return AnalysisRequest.model_validate({**analysis.model_dump(mode="python", exclude_none=True),
+                                               "year": previous.year})
+    except ValidationError:
+        return analysis
+
+
 def _recompute_previous(claims: ContextClaims, request_id: UUID) -> AnalysisResult:
     """Rebuild the referenced result from its signed request and prove it is unchanged."""
     result = dispatch_analysis(claims.request, request_id)
@@ -442,10 +457,15 @@ async def _interpret_and_dispatch(
     pending_comparison: list[str] | None = None,
 ) -> tuple[AnalysisResult, AnalysisRequest]:
     started = time.perf_counter()
+    context = claims.request.model_dump(mode="json", exclude_none=True) if claims is not None else None
+    if context is not None and pending_comparison is not None:
+        # The period of an answer to "which measure?" is resolved here, after the model,
+        # exactly as a clicked measure resolves it (_pending_answer_period).
+        context = {key: value for key, value in context.items() if key not in {"year", "bundle_id"}}
     try:
         interpreted = await interpret_message(
             message, settings=settings,
-            context=claims.request.model_dump(mode="json", exclude_none=True) if claims is not None else None,
+            context=context,
             # Passed only while a comparison clarification awaits its answer.
             **({"pending_comparison": pending_comparison} if pending_comparison is not None else {}),
         )
@@ -475,6 +495,8 @@ async def _interpret_and_dispatch(
             "AI interpretation is unavailable. Try a preset."
         ))
     analysis = AnalysisRequest.model_validate(interpreted.analysis)
+    if pending_comparison is not None and claims is not None:
+        analysis = _pending_answer_period(analysis, claims.request, pending_comparison)
     if analysis.action == "explain" and claims is None:
         raise _ModelOutcome("clarification_required", "Choose a previous result to explain.")
     return await asyncio.to_thread(_run_structured, analysis, request_id, claims)

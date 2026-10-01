@@ -1,0 +1,99 @@
+{
+ "version": 1,
+ "pair": [
+  "LAX",
+  "SFO"
+ ],
+ "cases": [
+  {
+   "metric": "overview",
+   "previous_year": 2023,
+   "button_year": null
+  },
+  {
+   "metric": "overview",
+   "previous_year": 2024,
+   "button_year": 2024
+  },
+  {
+   "metric": "overview",
+   "previous_year": 2025,
+   "button_year": null
+  },
+  {
+   "metric": "passenger_growth",
+   "previous_year": 2023,
+   "button_year": null
+  },
+  {
+   "metric": "passenger_growth",
+   "previous_year": 2024,
+   "button_year": 2024
+  },
+  {
+   "metric": "passenger_growth",
+   "previous_year": 2025,
+   "button_year": null
+  },
+  {
+   "metric": "seat_occupancy",
+   "previous_year": 2023,
+   "button_year": 2023
+  },
+  {
+   "metric": "seat_occupancy",
+   "previous_year": 2024,
+   "button_year": 2024
+  },
+  {
+   "metric": "seat_occupancy",
+   "previous_year": 2025,
+   "button_year": null
+  },
+  {
+   "metric": "passengers",
+   "previous_year": 2023,
+   "button_year": 2023
+  },
+  {
+   "metric": "passengers",
+   "previous_year": 2024,
+   "button_year": 2024
+  },
+  {
+   "metric": "passengers",
+   "previous_year": 2025,
+   "button_year": null
+  },
+  {
+   "metric": "long_haul_share",
+   "previous_year": 2023,
+   "button_year": 2023
+  },
+  {
+   "metric": "long_haul_share",
+   "previous_year": 2024,
+   "button_year": 2024
+  },
+  {
+   "metric": "long_haul_share",
+   "previous_year": 2025,
+   "button_year": null
+  },
+  {
+   "metric": "congestion",
+   "previous_year": 2023,
+   "button_year": null
+  },
+  {
+   "metric": "congestion",
+   "previous_year": 2024,
+   "button_year": 2024
+  },
+  {
+   "metric": "congestion",
+   "previous_year": 2025,
+   "button_year": null
+  }
+ ]
+}

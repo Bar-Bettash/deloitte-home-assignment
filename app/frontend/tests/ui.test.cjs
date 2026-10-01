@@ -2515,6 +2515,36 @@ test('a chosen measure keeps the period on screen unless that measure has no suc
   assert.equal(JSON.parse(pick(null, 'passengers')).year, undefined);
 });
 
+test('the measure button resolves the period exactly as the shared fixture the server is tested against', () => {
+  const parity = JSON.parse(fs.readFileSync(path.join(__dirname, '../../backend/tests/fixtures/pending_answer_period.json'), 'utf8'));
+  const ui = setup(async () => success(result()));
+  assert.equal(parity.cases.length, 18);
+  for (const { metric, previous_year: year, button_year: expected } of parity.cases) {
+    const sent = JSON.parse(ui.run(`latestSuccessfulResult = { scope: { year: ${year} } };
+      JSON.stringify(choiceAnalysis(${JSON.stringify(parity.pair)}, "${metric}"))`));
+    assert.deepEqual(sent, { action: 'compare', airports: parity.pair, metric, ...(expected === null ? {} : { year: expected }) },
+      `${metric} after ${year}`);
+  }
+});
+
+test('a failed typed answer to "which measure?" keeps the pending pair for the next answer', async () => {
+  const failed = () => ({ ok: false, status: 503, json: async () => errorEnvelope('ai_unavailable', 'AI interpretation is unavailable.') });
+  const { query, bodies } = queuedFetch([success(sfoPressure(-1.2247)), measureQuestion(['SFO', 'LAX']), failed(), success(overviewResult(['SFO', 'LAX']))]);
+  const ui = setup(query);
+  await ui.run('runPreset(demos["sfo-pressure"])');
+  ui.nodes.get('#ask-trigger').click();
+  sendChat(ui, 'give me an analysis of SFO versus LAX');
+  await flush(); await flush();
+  sendChat(ui, 'everything');
+  await flush(); await flush();
+  assert.deepEqual(bodies[2].pending_comparison, ['SFO', 'LAX']);
+  assert.equal(ui.run('JSON.stringify(pendingComparison)'), '["SFO","LAX"]', 'a failed answer has not answered the question');
+  sendChat(ui, 'everything, please');
+  await flush(); await flush();
+  assert.deepEqual(bodies[3].pending_comparison, ['SFO', 'LAX'], 'the retyped answer still carries the pair');
+  assert.equal(ui.run('pendingComparison'), null, 'a successful answer uses the pair up');
+});
+
 test('a failed measure choice keeps the pending pair for a typed answer, and Back retires stale choices', async () => {
   const failed = () => ({ ok: false, status: 503, json: async () => errorEnvelope('data_unavailable', 'Qualified data is unavailable.') });
   const { query, bodies } = queuedFetch([success(sfoPressure(-1.2247)), measureQuestion(['SFO', 'LAX']), failed(), measureQuestion(['SFO', 'LAX'])]);
