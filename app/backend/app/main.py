@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 import secrets
 import time
 from html import escape
@@ -427,6 +428,43 @@ def _period_on_screen(analysis: AnalysisRequest, previous: AnalysisRequest,
         return analysis
 
 
+# Whole messages that ask for the overall comparison of the airports already in play.
+# Exact phrases only (after case, punctuation and a trailing "please" are dropped):
+# anything longer, or naming a year or an airport, still goes to the model.
+OVERVIEW_FOLLOW_UPS = frozenset({
+    "everything", "full picture", "the full picture", "overall", "overview", "the overview",
+    "all of it", "all of them", "the rest",
+})
+
+
+def _overview_follow_up(message: str, claims: ContextClaims | None,
+                        pending_comparison: list[str] | None) -> AnalysisRequest | None:
+    """The overview a broad follow-up asks for, without a model call, or None.
+
+    With a pending "which measure?" pair it compares that pair; otherwise it keeps the
+    one or two airports of the signed result on screen. Its period follows the server's
+    rule for a measure the analyst named without a year (_period_on_screen)."""
+    words = re.sub(r"[^\w\s]", " ", message.lower()).split()
+    if words[-1:] == ["please"]:
+        words = words[:-1]
+    if " ".join(words) not in OVERVIEW_FOLLOW_UPS:
+        return None
+    previous = claims.request if claims is not None else None
+    if pending_comparison is not None:
+        proposed = {"action": "compare", "airports": list(pending_comparison)}
+    elif previous is not None and (
+            (previous.action == "metric" and len(previous.airports or []) == 1)
+            or (previous.action == "compare" and len(previous.airports or []) == 2)):
+        proposed = {"action": previous.action, "airports": list(previous.airports)}
+    else:
+        return None
+    try:
+        analysis = AnalysisRequest.model_validate({**proposed, "metric": "overview"})
+    except ValidationError:
+        return None
+    return analysis if previous is None else _period_on_screen(analysis, previous, pending_comparison)
+
+
 def _recompute_previous(claims: ContextClaims, request_id: UUID) -> AnalysisResult:
     """Rebuild the referenced result from its signed request and prove it is unchanged."""
     result = dispatch_analysis(claims.request, request_id)
@@ -465,6 +503,10 @@ async def _interpret_and_dispatch(
     message: str, request_id: UUID, claims: ContextClaims | None, settings,
     pending_comparison: list[str] | None = None,
 ) -> tuple[AnalysisResult, AnalysisRequest]:
+    shortcut = _overview_follow_up(message, claims, pending_comparison)
+    if shortcut is not None:
+        logger.info("overview follow-up request_id=%s action=%s model_calls=0", request_id, shortcut.action)
+        return await asyncio.to_thread(_run_structured, shortcut, request_id, claims)
     context = claims.request.model_dump(mode="json", exclude_none=True) if claims is not None else None
     # The period of an answer to "which measure?" is resolved by the server after the
     # model, exactly as a clicked measure resolves it (_period_on_screen).
