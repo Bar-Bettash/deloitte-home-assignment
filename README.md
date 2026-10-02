@@ -84,14 +84,15 @@ Default results compare **CY2024 → CY2025** using the accepted `annual-2025-r1
 
 ## Validation
 
-Latest RC3 candidate:
+Final RC3 Production release:
 
 - **Backend:** 971 passed, 2 skipped (optional local-data fixtures).
 - **Frontend:** 178/178 passed.
 - **Model admission:** 108/108, 0 errors, adapter `e58ea32e…`.
-- **Conversation reliability:** bare two-airport stress passed; 24/24 overview-shortcut turns used 0 Gemini calls.
-- **Hosted QA:** desktop/mobile browser checks passed; four brief questions and follow-ups returned correctly; Preview bypass was revoked after testing.
-- **Security:** Preview logs had 0 password, bypass-secret, or API-key-pattern hits, with positive controls.
+- **Conversation reliability:** 40/40 bare two-airport questions; 24/24 overview shortcuts after 2023, with 0 Gemini calls.
+- **Production browser QA:** 18/18 desktop, 17/17 phone; 2023 flow 8/8; typed-vs-button 5/5.
+- **Assignment checks:** all four brief questions plus follow-ups returned 200; voice passed.
+- **Security:** 427 Production log rows scanned with 0 password/API-key hits and 0 provider errors; Preview bypass remains revoked.
 
 See [Validation](docs/VALIDATION.md) for the compact evidence summary.
 
