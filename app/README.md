@@ -34,7 +34,7 @@ The accepted data snapshots ship with the repository; runtime analysis does not 
 
 Never commit secret values. Hosted secrets belong in Vercel environment settings.
 
-Free text is enabled only when the Gemini key, runtime flag, admitted model name, and adapter SHA all match. Presets and deterministic analysis remain independent of the model.
+Free text is enabled only when the Gemini key, runtime flag, admitted model name, and adapter SHA all match. The admitted RC3 adapter is `e58ea32e77ee946de036ba89d6444e664becfab6638b0d4ff7e0546dfbc2234e`; the output cap remains 1024 tokens. Presets and deterministic analysis remain independent of the model.
 
 Voice uses browser speech APIs and needs no backend key.
 
@@ -53,7 +53,7 @@ Optional lint:
 ruff check app/backend --ignore EXE002,SIM905
 ```
 
-The latest RC2 evidence is summarized in [docs/VALIDATION.md](../docs/VALIDATION.md).
+The latest RC3 evidence is summarized in [docs/VALIDATION.md](../docs/VALIDATION.md).
 
 ## Vercel
 
