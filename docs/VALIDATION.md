@@ -2,44 +2,47 @@
 
 Compact release evidence for the submitted application.
 
-## Final release validation
+## RC3 release candidate
 
 | Area | Verification | Result |
 |---|---|---|
-| Backend | Python suite | **908 passed, 1 skipped** |
-| Frontend | Node UI/globe suite | **166/166 passed** |
-| Production browser | 8 screen widths, 80–200% zoom, keyboard-only use, chat, clarification, voice/read-aloud, sign-out | **104/104 passed** |
-| Production API | Auth, analyses, follow-ups, errors, security | **59/60 harness checks**; the remaining harness failure is a known check-script ordering issue. Production returned the correct SNA 1.05% vs LAX 0.69% cancellation values. |
-| Accessibility | Automated contrast + keyboard/a11y probes | **PASS**, 0 contrast failures |
-| Access gate | Correct/wrong password, authenticated flow, sign-out, unauthenticated blocking | **PASS** |
-| Preview secret handling | 657 Preview log rows (13:31:07–13:44:56 UTC) scanned for the password; 0 hits, with a planted positive control | **PASS** |
-| Production secret handling | 676 Production log rows (14:37:03–14:48:19 UTC, `dpl_CdrXR3QR8MHSQn7gwe6eSecQt58s`) scanned for the password; 0 hits, with a planted positive control; 0 5xx | **PASS** |
-| Voice | Dictation, typed fallback, follow-up, read-aloud | **PASS** |
-| Model admission | Pending-comparison 10/10, new-airport follow-ups 10/10, corpus 30/30, holdout 12/12, assignment wording 8/8, chat regression 20/20 | **90/90, 0 errors** |
-| Review | 3 bug-fix review rounds; all findings were minor and fixed | **No blocking findings** |
+| Backend | Python suite | **971 passed, 2 skipped** (optional local-data fixtures) |
+| Frontend | Node UI/globe suite | **178/178 passed** |
+| Model admission | Corpus, holdout, assignment, regression, follow-up, pending-comparison and conversation sets | **108/108, 0 errors** |
+| Adapter | `model_adapter.py` admission SHA-256 | `e58ea32e77ee946de036ba89d6444e664becfab6638b0d4ff7e0546dfbc2234e` |
+| Bare two-airport intent | Focused local stress + final Preview stress | **84/84 local; 39/40 Preview**, with the one miss surfaced correctly as temporary provider rate limiting |
+| Overview shortcut | 2023 “everything / full picture / all of them” flows | **24/24**, **0 Gemini calls** |
+| 2023 conversation flow | Hosted browser flow / typed-vs-button parity | **8/8 / 5/5** |
+| Hosted browser | Desktop / phone RC3 QA | **18/18 / 17/17** |
+| Hosted API | Auth, analyses, follow-ups, errors, security | **59/60**; remaining miss is the known stale-result harness ordering quirk |
+| Brief questions | Four assignment questions + follow-ups | **8/8 returned 200** |
+| Voice | Dictation, read-aloud, blocked mic, unsupported browser | **PASS** |
+| Secret handling | Final Preview logs scanned for password, bypass and API-key patterns with positive controls | **0 hits** |
+| Preview protection | Temporary bypass revoked after QA | **PASS** |
 
-The hosted Preview was re-protected after QA: the automation bypass was removed and unauthenticated access again redirected to Vercel protection.
-
-## Release facts
+## Candidate facts
 
 | Item | Value |
 |---|---|
-| Production URL | https://deloitte-airport-analyst.vercel.app |
-| Vercel deployment | `dpl_CdrXR3QR8MHSQn7gwe6eSecQt58s` |
-| Production release | `20304e920286407dbc2f132501972b79652d22e0` |
+| RC3 commit | `fe819490652cdab1a0230ea7b3f546fde21b5269` |
+| Final Preview | `dpl_Gper4m6g…` |
 | Model | `gemini-3.8-flash` |
-| Admitted adapter SHA-256 | `1873f9e4304110be438fa69d79f0e09948f863a138a3cdd9fa1be6f327f9451d` |
+| Output-token cap | **1024** |
+| Admitted adapter SHA-256 | `e58ea32e77ee946de036ba89d6444e664becfab6638b0d4ff7e0546dfbc2234e` |
 | Default data bundle | `annual-2025-r1` |
+
+The 1024-token cap was retained: increasing it to 1536/2048 increased model deliberation instead of fixing the bare-pair ambiguity. The prompt rule reduced worst-case focused stress usage to below half the cap.
 
 ## Data / numerical checks
 
 - The four assignment workflows were independently recomputed against the bundled source data and matched the API.
-- The accepted snapshots are SHA-256 checked before use.
-- FAA’s final CY2025 commercial-service file did not change the relevant New England cohort or CY2025 enplanements versus the accepted preliminary snapshot.
-- Missing monthly coverage is treated as unavailable, not estimated or zero-filled.
+- Accepted snapshots are SHA-256 checked before use.
+- FAA’s final CY2025 commercial-service file did not change the relevant New England cohort or enplanements versus the accepted frozen snapshot.
+- Missing monthly coverage is unavailable, never estimated or zero-filled.
 
-Machine-readable reconciliation and source-check artifacts remain under `docs/evidence/` because the offline verification scripts use some of them directly; the old narrative QA diaries were removed.
+Machine-readable reconciliation and model-admission evidence remains under `docs/evidence/`.
 
-## Accepted limitation
+## Limits
 
-At 1440 px, the temporary “Loading interactive Earth…” text can overlap the footer for about a second while the globe loads. It does not affect interaction or the rendered globe.
+- With a full result context, the model-prompt budget guarantees at least a **400-character** follow-up; the measured boundary on the final prompt is about **440 characters**.
+- Temporary provider overload/rate limits are returned as a retryable message with `Retry-After: 10`; provider status details stay server-side.
