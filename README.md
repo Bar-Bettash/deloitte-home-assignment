@@ -43,6 +43,7 @@ flowchart LR
 | Frozen Parquet snapshots + DuckDB | Reproducible results; runtime does not depend on live provider APIs |
 | Deterministic calculations | Prevents the model from inventing numbers or SQL |
 | One constrained Gemini call | Natural-language flexibility without an agent loop |
+| Deterministic overview shortcuts | Obvious “everything / full picture” follow-ups avoid unnecessary model calls |
 | No composite LAX/SNA congestion score | Avoids arbitrary weighting and false “winner” claims |
 | Signed stateless result context | Follow-ups work on serverless instances without a session database |
 | Browser-native voice | Adds the optional voice experience without changing the analytics path |
@@ -56,6 +57,7 @@ flowchart LR
 | LAX vs SNA | Four operational indicators shown independently; no composite congestion index. |
 | ANC long-haul | Eligible performed passenger-service departures with route distance ≥3,000 miles ÷ all eligible departures. |
 | SFO pressure | Passenger-growth % minus seat-growth %, in percentage points. A negative value means seats grew faster than transported passengers. |
+| Overall comparison | Compares the key measures valid for both airports; no composite winner is invented. |
 
 Missing airport-years are excluded rather than filled with zero. Different source populations are not combined into unsupported ratios.
 
@@ -78,17 +80,18 @@ Default results compare **CY2024 → CY2025** using the accepted `annual-2025-r1
 - Speech recognition turns speech into editable text before using the normal chat path. On Send, the composer clears immediately; retryable failures restore the draft for editing.
 - “Read aloud” uses browser speech synthesis. Audio is not stored and does not trigger another Gemini call.
 - Typing remains the fallback when speech recognition is unavailable.
+- The chat starts compact, grows with the conversation, supports manual expand/collapse, and respects reduced-motion preferences.
 
 ## Validation
 
-The latest hosted RC2 validation recorded:
+Latest RC3 candidate:
 
-- **Backend:** 908 passed, 1 skipped.
-- **Frontend:** 166/166 passed.
-- **Hosted browser:** 104/104 checks across desktop/mobile sizes, zoom, keyboard use, chat, voice, and sign-out.
-- **Hosted API:** 59/60 harness checks; the single reported failure intentionally referenced an older result and the app correctly rejected it. The equivalent latest-result follow-up passed.
-- **Model admission:** all six evaluation sets passed with zero errors for adapter `1873f9e4…`.
-- **Security:** no password found in the complete Preview log window; the scan was validated with a planted positive control.
+- **Backend:** 971 passed, 2 skipped (optional local-data fixtures).
+- **Frontend:** 178/178 passed.
+- **Model admission:** 108/108, 0 errors, adapter `e58ea32e…`.
+- **Conversation reliability:** bare two-airport stress passed; 24/24 overview-shortcut turns used 0 Gemini calls.
+- **Hosted QA:** desktop/mobile browser checks passed; four brief questions and follow-ups returned correctly; Preview bypass was revoked after testing.
+- **Security:** Preview logs had 0 password, bypass-secret, or API-key-pattern hits, with positive controls.
 
 See [Validation](docs/VALIDATION.md) for the compact evidence summary.
 
