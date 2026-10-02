@@ -10,7 +10,9 @@ flowchart LR
     UI --> AUTH[Shared password gate]
     UI -->|Typed or voice text| API[FastAPI]
     API --> CONTRACT[Strict request validation]
-    API -. free text only .-> LLM[Gemini]
+    API --> SHORTCUT{Exact overview follow-up?}
+    SHORTCUT -->|yes| CONTRACT
+    SHORTCUT -. no / free text .-> LLM[Gemini]
     LLM -. structured intent .-> CONTRACT
     CONTRACT --> DISPATCH[Deterministic dispatcher]
     DISPATCH --> CALC[Python calculations]
@@ -49,7 +51,7 @@ sequenceDiagram
     B->>B: Optional read aloud
 ```
 
-Presets skip Gemini completely. **Explain this result** recomputes and explains the referenced deterministic result without another model call.
+Presets skip Gemini completely. Exact overview follow-ups such as “everything” or “full picture” are also resolved server-side when the airports in play are unambiguous. **Explain this result** recomputes and explains the referenced deterministic result without another model call.
 
 ## Data pipeline
 
@@ -81,7 +83,7 @@ Default runtime data is `annual-2025-r1`, comparing CY2024 with CY2025. Historic
 | Return a structured request or safe clarification | Create citations |
 | Select from allowed airports/metrics/years | Write authoritative numerical answers |
 
-The adapter uses one Gemini `generateContent` call with structured JSON output. Backend validation remains authoritative.
+The adapter uses one Gemini `generateContent` call with structured JSON output. Backend validation remains authoritative. The output cap stays at 1024 tokens; the final prompt was admitted at `e58ea32e…` with 108/108 evaluation cases.
 
 Free text is admitted only when the configured model name and the SHA-256 of `model_adapter.py` match the reviewed values. Any adapter change disables free text until re-admitted.
 
@@ -93,6 +95,7 @@ Free text is admitted only when the configured model name and the SHA-256 of `mo
 | Congestion | Cancellation %, diversion %, average departure delay, average taxi-out; no composite score |
 | ANC long-haul | Eligible performed departures with distance ≥ threshold ÷ all eligible performed departures |
 | SFO pressure | Passenger-growth % − seat-growth %, plus occupancy, trend, and delay-cause context |
+| Overview | Key measures valid for the selected airport(s), shown side by side without a composite winner |
 
 Important rules:
 
@@ -126,6 +129,10 @@ Voice is a browser-layer feature:
 - Audio is not stored by the application.
 - Voice adds no second model call and no alternate analytics path.
 - Unsupported browsers keep the typed-chat experience.
+
+## Conversation UI
+
+The chat begins as a compact composer, expands as the transcript grows, and can be manually enlarged or restored. Header and composer stay fixed while the transcript scrolls. Result/card/back transitions and hover/focus states share short motion timings, with `prefers-reduced-motion` disabling nonessential animation.
 
 ## Deployment
 
