@@ -24,15 +24,16 @@ Default results use **CY2024 → CY2025** from the accepted `annual-2025-r1` bun
 
 ```mermaid
 flowchart LR
-    U[Analyst] --> UI[Web UI]
-    UI --> API[FastAPI]
+    U[Analyst] --> A[Shared access gate] --> UI[Web UI]
+    UI -->|Question| API[FastAPI]
     API --> C{Exact deterministic shortcut?}
     C -->|yes| E[Python + DuckDB]
     C -->|no| G[Gemini<br/>intent → structured request]
     G --> E
-    E --> D[(Frozen Parquet snapshots)]
-    E --> UI
-    UI --> V[Optional browser voice]
+    D[(Frozen Parquet snapshots)] --> E
+    E --> API
+    API --> UI
+    UI <--> V[Browser speech APIs]
 ```
 
 **Gemini interprets language; it never calculates the answer.** Numbers, rankings, comparisons, explanations, sources, and limitations come from deterministic backend code over frozen, hash-verified snapshots.
